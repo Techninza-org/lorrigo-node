@@ -222,7 +222,7 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
 
     const vendors = await CourierModel.find({
       _id: { $in: vendorIds }
-    });
+    }).populate("vendor_channel_id").lean();
 
 
     const loopLength = vendors.length;
@@ -307,6 +307,8 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
 
       data2send.push({
         name: cv.name,
+        // @ts-ignore
+        nickName: cv.vendor_channel_id.nickName,
         minWeight,
         charge: totalCharge,
         type: cv.type,

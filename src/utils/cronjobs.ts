@@ -194,7 +194,7 @@ export const trackOrder_Smartship = async () => {
 
         const bucketInfo = getSmartshipBucketing(Number(requiredResponse?.status_code) ?? -1);
 
-        console.log("bucketInfo---[SMARTSHIP]", bucketInfo)
+        console.log("bucketInfo---[SMARTSHIP]",requiredResponse?.status_code, bucketInfo)
 
         if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {
           console.log("Updating order status...[smartship]", orderWithOrderReferenceId._id, orderWithOrderReferenceId.order_reference_id);
@@ -253,7 +253,7 @@ export const trackOrder_Shiprocket = async () => {
 
       if (response.data.tracking_data.shipment_status) {
         const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
-        console.log("bucketInfo---[SHIPROCKET]", bucketInfo)
+        console.log("bucketInfo---[SHIPROCKET]", response.data.tracking_data.shipment_status, bucketInfo)
 
 
         if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {

@@ -87,6 +87,12 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
     const client_order_reference_id = isReshipedOrder ? newString : `${order?._id}_${order?.order_reference_id}`;
 
+    let orderWeight = order?.orderWeight || 0;
+    if (orderWeight < 1) {
+      orderWeight = orderWeight * 1000;
+    }
+
+    console.log(client_order_reference_id, "order.orderWeight")
 
     const shipmentAPIBody = {
       request_info: {
@@ -95,42 +101,49 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       },
       orders: [
         {
-          client_order_reference_id: client_order_reference_id,
-
-          order_collectable_amount: order.payment_mode === 1 ? order.amount2Collect : 0, // need to take  from user in future
-          total_order_value: totalOrderValue,
-          payment_type: order.payment_mode ? "cod" : "prepaid",
-          package_order_weight: order.orderWeight,
-          package_order_length: order.orderBoxLength,
-          package_order_width: order.orderBoxWidth,
-          package_order_height: order.orderBoxHeight,
-          shipper_hub_id: hubDetails.hub_id,
-          shipper_gst_no: req.seller.gstno,
-          order_invoice_date: order?.order_invoice_date, // not mandatory
-          order_invoice_number: order?.order_invoice_number || "Non-commercial", // not mandatory
-          order_meta: {
-            preferred_carriers: [body.carrierId],  // not mandatory
+          "client_order_reference_id": client_order_reference_id,
+          "shipment_type": 1,
+          "order_collectable_amount": order.payment_mode === 1 ? order.amount2Collect : 0, // need to take  from user in future,
+          "total_order_value": totalOrderValue,
+          "payment_type": order.payment_mode ? "cod" : "prepaid",
+          "package_order_weight": orderWeight,
+          "package_order_length": order.orderBoxLength,
+          "package_order_height": order.orderBoxWidth,
+          "package_order_width": order.orderBoxHeight,
+          "shipper_hub_id": hubDetails.hub_id,
+          "shipper_gst_no": req.seller.gstno,
+          "order_invoice_date": order?.order_invoice_date,
+          "order_invoice_number": order?.order_invoice_number || "Non-commercial",
+          // "is_return_qc": "1",
+          // "return_reason_id": "0",
+          "order_meta": {
+            "preferred_carriers": [body.carrierId]
           },
-          product_details: [
+          "product_details": [
             {
-              client_product_reference_id: "something", // not mandantory
-              product_name: productDetails?.name,
-              product_category: productDetails?.category,
-              product_hsn_code: productDetails?.hsn_code || "0000", // appear to be mandantory
-              product_quantity: productDetails?.quantity,
-              product_invoice_value: 11234, //productDetails?.invoice_value, // invoice value
-              product_taxable_value: productDetails.taxable_value,
-              product_gst_tax_rate: productDetails.tax_rate || 18,
-            },
+              "client_product_reference_id": "something",
+              "product_name": productDetails?.name,
+              "product_category": productDetails?.category,
+              "product_hsn_code": productDetails?.hsn_code || "0000",
+              "product_quantity": productDetails?.quantity,
+              "product_invoice_value": 11234,
+              "product_gst_tax_rate": productDetails.tax_rate,
+              "product_taxable_value": productDetails.taxable_value,
+              // "product_sgst_amount": "2",
+              // "product_sgst_tax_rate": "2",
+              // "product_cgst_amount": "2",
+              // "product_cgst_tax_rate": "2"
+            }
           ],
-          consignee_details: {
-            consignee_name: order.customerDetails.get("name"),
-            consignee_phone: order.customerDetails?.get("phone"),
-            consignee_email: order.customerDetails.get("email"),
-            consignee_complete_address: order.customerDetails.get("address"),
-            consignee_pincode: order.customerDetails.get("pincode"),
-          },
-        },
+          "consignee_details": {
+            "consignee_name": order.customerDetails.get("name"),
+            "consignee_phone": order.customerDetails?.get("phone"),
+            "consignee_email": order.customerDetails.get("email"),
+            "consignee_complete_address": order.customerDetails.get("address"),
+            "consignee_pincode": order.customerDetails.get("pincode"),
+          }
+        }
+
       ],
     };
     let smartshipToken;
@@ -145,7 +158,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     let externalAPIResponse: any;
     try {
       const requestConfig = { headers: { Authorization: smartshipToken } };
-      console.log(shipmentAPIBody, "shipmentAPIBody[SMARTSHIP]")
       const response = await axios.post(
         config.SMART_SHIP_API_BASEURL + APIs.CREATE_SHIPMENT,
         shipmentAPIBody,
