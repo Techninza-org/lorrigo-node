@@ -17,148 +17,159 @@ import Logger from "../utils/logger";
 
 // FIXME smartship doesn't expect the hub with same address is the address mateches with some other address hub would not be created.
 export const createHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  const body = req.body;
+  try {
+    const body = req.body;
 
-  if (!body) return res.status(200).send({ valid: false, message: "payload required" });
+    if (!body) return res.status(200).send({ valid: false, message: "payload required" });
 
-  if (!(body?.name && body?.pincode && body?.address1 && body?.phone)) {
-    return res.status(200).send({
-      valid: false,
-      message: "Invalid payload",
-    });
-  }
+    if (!(body?.name && body?.pincode && body?.address1 && body?.phone)) {
+      return res.status(200).send({
+        valid: false,
+        message: "Invalid payload",
+      });
+    }
 
-  let { name, pincode, address1, address2, phone, contactPersonName } = req.body;
-  pincode = Number(pincode);
-  phone = Number(phone);
+    let { name, pincode, address1, address2, phone, contactPersonName } = req.body;
+    pincode = Number(pincode);
+    phone = Number(phone);
 
-  if (
-    !(
-      typeof name === "string" &&
-      typeof pincode === "number" &&
-      typeof address1 === "string" &&
-      typeof phone === "number"
-    )
-  ) {
-    return res.status(200).send({
-      valid: false,
-      message: "invalid payload type",
-    });
-  }
-  if (!validatePhone(phone)) {
-    return res.status(200).send({
-      valid: false,
-      message: "invalid phone",
-    });
-  }
-  const isAlreadyExists = (await HubModel.findOne({ name, sellerId: req.seller._id }).lean()) !== null;
-  // create hub using smartship api
-  if (isAlreadyExists) {
-    return res.status(200).send({
-      valid: false,
-      message: `Hub already exists with name: ${name}`,
-    });
-  }
-  const pincodeDetails = await getPincodeDetails(pincode);
-  const city = pincodeDetails?.District;
-  const state = pincodeDetails?.StateName;
+    if (
+      !(
+        typeof name === "string" &&
+        typeof pincode === "number" &&
+        typeof address1 === "string" &&
+        typeof phone === "number"
+      )
+    ) {
+      return res.status(200).send({
+        valid: false,
+        message: "invalid payload type",
+      });
+    }
+    if (!validatePhone(phone)) {
+      return res.status(200).send({
+        valid: false,
+        message: "invalid phone",
+      });
+    }
+    const isAlreadyExists = (await HubModel.findOne({ name, sellerId: req.seller._id }).lean()) !== null;
+    // create hub using smartship api
+    if (isAlreadyExists) {
+      return res.status(200).send({
+        valid: false,
+        message: `Hub already exists with name: ${name}`,
+      });
+    }
+    const pincodeDetails = await getPincodeDetails(pincode);
+    const city = pincodeDetails?.District;
+    const state = pincodeDetails?.StateName;
 
-  const smartshipToken = await getSmartShipToken();
-  if (!smartshipToken) return res.status(200).send({ valid: false, message: "smartship ENVs not found" });
+    const smartshipToken = await getSmartShipToken();
+    if (!smartshipToken) return res.status(200).send({ valid: false, message: "smartship ENVs not found" });
 
-  const smartshipAPIconfig = { headers: { Authorization: smartshipToken } };
+    const smartshipAPIconfig = { headers: { Authorization: smartshipToken } };
 
-  const shiprocketToken = await getShiprocketToken();
-  if (!smartshipToken) return res.status(200).send({ valid: false, message: "smartship ENVs not found" });
+    const shiprocketToken = await getShiprocketToken();
+    if (!smartshipToken) return res.status(200).send({ valid: false, message: "smartship ENVs not found" });
 
-  const shiprocketAPIconfig = { headers: { Authorization: shiprocketToken } };
+    const shiprocketAPIconfig = { headers: { Authorization: shiprocketToken } };
 
-  const smartshipApiBody = {
-    hub_details: {
-      hub_name: name,
-      pincode: pincode,
+    const smartshipApiBody = {
+      hub_details: {
+        hub_name: name,
+        pincode: pincode,
+        city: city,
+        state: state,
+        address1: address1,
+        address2: address2,
+        hub_phone: phone,
+        delivery_type_id: 2,
+      },
+    };
+
+    // console.log(phone.toString().slice(2, 12), "smartshipApiBody");
+
+    const shiprocketHubPayload = {
+      pickup_location: name,
+      name: name,
+      email: "noreply@lorrigo.com",
+      phone: phone.toString().slice(2, 12),
+      address: address1,
+      address_2: address2,
       city: city,
       state: state,
-      address1: address1,
-      address2: address2,
-      hub_phone: phone,
-      delivery_type_id: 2,
-    },
-  };
+      country: "India",
+      pin_code: pincode,
+    };
 
-  // console.log(phone.toString().slice(2, 12), "smartshipApiBody");
+    let smartShipResponse;
+    let shiprocketResponse;
+    try {
+      smartShipResponse = await axios.post(
+        config.SMART_SHIP_API_BASEURL! + APIs.HUB_REGISTRATION,
+        smartshipApiBody,
+        smartshipAPIconfig
+      );
+      console.log('smartShipResponse', smartShipResponse.data);
+    } catch (err) {
+      return next(err);
+    }
 
-  const shiprocketHubPayload = {
-    pickup_location: name,
-    name: name,
-    email: "noreply@lorrigo.com",
-    phone: phone.toString().slice(2, 12),
-    address: address1,
-    address_2: address2,
-    city: city,
-    state: state,
-    country: "India",
-    pin_code: pincode,
-  };
+    try {
+      shiprocketResponse = await axios.post(
+        config.SHIPROCKET_API_BASEURL + APIs.CREATE_PICKUP_LOCATION,
+        shiprocketHubPayload,
+        shiprocketAPIconfig
+      );
+      console.log(shiprocketResponse.data, "shiprocketResponse");
+    } catch (err) {
+      // @ts-ignore
+      const isExistingHub = err?.response?.data.errors.pickup_location[0].includes("Address nick name already in use")
+      console.log(isExistingHub, "err");
+      if (!isExistingHub) return next(err);
+    }
 
-  let smartShipResponse;
-  let shiprocketResponse;
-  try {
-    smartShipResponse = await axios.post(
-      config.SMART_SHIP_API_BASEURL! + APIs.HUB_REGISTRATION,
-      smartshipApiBody,
-      smartshipAPIconfig
-    );
-    console.log('smartShipResponse', smartShipResponse.data);
-    
+    const smartShipData: SMARTSHIP_DATA = smartShipResponse.data;
 
-    shiprocketResponse = await axios.post(
-      config.SHIPROCKET_API_BASEURL + APIs.CREATE_PICKUP_LOCATION,
-      shiprocketHubPayload,
-      shiprocketAPIconfig
-    );
-    console.log(shiprocketResponse.data, "shiprocketResponse");
-  } catch (err) {
-    // @ts-ignore
-    console.log(err, err?.response?.data?.errors, err?.data, "err");
-    return next(err);
-  }
+    let hubId = 0;
+    if (smartShipData.status && smartShipData.data.hub_id) {
+      hubId = smartShipData.data.hub_id;
+    } else if (smartShipData.data.message.registered_hub_id) {
+      hubId = Number(smartShipData.data.message.registered_hub_id);
+    }
 
-  const smartShipData: SMARTSHIP_DATA = smartShipResponse.data;
+    if (!smartShipData) return res.sendStatus(500);
 
-  let hubId = 0; // if hub_id is not available in smartShipData
-  if (smartShipData.status && smartShipData.data.hub_id) {
-    hubId = smartShipData.data.hub_id;
-  }
-  if (!smartShipData) return res.sendStatus(500);
+    const delivery_type_id = 2;
 
-  const delivery_type_id = 2;
+    let savedHub;
+    try {
+      const toSaveHub = new HubModel({
+        sellerId: req.seller._id,
+        contactPersonName,
+        name,
+        city,
+        pincode,
+        state,
+        address1,
+        address2,
+        phone,
 
-  let savedHub;
-  try {
-    const toSaveHub = new HubModel({
-      sellerId: req.seller._id,
-      contactPersonName,
-      name,
-      city,
-      pincode,
-      state,
-      address1,
-      address2,
-      phone,
+        hub_id: hubId,
+        delivery_type_id,
+      });
+      savedHub = await toSaveHub.save();
+    } catch (err) {
+      return next(err);
+    }
 
-      hub_id: hubId,
-      delivery_type_id,
+    return res.status(200).send({
+      valid: true,
+      hub: savedHub,
     });
-    savedHub = await toSaveHub.save();
-  } catch (err) {
-    return next(err);
+  } catch (error) {
+    console.log("error[CreateHub]", error);
   }
-
-  return res.status(200).send({
-    valid: true,
-    hub: savedHub,
-  });
 };
 
 export const getHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
@@ -250,6 +261,13 @@ export const updateHub = async (req: ExtendedRequest, res: Response, next: NextF
   const sellerId = req.seller._id;
   const hubId = req.params.id;
   const body = req.body;
+  if (!body) {
+    return res.status(200).send({
+      valid: false,
+      message: "payload required",
+    });
+  }
+
   if (!isValidPayload(body, [])) {
     return res.status(200).send({
       valid: false,
@@ -268,94 +286,38 @@ export const updateHub = async (req: ExtendedRequest, res: Response, next: NextF
       message: "invalid hubId",
     });
   }
-  let hubData = null;
-  try {
-    hubData = await HubModel.findOne({ _id: hubId, sellerId }).lean();
-  } catch (err) {
-    return next(err);
-  }
-  if (hubData === null) return res.status(200).send({ valid: false, message: "Hub not found" });
+  if(body.isActive === undefined) return res.status(200).send({ valid: false, message: "isActive required" });
 
-  const { hub_id, name, contactPersonName, phone, pincode, city, state, address1, address2, delivery_type_id } = hubData;
-  
+  const hubData = await HubModel.findOne({ _id: hubId, sellerId: sellerId });
+  if (!hubData) return res.status(200).send({ valid: false, message: "hub not found" });
+
+
+  let updatedHub;
   try {
-    const updatedHub = await HubModel.findOneAndUpdate(
+    updatedHub = await HubModel.findOneAndUpdate(
       { _id: hubId, sellerId: sellerId },
-      body, 
-      { new: true, upsert: true } 
+      {
+        isActive: body.isActive,
+      },
+      { new: true }
     );
-
-    return res.status(200).send({
-      valid: true,
-      message: "Hub updated successfully",
-      hub: updatedHub,
-    });
   } catch (err) {
     return next(err);
   }
-  // const smartshipToken = await getSmartShipToken();
-  // if (!smartshipToken) return res.status(500).send({ valid: false, message: "SMARTSHIP envs not found" });
 
-  // if (body?.pincode) {
-  //   const pincodeDetails = await getPincodeDetails(Number(body?.pincode));
-  //   body.city = pincodeDetails?.District;
-  //   body.state = pincodeDetails?.StateName;
-  // }
+  if (!updatedHub) {
+    return res.status(200).send({
+      valid: false,
+      message: "Hub not found",
+    });
+  }
 
-  // const smartshipAPIconfig = { headers: { Authorization: smartshipToken } };
-  // const smartshipAPIBody = {
-  //   hub_id,
-  //   hub_name: name,
-  //   hub_phone: phone,
-  //   contactPersonName, ///
-  //   pincode,
-  //   city,
-  //   state,
-  //   address1,
-  //   address2,
-  //   delivery_type_id,
-  //   ...body,
-  // };
+  return res.status(200).send({
+    valid: true,
+    message: "Hub updated successfully",
+    hub: updatedHub,
+  });
 
-  // // hit smartship api
-  // const response = await axios.put(    //////////////////put ????
-  //   config.SMART_SHIP_API_BASEURL + APIs.HUB_UPDATE,
-  //   smartshipAPIBody,
-  //   smartshipAPIconfig
-  // );
-  // const smartShipResponseData: SMARTSHIP_UPDATE_DATA = response.data;
-
-  // if (!smartShipResponseData.status) {
-  //   return res.status(200).send({
-  //     valid: false,
-  //     message: "Failed to update",
-  //   });
-  // }
-  // try {
-  //   const updatedDocuments = await HubModel.findByIdAndUpdate(
-  //     hubData._id,
-  //     {
-  //       name: smartshipAPIBody.hub_name,
-  //       phone: smartshipAPIBody.hub_phone,
-  //       pincode: smartshipAPIBody.pincode,
-  //       contactPersonName: smartshipAPIBody.contactPersonName,
-  //       city: smartshipAPIBody.city,
-  //       state: smartshipAPIBody.state,
-  //       address1: smartshipAPIBody.address1,
-  //       address2: smartshipAPIBody.address2,
-  //       delivery_type_id: smartshipAPIBody.delivery_type_id,
-  //     },
-  //     { new: true }
-  //   );
-
-  //   return res.status(200).send({
-  //     valid: true,
-  //     message: "Hub data updated successfully",
-  //     hub: updatedDocuments,
-  //   });
-  // } catch (err) {
-  //   return next(err);
-  // }
 };
 
 export const deleteHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
@@ -380,20 +342,20 @@ export const deleteHub = async (req: ExtendedRequest, res: Response, next: NextF
   }
 
   // const smartshipToken = env.token_type + " " + env.access_token;
-  const smartshipToken = await getSmartShipToken();
-  if (smartshipToken === false) return res.status(200).send({ valid: false, message: "smartship ENVs not found" });
+  // const smartshipToken = await getSmartShipToken();
+  // if (smartshipToken === false) return res.status(200).send({ valid: false, message: "smartship ENVs not found" });
 
-  const smartshipAPIconfig = { headers: { Authorization: smartshipToken } };
-  const smartshipAPIPayload = { hub_ids: [hubData[0].hub_id] };
+  // const smartshipAPIconfig = { headers: { Authorization: smartshipToken } };
+  // const smartshipAPIPayload = { hub_ids: [hubData[0].hub_id] };
 
-  const response = await axios.post(
-    config.SMART_SHIP_API_BASEURL + APIs.HUB_DELETE,
-    smartshipAPIPayload,
-    smartshipAPIconfig
-  );
-  const smartShipResponseData = response.data;
-  Logger.plog(JSON.stringify(smartShipResponseData));
-  if (!smartShipResponseData.status) return res.status(200).send({ valid: false, message: "Failed to delete Hub" });
+  // const response = await axios.post(
+  //   config.SMART_SHIP_API_BASEURL + APIs.HUB_DELETE,
+  //   smartshipAPIPayload,
+  //   smartshipAPIconfig
+  // );
+  // const smartShipResponseData = response.data;
+  // Logger.plog(JSON.stringify(smartShipResponseData));
+  // if (!smartShipResponseData.status) return res.status(200).send({ valid: false, message: "Failed to delete Hub" });
   try {
     const deletedHub = await HubModel.findByIdAndDelete(hubId);
     return res.status(200).send({
@@ -431,6 +393,7 @@ type SMARTSHIP_DATA = {
     info: string;
     hub_id?: number;
     validation_error?: string[];
+    message: { info: string, registered_hub_id: string }
   };
   extra: null;
 };

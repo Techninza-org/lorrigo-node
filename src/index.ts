@@ -17,6 +17,7 @@ import sellerRouter from "./routes/seller.routes";
 import runCron, { CONNECT_SHIPROCKET, CONNECT_SMARTR, CONNECT_SMARTSHIP, trackOrder_Smartship } from "./utils/cronjobs";
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
+import PincodeModel from "./models/pincode.model";
 
 app.use(cors({ origin: "*" }));
 
@@ -34,6 +35,19 @@ if (!config.MONGODB_URI) {
   Logger.log("MONGODB_URI doesn't exists: " + config.MONGODB_URI);
   process.exit(0);
 }
+
+// async function toUpdatePinDB() {
+//   const updateQuery = {
+//     $set: {
+//       District: "Delhi"
+//     }
+//   }
+//   const update = await PincodeModel.updateMany({ StateName: "Delhi" }, updateQuery);
+//   console.log(update)
+
+// }
+
+
 mongoose
   .connect(config.MONGODB_URI)
   .then(() => {

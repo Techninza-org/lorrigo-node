@@ -14,10 +14,7 @@ const HubSchema = new mongoose.Schema({
   phone: { type: String, required: true },
   delivery_type_id: { type: Number, required: false },
 
-  isSuccess: { type: Boolean, required: false },
-  code: { type: Number, required: false },
-  message: { type: String, required: false },
-  hub_id: { type: Number, required: false },
+  isActive: { type: Boolean, required: false, default: true },
 });
 
 const HubModel = mongoose.model("Hub", HubSchema);
