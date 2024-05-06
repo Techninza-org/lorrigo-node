@@ -12,12 +12,12 @@ export const createCustomer = async (req: ExtendedRequest, res: Response, next: 
       message: "name, email, phone, address, city, state, pincode are required",
     });
   }
-
+  try {
   const customer2save = new B2BCustomerModel({
     sellerId,
     ...body,
   });
-  try {
+
     const customer = await customer2save.save();
     return res.status(200).send({
       valid: true,

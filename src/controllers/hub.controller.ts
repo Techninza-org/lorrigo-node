@@ -188,60 +188,68 @@ export const getHub = async (req: ExtendedRequest, res: Response, next: NextFunc
 };
 
 export const getSpecificHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  const sellerId = req.seller._id;
-  const hubId: string = req.params.id;
-  if (!isValidObjectId(sellerId)) {
-    return res.status(200).send({
-      valid: false,
-      message: "invalid sellerId",
-    });
-  }
-  if (!isValidObjectId(hubId)) {
-    return res.status(200).send({
-      valid: false,
-      message: "invalid hubId",
-    });
-  }
-
-  let specificHub;
   try {
-    specificHub = await HubModel.findOne({ sellerId, _id: hubId }).lean();
-  } catch (err) {
-    return next(err);
-  }
-  if (specificHub === null) {
-    return res.status(200).send({
-      valid: false,
-      message: "Hub not found",
-    });
-  } else {
-    return res.status(200).send({
-      valid: true,
-      hub: specificHub,
-    });
+    const sellerId = req.seller._id;
+    const hubId: string = req.params.id;
+    if (!isValidObjectId(sellerId)) {
+      return res.status(200).send({
+        valid: false,
+        message: "invalid sellerId",
+      });
+    }
+    if (!isValidObjectId(hubId)) {
+      return res.status(200).send({
+        valid: false,
+        message: "invalid hubId",
+      });
+    }
+
+    let specificHub;
+    try {
+      specificHub = await HubModel.findOne({ sellerId, _id: hubId }).lean();
+    } catch (err) {
+      return next(err);
+    }
+    if (specificHub === null) {
+      return res.status(200).send({
+        valid: false,
+        message: "Hub not found",
+      });
+    } else {
+      return res.status(200).send({
+        valid: true,
+        hub: specificHub,
+      });
+    }
+  } catch (error) {
+    return next(error);
   }
 };
 
 export const getCityDetails = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  const pincode = req.body.pincode;
-  if (!pincode) {
+  try {
+    const pincode = req.body.pincode;
+    if (!pincode) {
+      return res.status(200).send({
+        valid: false,
+        message: "pincode required",
+      });
+    }
+    if (typeof pincode !== "number") {
+      return res.status(200).send({
+        valid: false,
+        message: "invalid pincode",
+      });
+    }
+    const pincodeDetails = await getPincodeDetails(pincode);
     return res.status(200).send({
-      valid: false,
-      message: "pincode required",
+      valid: true,
+      city: pincodeDetails?.District,
+      state: pincodeDetails?.StateName,
     });
+  } catch (error) {
+
   }
-  if (typeof pincode !== "number") {
-    return res.status(200).send({
-      valid: false,
-      message: "invalid pincode",
-    });
-  }
-  const pincodeDetails = await getPincodeDetails(pincode);
-  return res.status(200).send({
-    valid: true,
-    city: pincodeDetails?.District,
-    state: pincodeDetails?.StateName,
-  });
 };
 
 // FIXME fix update hub when smartship isnt' login
@@ -258,119 +266,127 @@ update-body =>
   delivery_type_id
 */
 export const updateHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  const sellerId = req.seller._id;
-  const hubId = req.params.id;
-  const body = req.body;
-  if (!body) {
-    return res.status(200).send({
-      valid: false,
-      message: "payload required",
-    });
-  }
-
-  if (!isValidPayload(body, [])) {
-    return res.status(200).send({
-      valid: false,
-      message: "invalid payload",
-    });
-  }
-  if (!isValidObjectId(sellerId)) {
-    return res.status(200).send({
-      valid: false,
-      message: "invalid sellerId",
-    });
-  }
-  if (!isValidObjectId(hubId)) {
-    return res.status(200).send({
-      valid: false,
-      message: "invalid hubId",
-    });
-  }
-  if(body.isActive === undefined) return res.status(200).send({ valid: false, message: "isActive required" });
-
-  const hubData = await HubModel.findOne({ _id: hubId, sellerId: sellerId });
-  if (!hubData) return res.status(200).send({ valid: false, message: "hub not found" });
-
-
-  let updatedHub;
   try {
-    updatedHub = await HubModel.findOneAndUpdate(
-      { _id: hubId, sellerId: sellerId },
-      {
-        isActive: body.isActive,
-      },
-      { new: true }
-    );
-  } catch (err) {
-    return next(err);
-  }
+    const sellerId = req.seller._id;
+    const hubId = req.params.id;
+    const body = req.body;
+    if (!body) {
+      return res.status(200).send({
+        valid: false,
+        message: "payload required",
+      });
+    }
 
-  if (!updatedHub) {
+    if (!isValidPayload(body, [])) {
+      return res.status(200).send({
+        valid: false,
+        message: "invalid payload",
+      });
+    }
+    if (!isValidObjectId(sellerId)) {
+      return res.status(200).send({
+        valid: false,
+        message: "invalid sellerId",
+      });
+    }
+    if (!isValidObjectId(hubId)) {
+      return res.status(200).send({
+        valid: false,
+        message: "invalid hubId",
+      });
+    }
+    if (body.isActive === undefined) return res.status(200).send({ valid: false, message: "isActive required" });
+
+    const hubData = await HubModel.findOne({ _id: hubId, sellerId: sellerId });
+    if (!hubData) return res.status(200).send({ valid: false, message: "hub not found" });
+
+
+    let updatedHub;
+    try {
+      updatedHub = await HubModel.findOneAndUpdate(
+        { _id: hubId, sellerId: sellerId },
+        {
+          isActive: body.isActive,
+        },
+        { new: true }
+      );
+    } catch (err) {
+      return next(err);
+    }
+
+    if (!updatedHub) {
+      return res.status(200).send({
+        valid: false,
+        message: "Hub not found",
+      });
+    }
+
     return res.status(200).send({
-      valid: false,
-      message: "Hub not found",
+      valid: true,
+      message: "Hub updated successfully",
+      hub: updatedHub,
     });
+  } catch (error) {
+    return next(error);
   }
-
-  return res.status(200).send({
-    valid: true,
-    message: "Hub updated successfully",
-    hub: updatedHub,
-  });
 
 };
 
 export const deleteHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  const hubId = req.params.id;
-  const sellerId = req.seller._id;
-
-  let hubData;
   try {
-    hubData = await HubModel.find({ _id: hubId, sellerId: sellerId });
-  } catch (err) {
-    return next(err);
-  }
-  // console.log(hubData);
-  if (hubData.length < 1) return res.status(200).send({ valid: false, message: "hub not found" });
+    const hubId = req.params.id;
+    const sellerId = req.seller._id;
 
-  const env = await EnvModel.findOne({}).lean();
-  if (!env) {
-    return res.status(500).send({
-      valid: false,
-      message: "Smartship ENVs not found",
-    });
-  }
+    let hubData;
+    try {
+      hubData = await HubModel.find({ _id: hubId, sellerId: sellerId });
+    } catch (err) {
+      return next(err);
+    }
+    // console.log(hubData);
+    if (hubData.length < 1) return res.status(200).send({ valid: false, message: "hub not found" });
 
-  // const smartshipToken = env.token_type + " " + env.access_token;
-  // const smartshipToken = await getSmartShipToken();
-  // if (smartshipToken === false) return res.status(200).send({ valid: false, message: "smartship ENVs not found" });
+    const env = await EnvModel.findOne({}).lean();
+    if (!env) {
+      return res.status(500).send({
+        valid: false,
+        message: "Smartship ENVs not found",
+      });
+    }
 
-  // const smartshipAPIconfig = { headers: { Authorization: smartshipToken } };
-  // const smartshipAPIPayload = { hub_ids: [hubData[0].hub_id] };
+    // const smartshipToken = env.token_type + " " + env.access_token;
+    // const smartshipToken = await getSmartShipToken();
+    // if (smartshipToken === false) return res.status(200).send({ valid: false, message: "smartship ENVs not found" });
 
-  // const response = await axios.post(
-  //   config.SMART_SHIP_API_BASEURL + APIs.HUB_DELETE,
-  //   smartshipAPIPayload,
-  //   smartshipAPIconfig
-  // );
-  // const smartShipResponseData = response.data;
-  // Logger.plog(JSON.stringify(smartShipResponseData));
-  // if (!smartShipResponseData.status) return res.status(200).send({ valid: false, message: "Failed to delete Hub" });
-  try {
-    const deletedHub = await HubModel.findByIdAndDelete(hubId);
+    // const smartshipAPIconfig = { headers: { Authorization: smartshipToken } };
+    // const smartshipAPIPayload = { hub_ids: [hubData[0].hub_id] };
+
+    // const response = await axios.post(
+    //   config.SMART_SHIP_API_BASEURL + APIs.HUB_DELETE,
+    //   smartshipAPIPayload,
+    //   smartshipAPIconfig
+    // );
+    // const smartShipResponseData = response.data;
+    // Logger.plog(JSON.stringify(smartShipResponseData));
+    // if (!smartShipResponseData.status) return res.status(200).send({ valid: false, message: "Failed to delete Hub" });
+    try {
+      const deletedHub = await HubModel.findByIdAndDelete(hubId);
+      return res.status(200).send({
+        valid: true,
+        message: "Hub deleted successfully",
+        hub: deleteHub,
+      });
+    } catch (err) {
+      return next(err);
+    }
+
     return res.status(200).send({
-      valid: true,
-      message: "Hub deleted successfully",
-      hub: deleteHub,
+      valid: false,
+      message: "incomplete route",
     });
-  } catch (err) {
-    return next(err);
+  } catch (error) {
+    return next(error)
   }
-
-  return res.status(200).send({
-    valid: false,
-    message: "incomplete route",
-  });
 };
 
 type SMARTSHIP_UPDATE_DATA = {

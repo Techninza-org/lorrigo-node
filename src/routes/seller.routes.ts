@@ -2,14 +2,18 @@ import { Router } from "express";
 import { deleteSeller, getSeller, updateSeller, getRemittaces, getRemittaceByID, uploadKycDocs } from "../controllers/seller.controller";
 import { imageStorage } from "../utils/multerConfig";
 
+import multer from 'multer';
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+
 const sellerRouter = Router();
 
-// console.log(Object.keys(imageStorage))
 //@ts-ignore
 sellerRouter.put("/",imageStorage.single('logo') ,updateSeller);
 
 //@ts-ignore
-sellerRouter.put("/kyc", uploadKycDocs);
+sellerRouter.put("/kyc", upload.single('file'), uploadKycDocs);
 
 //@ts-ignore
 sellerRouter.get("/", getSeller);

@@ -66,61 +66,69 @@ export const validateSmartShipServicablity = async (
 };
 
 export const addVendors = async (req: Request, res: Response, next: NextFunction) => {
-  const vendor = new CourierModel(req.body);
-  let savedVendor;
   try {
-    savedVendor = await vendor.save();
-  } catch (err) {
-    // console.log(err);
-    return next(err);
+    const vendor = new CourierModel(req.body);
+    let savedVendor;
+    try {
+      savedVendor = await vendor.save();
+    } catch (err) {
+      // console.log(err);
+      return next(err);
+    }
+    return res.status(200).send({
+      valid: true,
+      vendor: savedVendor,
+    });
+  } catch (error) {
+    return next(error)
   }
-  return res.status(200).send({
-    valid: true,
-    vendor: savedVendor,
-  });
 };
 
 export const updateVendor4Seller = async (req: Request, res: Response, next: NextFunction) => {
-  const body = req.body;
-  if (!isValidPayload(body, ["vendorId", "sellerId"])) {
-    return res.status(200).send({ valid: false, message: "Invalid payload." });
-  }
-  const { vendorId, sellerId } = body;
-  if (!isValidObjectId(vendorId) || !isValidObjectId(sellerId)) {
-    return res.status(200).send({ valid: false, message: "Invalid vendorId or sellerId." });
-  }
   try {
-    const vendor = await CourierModel.findById(vendorId);
-    if (!vendor) return res.status(200).send({ valid: false, message: "Vendor not found" });
-    delete body?.vendorId;
-    delete body?.sellerId;
-    const previouslySavedPricing = await CustomPricingModel.findOne({ sellerId, vendorId }).lean();
-    let savedPricing;
-    if (previouslySavedPricing) {
-      //update it
-      savedPricing = await CustomPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
-      return res.status(200).send({ valid: true, message: "vendor priced updated for user", savedPricing });
-    } else {
-      // create it
-      const toAdd = {
-        vendorId: vendorId,
-        sellerId: sellerId,
-        withinCity: vendor.withinCity,
-        withinZone: vendor.withinZone,
-        withinMetro: vendor.withinMetro,
-        withinRoi: vendor.withinRoi,
-        northEast: vendor.northEast,
-        ...body,
-      };
-      savedPricing = new CustomPricingModel(toAdd);
-      savedPricing = await savedPricing.save();
-      return res.status(200).send({ valid: true, message: "vendor priced updated for user", savedPricing });
+    const body = req.body;
+    if (!isValidPayload(body, ["vendorId", "sellerId"])) {
+      return res.status(200).send({ valid: false, message: "Invalid payload." });
     }
-    return res.status(200).send({ valid: false, message: "Incomplee " });
-  } catch (err) {
-    return next(err);
+    const { vendorId, sellerId } = body;
+    if (!isValidObjectId(vendorId) || !isValidObjectId(sellerId)) {
+      return res.status(200).send({ valid: false, message: "Invalid vendorId or sellerId." });
+    }
+    try {
+      const vendor = await CourierModel.findById(vendorId);
+      if (!vendor) return res.status(200).send({ valid: false, message: "Vendor not found" });
+      delete body?.vendorId;
+      delete body?.sellerId;
+      const previouslySavedPricing = await CustomPricingModel.findOne({ sellerId, vendorId }).lean();
+      let savedPricing;
+      if (previouslySavedPricing) {
+        //update it
+        savedPricing = await CustomPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
+        return res.status(200).send({ valid: true, message: "vendor priced updated for user", savedPricing });
+      } else {
+        // create it
+        const toAdd = {
+          vendorId: vendorId,
+          sellerId: sellerId,
+          withinCity: vendor.withinCity,
+          withinZone: vendor.withinZone,
+          withinMetro: vendor.withinMetro,
+          withinRoi: vendor.withinRoi,
+          northEast: vendor.northEast,
+          ...body,
+        };
+        savedPricing = new CustomPricingModel(toAdd);
+        savedPricing = await savedPricing.save();
+        return res.status(200).send({ valid: true, message: "vendor priced updated for user", savedPricing });
+      }
+      return res.status(200).send({ valid: false, message: "Incomplee " });
+    } catch (err) {
+      return next(err);
+    }
+    return res.status(200).send({ valid: false, message: "Not implemented yet" });
+  } catch (error) {
+    return next(error)
   }
-  return res.status(200).send({ valid: false, message: "Not implemented yet" });
 };
 
 export const getSellers = async (req: Request, res: Response, next: NextFunction) => {
@@ -349,213 +357,218 @@ export const rateCalculation = async (
   collectableAmount?: any,
   hubId?: number,
 ) => {
-  const numPaymentType = Number(paymentType);
-  if (!(numPaymentType === 0 || numPaymentType === 1)) throw new Error("Invalid paymentType");
-  if (paymentType === 1) {
-    if (!collectableAmount) throw new Error("collectable amount is required.");
-  }
-  if (weightUnit === "g") {
-    weight = (1 / 1000) * weight;
-  }
-  let volumetricWeight = null;
-  if (sizeUnit === "cm") {
-    const volume = boxLength * boxWidth * boxHeight;
-    volumetricWeight = Math.round(volume / 5000);
-  } else if (sizeUnit === "m") {
-    volumetricWeight = Math.round((boxLength * boxWidth * boxHeight) / 5);
-  } else {
-    throw new Error("unhandled size unit");
-  }
-
-  const pickupDetails = await getPincodeDetails(Number(pickupPincode));
-  const deliveryDetails = await getPincodeDetails(Number(deliveryPincode));
-
-  if (!pickupDetails || !deliveryDetails) throw new Error("invalid pickup or delivery pincode");
-
-  // Convert vendor IDs to ObjectId format
-  const vendorIds = users_vendors.map(convertToObjectId).filter(id => id !== null);
-
-  // Check if any IDs failed to convert
-  if (vendorIds.length !== users_vendors.length) {
-    console.error('Some vendor IDs could not be converted.');
-  }
-
-  const vendors = await CourierModel.find({
-    _id: { $in: vendorIds }
-  });
-
-  let commonCouriers: any[] = [];
-
   try {
-    const token = await getShiprocketToken();
-    if (!token) return [{ message: "Invalid Shiprocket token" }];
+    const numPaymentType = Number(paymentType);
+    if (!(numPaymentType === 0 || numPaymentType === 1)) throw new Error("Invalid paymentType");
+    if (paymentType === 1) {
+      if (!collectableAmount) throw new Error("collectable amount is required.");
+    }
+    if (weightUnit === "g") {
+      weight = (1 / 1000) * weight;
+    }
+    let volumetricWeight = null;
+    if (sizeUnit === "cm") {
+      const volume = boxLength * boxWidth * boxHeight;
+      volumetricWeight = Math.round(volume / 5000);
+    } else if (sizeUnit === "m") {
+      volumetricWeight = Math.round((boxLength * boxWidth * boxHeight) / 5);
+    } else {
+      throw new Error("unhandled size unit");
+    }
 
-    const url = envConfig.SHIPROCKET_API_BASEURL + APIs.SHIPROCKET_ORDER_COURIER + `/?pickup_postcode=${pickupPincode}&delivery_postcode=${deliveryPincode}&weight=${weight}&cod=0&order_id=${shiprocketOrderID}`;
+    const pickupDetails = await getPincodeDetails(Number(pickupPincode));
+    const deliveryDetails = await getPincodeDetails(Number(deliveryPincode));
 
-    const config = {
-      headers: {
-        Authorization: token,
-      },
-    };
+    if (!pickupDetails || !deliveryDetails) throw new Error("invalid pickup or delivery pincode");
 
-    const response = await axios.get(url, config);
-    const courierCompanies = response?.data?.data?.available_courier_companies;
+    // Convert vendor IDs to ObjectId format
+    const vendorIds = users_vendors.map(convertToObjectId).filter(id => id !== null);
+
+    // Check if any IDs failed to convert
+    if (vendorIds.length !== users_vendors.length) {
+      console.error('Some vendor IDs could not be converted.');
+    }
+
+    const vendors = await CourierModel.find({
+      _id: { $in: vendorIds }
+    });
+
+    let commonCouriers: any[] = [];
+
+    try {
+      const token = await getShiprocketToken();
+      if (!token) return [{ message: "Invalid Shiprocket token" }];
+
+      const url = envConfig.SHIPROCKET_API_BASEURL + APIs.SHIPROCKET_ORDER_COURIER + `/?pickup_postcode=${pickupPincode}&delivery_postcode=${deliveryPincode}&weight=${weight}&cod=0&order_id=${shiprocketOrderID}`;
+
+      const config = {
+        headers: {
+          Authorization: token,
+        },
+      };
+
+      const response = await axios.get(url, config);
+      const courierCompanies = response?.data?.data?.available_courier_companies;
 
 
-    const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
-    vendors.forEach((vendor: any) => {
-      const courier = courierCompanies.find((company: { courier_company_id: number; }) => company.courier_company_id === vendor.carrierID);
-      if (courier && shiprocketNiceName) {
+      const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
+      vendors.forEach((vendor: any) => {
+        const courier = courierCompanies.find((company: { courier_company_id: number; }) => company.courier_company_id === vendor.carrierID);
+        if (courier && shiprocketNiceName) {
 
-        const shiprocketVendors = vendors.filter((vendor) => {
-          return vendor?.vendor_channel_id?.toString() === shiprocketNiceName._id.toString();
-        });
-
-        if (shiprocketVendors.length > 0) {
-          commonCouriers.push({
-            ...vendor.toObject(),
-            nickName: shiprocketNiceName.nickName
+          const shiprocketVendors = vendors.filter((vendor) => {
+            return vendor?.vendor_channel_id?.toString() === shiprocketNiceName._id.toString();
           });
+
+          if (shiprocketVendors.length > 0) {
+            commonCouriers.push({
+              ...vendor.toObject(),
+              nickName: shiprocketNiceName.nickName
+            });
+          }
+        }
+      });
+    } catch (error) {
+      console.log("error", error);
+    }
+
+
+    try {
+      const isSmartshipServicable = await validateSmartShipServicablity(
+        1,
+        hubId || 1,
+        Number(deliveryPincode),
+        weight,
+        []
+      );
+
+      const smartShipNiceName = await EnvModel.findOne({ name: "SMARTSHIP" }).select("_id nickName");
+      if (smartShipNiceName) {
+        const smartShipVendors = vendors.filter((vendor) => {
+          return vendor?.vendor_channel_id?.toString() === smartShipNiceName._id.toString();
+        });
+        if (isSmartshipServicable) {
+          // Add nickname for each vendor in smartShipVendors array
+          const smartShipVendorsWithNickname = smartShipVendors.map((vendor) => {
+            return {
+              ...vendor.toObject(), // Convert vendor to plain JavaScript object
+              nickName: smartShipNiceName.nickName
+            };
+          });
+          commonCouriers.push(...smartShipVendorsWithNickname);
         }
       }
-    });
-  } catch (error) {
-    console.log("error", error);
-  }
+    } catch (error) {
+      console.log("error", error);
+    }
+
+    const data2send: {
+      name: string;
+      minWeight: number;
+      charge: number;
+      type: string;
+      expectedPickup: string;
+      carrierID: number;
+      order_zone: string;
+      nickName?: string;
+
+    }[] = [];
+
+    const loopLength = commonCouriers.length;
 
 
-  try {
-    const isSmartshipServicable = await validateSmartShipServicablity(
-      1,
-      hubId || 1,
-      Number(deliveryPincode),
-      weight,
-      []
-    );
+    for (let i = 0; i < loopLength; i++) {
+      let orderWeight = volumetricWeight > Number(weight) ? volumetricWeight : Number(weight);
+      const cv = commonCouriers[i];
 
-    const smartShipNiceName = await EnvModel.findOne({ name: "SMARTSHIP" }).select("_id nickName");
-    if (smartShipNiceName) {
-      const smartShipVendors = vendors.filter((vendor) => {
-        return vendor?.vendor_channel_id?.toString() === smartShipNiceName._id.toString();
+      let order_zone = "";
+      let increment_price = null;
+      const userSpecificUpdatedVendorDetails = await CustomPricingModel.find({
+        vendorId: cv._id,
+        sellerId: seller_id,
       });
-      if (isSmartshipServicable) {
-        // Add nickname for each vendor in smartShipVendors array
-        const smartShipVendorsWithNickname = smartShipVendors.map((vendor) => {
-          return {
-            ...vendor.toObject(), // Convert vendor to plain JavaScript object
-            nickName: smartShipNiceName.nickName
-          };
-        });
-        commonCouriers.push(...smartShipVendorsWithNickname);
+      if (userSpecificUpdatedVendorDetails.length === 1) {
+        cv.withinCity = userSpecificUpdatedVendorDetails[0].withinCity;
+        cv.withinZone = userSpecificUpdatedVendorDetails[0].withinZone;
+        cv.withinMetro = userSpecificUpdatedVendorDetails[0].withinMetro;
+        cv.northEast = userSpecificUpdatedVendorDetails[0].northEast;
+        cv.withinRoi = userSpecificUpdatedVendorDetails[0].withinRoi;
       }
+      if (pickupDetails.District === deliveryDetails.District) {
+        increment_price = cv.withinCity;
+        order_zone = "Zone A";
+      } else if (pickupDetails.StateName === deliveryDetails.StateName) {
+        // same state
+        increment_price = cv.withinZone;
+        order_zone = "Zone B";
+      } else if (
+        MetroCitys.find((city) => city === pickupDetails?.District) &&
+        MetroCitys.find((city) => city === deliveryDetails?.District)
+      ) {
+        // metro citys
+        increment_price = cv.withinMetro;
+        order_zone = "Zone C";
+      } else if (
+        NorthEastStates.find((state) => state === pickupDetails?.StateName) &&
+        NorthEastStates.find((state) => state === deliveryDetails?.StateName)
+      ) {
+        // north east
+        increment_price = cv.northEast;
+        order_zone = "Zone E";
+      } else {
+        increment_price = cv.withinRoi;
+        order_zone = "Zone D";
+      }
+      if (!increment_price) {
+        return [{ message: "invalid incrementPrice" }];
+      }
+      const parterPickupTime = cv.pickupTime;
+      const partnerPickupHour = Number(parterPickupTime.split(":")[0]);
+      const partnerPickupMinute = Number(parterPickupTime.split(":")[1]);
+      const partnerPickupSecond = Number(parterPickupTime.split(":")[2]);
+      const pickupTime = new Date(new Date().setHours(partnerPickupHour, partnerPickupMinute, partnerPickupSecond, 0));
+
+      const currentTime = new Date();
+      let expectedPickup: string;
+      if (pickupTime < currentTime) {
+        expectedPickup = "Tomorrow";
+      } else {
+        expectedPickup = "Today";
+      }
+
+      const minWeight = cv.weightSlab;
+      // TODO apply cod
+      //@ts-ignore
+      let totalCharge = 0;
+      totalCharge += increment_price.basePrice;
+      orderWeight = orderWeight - cv.weightSlab;
+      const codPrice = cv.codCharge?.hard;
+      const codAfterPercent = (cv.codCharge?.percent / 100) * collectableAmount;
+      let cod = 0;
+      if (paymentType === 1) {
+        cod = codPrice > codAfterPercent ? codPrice : codAfterPercent;
+      }
+      const weightIncrementRatio = Math.ceil(orderWeight / cv.incrementWeight);
+      // console.log("weightIncrementRatio", weightIncrementRatio)
+      totalCharge += increment_price.incrementPrice * weightIncrementRatio + cod;
+
+      data2send.push({
+        nickName: cv.nickName,
+        name: cv.name,
+        minWeight,
+        charge: totalCharge,
+        type: cv.type,
+        expectedPickup,
+        carrierID: cv.carrierID,
+        order_zone,
+      });
     }
+
+    return data2send;
   } catch (error) {
-    console.log("error", error);
+    console.log("error [Rate Calculation]: ", error);
+    return [{ message: "error: " + (error as Error).message }];
   }
-
-  const data2send: {
-    name: string;
-    minWeight: number;
-    charge: number;
-    type: string;
-    expectedPickup: string;
-    carrierID: number;
-    order_zone: string;
-    nickName?: string;
-
-  }[] = [];
-
-  const loopLength = commonCouriers.length;
-
-
-  for (let i = 0; i < loopLength; i++) {
-    let orderWeight = volumetricWeight > Number(weight) ? volumetricWeight : Number(weight);
-    const cv = commonCouriers[i];
-
-    let order_zone = "";
-    let increment_price = null;
-    const userSpecificUpdatedVendorDetails = await CustomPricingModel.find({
-      vendorId: cv._id,
-      sellerId: seller_id,
-    });
-    if (userSpecificUpdatedVendorDetails.length === 1) {
-      cv.withinCity = userSpecificUpdatedVendorDetails[0].withinCity;
-      cv.withinZone = userSpecificUpdatedVendorDetails[0].withinZone;
-      cv.withinMetro = userSpecificUpdatedVendorDetails[0].withinMetro;
-      cv.northEast = userSpecificUpdatedVendorDetails[0].northEast;
-      cv.withinRoi = userSpecificUpdatedVendorDetails[0].withinRoi;
-    }
-    if (pickupDetails.District === deliveryDetails.District) {
-      increment_price = cv.withinCity;
-      order_zone = "Zone A";
-    } else if (pickupDetails.StateName === deliveryDetails.StateName) {
-      // same state
-      increment_price = cv.withinZone;
-      order_zone = "Zone B";
-    } else if (
-      MetroCitys.find((city) => city === pickupDetails?.District) &&
-      MetroCitys.find((city) => city === deliveryDetails?.District)
-    ) {
-      // metro citys
-      increment_price = cv.withinMetro;
-      order_zone = "Zone C";
-    } else if (
-      NorthEastStates.find((state) => state === pickupDetails?.StateName) &&
-      NorthEastStates.find((state) => state === deliveryDetails?.StateName)
-    ) {
-      // north east
-      increment_price = cv.northEast;
-      order_zone = "Zone E";
-    } else {
-      increment_price = cv.withinRoi;
-      order_zone = "Zone D";
-    }
-    if (!increment_price) {
-      return [{ message: "invalid incrementPrice" }];
-    }
-    const parterPickupTime = cv.pickupTime;
-    const partnerPickupHour = Number(parterPickupTime.split(":")[0]);
-    const partnerPickupMinute = Number(parterPickupTime.split(":")[1]);
-    const partnerPickupSecond = Number(parterPickupTime.split(":")[2]);
-    const pickupTime = new Date(new Date().setHours(partnerPickupHour, partnerPickupMinute, partnerPickupSecond, 0));
-
-    const currentTime = new Date();
-    let expectedPickup: string;
-    if (pickupTime < currentTime) {
-      expectedPickup = "Tomorrow";
-    } else {
-      expectedPickup = "Today";
-    }
-
-    const minWeight = cv.weightSlab;
-    // TODO apply cod
-    //@ts-ignore
-    let totalCharge = 0;
-    totalCharge += increment_price.basePrice;
-    orderWeight = orderWeight - cv.weightSlab;
-    const codPrice = cv.codCharge?.hard;
-    const codAfterPercent = (cv.codCharge?.percent / 100) * collectableAmount;
-    let cod = 0;
-    if (paymentType === 1) {
-      cod = codPrice > codAfterPercent ? codPrice : codAfterPercent;
-    }
-    const weightIncrementRatio = Math.ceil(orderWeight / cv.incrementWeight);
-    // console.log("weightIncrementRatio", weightIncrementRatio)
-    totalCharge += increment_price.incrementPrice * weightIncrementRatio + cod;
-
-    data2send.push({
-      nickName: cv.nickName,
-      name: cv.name,
-      minWeight,
-      charge: totalCharge,
-      type: cv.type,
-      expectedPickup,
-      carrierID: cv.carrierID,
-      order_zone,
-    });
-  }
-
-  return data2send;
 };
 
 // Define types for pickup and delivery details
@@ -688,6 +701,7 @@ export function getShiprocketBucketing(status: number) {
     10: { bucket: RTO, description: "RTO Delivered" },
     12: { bucket: LOST_DAMAGED, description: "Lost" },
     14: { bucket: RTO, description: "RTO Acknowledged" },
+    15: { bucket: NDR, description: "Customer Not Available/Contactable" },
     16: { bucket: CANCELED, description: "Cancellation Requested" },
     17: { bucket: IN_TRANSIT, description: "Out For Delivery" },
     18: { bucket: IN_TRANSIT, description: "In Transit" },

@@ -6,28 +6,32 @@ import { B2COrderModel } from "../models/order.model";
 import RemittanceModel from "../models/remittance-modal";
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  const seller = await req.seller;
-  delete seller?.password;
-  delete seller?.__v;
-  return res.status(200).send({ valid: true, seller });
+  try {
+    const seller = await req.seller;
+    delete seller?.password;
+    delete seller?.__v;
+    return res.status(200).send({ valid: true, seller });
+  } catch (error) {
+    return next(error);
+  }
 };
 
 
-
 export const updateSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  let body = req.body;
-  const sellerId = req.seller._id;
-  let logo = req.file?.path;
-  logo = logo?.replace("uploads", "");
-  if (body?.password) return res.status(200).send({ valid: false, message: "Invalid payload" });
- const companyProfile = JSON.parse(JSON.parse(body?.companyProfile));
- console.log(companyProfile);
- companyProfile.logo = logo;
- body.companyProfile = companyProfile;
- console.log(companyProfile);
+  try {
+    let body = req.body;
+    const sellerId = req.seller._id;
+    let logo = req.file?.path;
+    logo = logo?.replace("uploads", "");
+    if (body?.password) return res.status(200).send({ valid: false, message: "Invalid payload" });
+    const companyProfile = JSON.parse(JSON.parse(body?.companyProfile));
+    console.log(companyProfile);
+    companyProfile.logo = logo;
+    body.companyProfile = companyProfile;
+    console.log(companyProfile);
 
-  try { 
-    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, { ...body }, { new: true }).select([  
+
+    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, { ...body }, { new: true }).select([
       "-__v",
       "-password",
       "-margin",
@@ -44,31 +48,37 @@ export const updateSeller = async (req: ExtendedRequest, res: Response, next: Ne
 };
 
 export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  let body = req.body;
-  const sellerId = req.seller._id;
-  let logo = req.file?.path;
-  logo = logo?.replace("uploads", "");
-  if (body?.password) return res.status(200).send({ valid: false, message: "Invalid payload" });
- const companyProfile = JSON.parse(JSON.parse(body?.companyProfile));
- companyProfile.logo = logo;
- body.companyProfile = companyProfile;
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
 
-  try { 
-    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, { ...body }, { new: true }).select([  
-      "-__v",
-      "-password",
-      "-margin",
-    ]);
+    const sellerId = req.seller._id;
+    const fileData = req.file.buffer.toString('base64');
 
-    return res.status(200).send({
+    // Insert the file data into the database
+    // const result = await collection.insertOne({
+    //   filename: req.file.originalname,
+    //   data: fileData,
+    // });
+
+    // Update seller document with file reference
+    const updatedSeller = await SellerModel.findByIdAndUpdate(
+      sellerId,
+      { $set: { kycDetails: { document1Front: fileData } } },
+      { new: true }
+    ).select(["-__v", "-password", "-margin"]);
+
+    return res.status(200).json({
       valid: true,
-      message: "updated success",
+      message: 'File uploaded successfully',
       seller: updatedSeller,
     });
   } catch (err) {
     return next(err);
   }
 };
+
 
 export const deleteSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   const seller = req.seller;
