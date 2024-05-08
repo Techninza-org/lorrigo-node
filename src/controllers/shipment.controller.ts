@@ -178,11 +178,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           .status(200)
           .send({ valid: false, message: "order failed to create", order, response: externalAPIResponse });
       } else {
-        console.log("externalAPIResponse", externalAPIResponse);
         const shipmentResponseToSave = new ShipmentResponseModel({ order: order._id, response: externalAPIResponse });
         try {
           const savedShipmentResponse = await shipmentResponseToSave.save();
-          console.log(savedShipmentResponse, externalAPIResponse?.data?.success_order_details, "savedShipmentResponse");
           const awbNumber = externalAPIResponse?.data?.success_order_details?.orders[0]?.awb_number
           const carrierName = externalAPIResponse?.data?.success_order_details?.orders[0]?.carrier_name + " " + (vendorName?.nickName);
           order.client_order_reference_id = client_order_reference_id;
@@ -418,7 +416,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
 
       const requestBody = {
         client_order_reference_ids: [order._id + "_" + order.order_reference_id],
-        preferred_pickup_date: pickupDate,
+        preferred_pickup_date: pickupDate.replaceAll(" ", "-"),
         shipment_type: 1,
       };
 

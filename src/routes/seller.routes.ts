@@ -5,15 +5,21 @@ import { imageStorage } from "../utils/multerConfig";
 import multer from 'multer';
 
 const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
+const fileUpload = multer({ storage: storage });
 
 const sellerRouter = Router();
 
 //@ts-ignore
-sellerRouter.put("/",imageStorage.single('logo') ,updateSeller);
+sellerRouter.put("/", fileUpload.single('file'), updateSeller);
 
-//@ts-ignore
-sellerRouter.put("/kyc", upload.single('file'), uploadKycDocs);
+sellerRouter.put("/kyc", fileUpload.fields([
+    { name: 'document1Front', maxCount: 1 },
+    { name: 'document1Back', maxCount: 1 },
+    { name: 'document2Front', maxCount: 1 },
+    { name: 'document2Back', maxCount: 1 },
+    { name: 'photoUrl', maxCount: 1 }
+    //@ts-ignore
+]), uploadKycDocs);
 
 //@ts-ignore
 sellerRouter.get("/", getSeller);

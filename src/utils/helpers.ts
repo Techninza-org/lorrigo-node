@@ -133,6 +133,14 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
 
 export const getSellers = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    let { limit, page, status }: { limit?: number; page?: number; status?: string } = req.query;
+
+    limit = Number(limit);
+    page = Number(page);
+    page = page < 1 ? 1 : page;
+    limit = limit < 1 ? 1 : limit;
+
+    const skip = (page - 1) * limit;
     const sellers = await SellerModel.find({}, { password: 0, __v: 0 });
     res.status(200).send({
       valid: true,
@@ -158,7 +166,7 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
   const body = req.body;
   const seller = req.seller;
   const users_vendors = seller?.vendors || [];
-  console.log(users_vendors)
+  console.log(users_vendors);
   if (
     !isValidPayload(body, [
       "pickupPincode",
@@ -180,7 +188,6 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
   }
 
   try {
-
     let weight = body.weight;
 
     const numPaymentType = Number(body.paymentType);
@@ -206,7 +213,6 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
 
     if (!pickupDetails || !deliveryDetails) throw new Error("invalid pickup or delivery pincode");
 
-
     const data2send: {
       name: string;
       minWeight: number;
@@ -216,31 +222,30 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
       carrierID: number;
       order_zone: string;
       nickName?: string;
-
     }[] = [];
 
     // Convert vendor IDs to ObjectId format
     // @ts-ignore
-    const vendorIds = users_vendors.map(convertToObjectId).filter(id => id !== null);
+    const vendorIds = users_vendors.map(convertToObjectId).filter((id) => id !== null);
 
     // Check if any IDs failed to convert
     if (vendorIds.length !== users_vendors.length) {
-      console.error('Some vendor IDs could not be converted.');
+      console.error("Some vendor IDs could not be converted.");
     }
 
     const vendors = await CourierModel.find({
-      _id: { $in: vendorIds }
-    }).populate("vendor_channel_id").lean();
-
+      _id: { $in: vendorIds },
+    })
+      .populate("vendor_channel_id")
+      .lean();
 
     const loopLength = vendors.length;
 
-
     for (let i = 0; i < loopLength; i++) {
-      console.log(weight, "wright")
+      console.log(weight, "wright");
       let orderWeight = volumetricWeight > Number(weight) ? volumetricWeight : Number(weight);
       const cv = vendors[i];
-      console.log("cv", cv)
+      console.log("cv", cv);
 
       let order_zone = "";
       let increment_price = null;
@@ -355,7 +360,7 @@ export const rateCalculation = async (
   users_vendors: string[],
   seller_id: any,
   collectableAmount?: any,
-  hubId?: number,
+  hubId?: number
 ) => {
   try {
     const numPaymentType = Number(paymentType);
@@ -381,17 +386,18 @@ export const rateCalculation = async (
 
     if (!pickupDetails || !deliveryDetails) throw new Error("invalid pickup or delivery pincode");
 
-    // Convert vendor IDs to ObjectId format
-    const vendorIds = users_vendors.map(convertToObjectId).filter(id => id !== null);
+  // Convert vendor IDs to ObjectId format
+  const vendorIds = users_vendors.map(convertToObjectId).filter((id) => id !== null);
 
     // Check if any IDs failed to convert
     if (vendorIds.length !== users_vendors.length) {
       console.error('Some vendor IDs could not be converted.');
     }
 
-    const vendors = await CourierModel.find({
-      _id: { $in: vendorIds }
-    });
+  const vendors = await CourierModel.find({
+    _id: { $in: vendorIds },
+    isActive: true,
+  });
 
     let commonCouriers: any[] = [];
 
@@ -407,9 +413,8 @@ export const rateCalculation = async (
         },
       };
 
-      const response = await axios.get(url, config);
-      const courierCompanies = response?.data?.data?.available_courier_companies;
-
+    const response = await axios.get(url, config);
+    const courierCompanies = response?.data?.data?.available_courier_companies;
 
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
       vendors.forEach((vendor: any) => {
@@ -602,7 +607,6 @@ export const calculateZone = async (pickupPincode: PincodePincode, deliveryPinco
   }
 };
 
-
 // condition timing should be in the format: "hour:minute:second"
 export const getNextDateWithDesiredTiming = (timing: string): Date => {
   const currentDate = new Date();
@@ -680,7 +684,6 @@ export async function getShiprocketToken(): Promise<string | false> {
   }
 }
 
-
 export function getShiprocketBucketing(status: number) {
   const shiprocketStatusMapping = {
     // 13: { bucket: NEW, description: "Pickup Error" },
@@ -692,7 +695,6 @@ export function getShiprocketBucketing(status: number) {
     // 54: { bucket: NEW, description: "In Transit Overseas" },
     // 55: { bucket: NEW, description: "Connection Aligned" },
     // 56: { bucket: NEW, description: "FC MANIFEST GENERATED" },
-
 
     6: { bucket: IN_TRANSIT, description: "Shipped" },
     7: { bucket: DELIVERED, description: "Delivered" },
@@ -729,21 +731,22 @@ export function getShiprocketBucketing(status: number) {
     78: { bucket: RTO, description: "REACHED_BACK_AT_SELLER_CITY" },
     // Additional statuses omitted for brevity
   };
-  return shiprocketStatusMapping[status as keyof typeof shiprocketStatusMapping] || { bucket: -1, description: "Status code not found" };
+  return (
+    shiprocketStatusMapping[status as keyof typeof shiprocketStatusMapping] || {
+      bucket: -1,
+      description: "Status code not found",
+    }
+  );
 }
-
-
 
 export function getSmartshipBucketing(status: number) {
   const smartshipStatusMapping = {
-
-    // commented statuses are not using by the our tracking system 
+    // commented statuses are not using by the our tracking system
     // 0: { bucket: NEW, description: "Open" },
     // 2: { bucket: NEW, description: "Confirmed" },
     // 3: { bucket: NEW, description: "Shipping Label Generated" },
     // 24: { bucket: NEW, description: "Courier Assigned" },
     // 4: { bucket: NEW, description: "Manifested" },
-
 
     10: { bucket: IN_TRANSIT, description: "Shipped" },
     27: { bucket: IN_TRANSIT, description: "In Transit" },
@@ -775,10 +778,13 @@ export function getSmartshipBucketing(status: number) {
     212: { bucket: RTO, description: "RTO - In Transit - Damaged" },
     189: { bucket: LOST_DAMAGED, description: "Forward Shipment Lost" },
   };
-  return smartshipStatusMapping[status as keyof typeof smartshipStatusMapping] || { bucket: -1, description: "Status code not found" };
+  return (
+    smartshipStatusMapping[status as keyof typeof smartshipStatusMapping] || {
+      bucket: -1,
+      description: "Status code not found",
+    }
+  );
 }
-
-
 
 export async function isSmartr_surface_servicable(pincode: number): Promise<boolean> {
   /*

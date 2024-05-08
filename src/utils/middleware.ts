@@ -9,42 +9,46 @@ export type ExtendedRequest = Request & {
 };
 
 export const AuthMiddleware = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  const token = req.headers?.authorization;
-
-  if (!token) {
-    return res.status(200).send({
-      valid: false,
-      message: "token is required",
-    });
-  }
-
-  const splittedToken = token.split(" ");
-  if (splittedToken[0] !== "Bearer") {
-    return res.status(200).send({
-      valid: false,
-      message: "invalid token_type",
-    });
-  }
-
-  let decryptedToken: any;
   try {
-    decryptedToken = jwt.verify(splittedToken[1], config.JWT_SECRET!);
-  } catch (err: any) {
-    return next(err);
-  }
+    const token = req.headers?.authorization;
 
-  // extracting seller using token and seller model
-  const sellerEmail = decryptedToken?.email;
-  if (!sellerEmail) {
-    Logger.log("Error: token doens't contain email, ", sellerEmail);
-    const err = new Error("Error: token doens't contain email");
-    return next(err);
-  }
+    if (!token) {
+      return res.status(200).send({
+        valid: false,
+        message: "token is required",
+      });
+    }
 
-  const seller = await SellerModel.findOne({ email: sellerEmail }).lean();
-  if (!seller) return res.status(200).send({ valid: false, message: "Seller no more exists" });
-  req.seller = seller;
-  next();
+    const splittedToken = token.split(" ");
+    if (splittedToken[0] !== "Bearer") {
+      return res.status(200).send({
+        valid: false,
+        message: "invalid token_type",
+      });
+    }
+
+    let decryptedToken: any;
+    try {
+      decryptedToken = jwt.verify(splittedToken[1], config.JWT_SECRET!);
+    } catch (err: any) {
+      return next(err);
+    }
+
+    // extracting seller using token and seller model
+    const sellerEmail = decryptedToken?.email;
+    if (!sellerEmail) {
+      Logger.log("Error: token doens't contain email, ", sellerEmail);
+      const err = new Error("Error: token doens't contain email");
+      return next(err);
+    }
+
+    const seller = await SellerModel.findOne({ email: sellerEmail }).lean();
+    if (!seller) return res.status(200).send({ valid: false, message: "Seller no more exists" });
+    req.seller = seller;
+    next();
+  } catch (error) {
+    console.log(error, 'error[AuthMiddleware]');
+  }
 };
 
 export const ErrorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
@@ -65,10 +69,11 @@ export const ErrorHandler = (err: any, req: Request, res: Response, next: NextFu
         message: "Invalid Id",
       });
     }
+    Logger.log(err);
     return res.status(200).send({
       valid: false,
       // @ts-ignore
-      message:  err?.response?.data?.message ?? err?.message ?? "Something went wrong",
+      message: err?.response?.data?.message ?? err?.message ?? "Something went wrong",
     });
   } else {
     return res.status(200).send({

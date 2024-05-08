@@ -228,7 +228,7 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
     if (!token || !password || !old_password) {
       return res.status(200).send({
         valid: false,
-        message: "Invalid token or password",
+        message: "Invalid Payload",
       });
     }
 
@@ -236,7 +236,7 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
     try {
       decodedToken = jwt.verify(token, config.JWT_SECRET!) as { _id: string };
     } catch (err) {
-      return res.status(200).send({
+      return res.status(400).send({
         valid: false,
         message: "Invalid token",
       });
@@ -245,7 +245,7 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
     const existingUser = await SellerModel.findOne({ _id: decodedToken._id }).lean();
 
     if (!existingUser) {
-      return res.status(200).send({
+      return res.status(401).send({
         valid: false,
         message: "User doesn't exist",
       });
@@ -254,14 +254,22 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
     const isValidPassword = bcrypt.compareSync(old_password, existingUser.password);
 
     if (!isValidPassword) {
-      return res.status(200).send({
+      return res.status(403).send({
         valid: false,
-        message: "incorrect old password",
+        message: "Incorrect old password",
+      });
+    }
+    
+    const isSamedPassword = bcrypt.compareSync(password, existingUser.password);
+    
+    if (isSamedPassword) {
+      return res.status(403).send({
+        valid: false,
+        message: "New password can't be same as old password",
       });
     }
 
     const hashPassword = await bcrypt.hash(password, config.SALT_ROUND!);
-
     await SellerModel.updateOne({ _id: decodedToken._id }, { password: hashPassword });
 
     return res.status(200).send({

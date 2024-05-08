@@ -14,7 +14,7 @@ import customerRouter from "./routes/customer.routes";
 import morgan from "morgan";
 import shipmentRouter from "./routes/shipment.routes";
 import sellerRouter from "./routes/seller.routes";
-import runCron, { CONNECT_SHIPROCKET, CONNECT_SMARTR, CONNECT_SMARTSHIP, trackOrder_Smartship } from "./utils/cronjobs";
+import runCron, { CONNECT_SHIPROCKET, CONNECT_SMARTR, CONNECT_SMARTSHIP } from "./utils/cronjobs";
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
 import PincodeModel from "./models/pincode.model";
@@ -62,7 +62,7 @@ mongoose
 
 app.use("/api/auth", authRouter);
 app.post("/api/vendor", addVendors);
-app.get("/api/getsellers", getSellers);
+app.get("/api/getsellers", getSellers);    //admin
 app.post("/api/seller_vendor", updateVendor4Seller);
 
 //@ts-ignore
@@ -78,7 +78,7 @@ app.use("/api/order", AuthMiddleware, orderRouter);
 //@ts-ignore
 app.use("/api/shipment", AuthMiddleware, shipmentRouter);
 //@ts-ignore
-app.use("/api/admin", AuthMiddleware, adminRouter);
+app.use("/api/admin", adminRouter); //AuthMiddleware
 
 app.use(ErrorHandler);
 app.use("*", (req: Request, res: Response) => {

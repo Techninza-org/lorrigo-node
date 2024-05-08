@@ -34,6 +34,6 @@ shipmentRouter.post("/b2b/cancel", cancelB2BShipment);
 shipmentRouter.get("/b2b/track", trackB2BShipment);
 
 //@ts-ignore
-shipmentRouter.get('/dashboard', getShipemntDetails)
+shipmentRouter.get("/dashboard", getShipemntDetails);
 
 export default shipmentRouter;

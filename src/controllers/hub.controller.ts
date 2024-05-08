@@ -175,9 +175,13 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
 export const getHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   const sellerId = req.seller._id;
 
+  const { type } = req.query;
+
+  const query = type === "all" ? { sellerId } : { sellerId, isActive: true };
+
   let sellerHubs;
   try {
-    sellerHubs = await HubModel.find({ sellerId });
+    sellerHubs = await HubModel.find(query);
   } catch (err) {
     return next(err);
   }
@@ -252,19 +256,6 @@ export const getCityDetails = async (req: ExtendedRequest, res: Response, next: 
   }
 };
 
-// FIXME fix update hub when smartship isnt' login
-/*
-
-update-body =>
-  hub_name:string,
-  hub_phone: number,
-  pincode: string,
-  city: string,
-  state: string,
-  address1: string,
-  address2: string
-  delivery_type_id
-*/
 export const updateHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const sellerId = req.seller._id;

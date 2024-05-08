@@ -6,12 +6,17 @@ const sellerSchema = new mongoose.Schema({
   password: { type: String, required: true },
   walletBalance: { type: Number, default: 0, min: 0 },
   entityType: { type: String, required: false },
+  // below feild need to remove
+  gst: { type: String, required: false },
+  pan: { type: String, required: false },
+  aadhar: { type: String, required: false },
+  
+  prefix: { type: String, required: false },
   address: { type: String, required: false },
-  gstno: { type: String, required: false },
-  panno: { type: String, required: false },
   margin: { type: Number, min: 0, max: 100, default: 20 },
   vendors: [{ type: mongoose.Schema.Types.ObjectId, ref: "Courier" }],
   isVerified: { type: Boolean, default: false },
+  isActive: { type: Boolean, default: true },
   gstInvoice: {
     gstin: { type: String, required: false },
     tan: { type: String, required: false },
@@ -35,8 +40,8 @@ const sellerSchema = new mongoose.Schema({
   kycDetails: {
     businessType: { type: String, required: false },
     photoUrl: { type: String, required: false },
-    gstin: { type: String, required: false },
     pan: { type: String, required: false },
+    adhaar: { type: String, required: false },
     document1Front: { type: String, required: false },
     document1Back: { type: String, required: false },
     document2Front: { type: String, required: false },
@@ -50,6 +55,7 @@ const sellerSchema = new mongoose.Schema({
     ifscNumber: { type: String, required: false },
     accType: { type: String, required: false },
   },
+  createdAt: { type: Date, default: Date.now },
 });
 
 const SellerModel = mongoose.model("Seller", sellerSchema);

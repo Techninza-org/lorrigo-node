@@ -28,6 +28,7 @@ export const courierSchema = new mongoose.Schema(
     withinRoi: { type: pricingSchema, required: true },
     northEast: { type: pricingSchema, required: true },
     carrierID: { type: Number, required: true },
+    isActive: { type: Boolean, required: true, default: true },
   },
   { timestamps: true }
 );

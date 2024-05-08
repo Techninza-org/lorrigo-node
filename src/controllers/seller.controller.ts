@@ -1,8 +1,6 @@
 import { NextFunction, Response } from "express";
 import { ExtendedRequest } from "../utils/middleware";
 import SellerModel from "../models/seller.model";
-import { generateRemittanceId } from "../utils";
-import { B2COrderModel } from "../models/order.model";
 import RemittanceModel from "../models/remittance-modal";
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
@@ -20,16 +18,20 @@ export const getSeller = async (req: ExtendedRequest, res: Response, next: NextF
 export const updateSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     let body = req.body;
-    const sellerId = req.seller._id;
-    let logo = req.file?.path;
-    logo = logo?.replace("uploads", "");
-    if (body?.password) return res.status(200).send({ valid: false, message: "Invalid payload" });
-    const companyProfile = JSON.parse(JSON.parse(body?.companyProfile));
-    console.log(companyProfile);
-    companyProfile.logo = logo;
-    body.companyProfile = companyProfile;
-    console.log(companyProfile);
 
+    const sellerId = req.seller._id;
+    try {
+      // let logo = req?.file?.buffer.toString('base64');
+      // if (logo) {
+      //   query = {
+      //     ...body,
+      //     logo
+      //   }
+      // }
+
+    } catch (error) {
+      console.log(error, "error[Logo error]")
+    }
 
     const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, { ...body }, { new: true }).select([
       "-__v",
@@ -49,23 +51,45 @@ export const updateSeller = async (req: ExtendedRequest, res: Response, next: Ne
 
 export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
-    }
+    // if (!req.file) {
+    //   return res.status(400).json({ message: 'No file uploaded' });
+    // }
 
     const sellerId = req.seller._id;
-    const fileData = req.file.buffer.toString('base64');
+    const files = req.files as any;
 
-    // Insert the file data into the database
-    // const result = await collection.insertOne({
-    //   filename: req.file.originalname,
-    //   data: fileData,
-    // });
+    const { businessType, gstin, pan, photoUrl, submitted, verified } = req.body;
 
-    // Update seller document with file reference
+    const document1Front = files['document1Front'][0].buffer.toString('base64');
+    const document1Back = files['document1Back'][0].buffer.toString('base64');
+    const document2Front = files['document2Front'][0].buffer.toString('base64');
+    const document2Back = files['document2Back'][0].buffer.toString('base64');
+
+    const companyID = `LS${Math.floor(1000 + Math.random() * 9000)}`
+
+
+
     const updatedSeller = await SellerModel.findByIdAndUpdate(
       sellerId,
-      { $set: { kycDetails: { document1Front: fileData } } },
+      {
+        $set: {
+          kycDetails: {
+            businessType,
+            gstin,
+            pan,
+            photoUrl: photoUrl.split(",")[1],
+            document1Front,
+            document1Back,
+            document2Front,
+            document2Back,
+            submitted,
+            verified
+          },
+          companyProfile: {
+            companyId: companyID
+          }
+        }
+      },
       { new: true }
     ).select(["-__v", "-password", "-margin"]);
 
@@ -75,6 +99,7 @@ export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: N
       seller: updatedSeller,
     });
   } catch (err) {
+    console.log(err, "error")
     return next(err);
   }
 };
