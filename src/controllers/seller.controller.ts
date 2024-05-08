@@ -14,26 +14,38 @@ export const getSeller = async (req: ExtendedRequest, res: Response, next: NextF
   }
 };
 
-
 export const updateSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    let body = req.body;
-
+    const body = req.body;
     const sellerId = req.seller._id;
-    try {
-      // let logo = req?.file?.buffer.toString('base64');
-      // if (logo) {
-      //   query = {
-      //     ...body,
-      //     logo
-      //   }
-      // }
+    const query: { [key: string]: any } = {};
 
+    try {
+      if (req.file && req.file.buffer) {
+        const logo = req.file.buffer.toString('base64');
+        query['companyProfile.logo'] = logo;
+      }
     } catch (error) {
-      console.log(error, "error[Logo error]")
+      console.log(error, "error[Logo error]");
+    }
+    const existingSeller = await SellerModel.findById(sellerId);
+    if (!existingSeller) {
+      throw new Error("Seller not found");
     }
 
-    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, { ...body }, { new: true }).select([
+    if (existingSeller.companyProfile && existingSeller.companyProfile.companyId) {
+      body.companyProfile = {
+        ...existingSeller.companyProfile, // Preserve existing fields
+        ...body.companyProfile,
+        companyId: existingSeller.companyProfile.companyId,
+        companyLogo: query['companyProfile.logo'] || existingSeller.companyProfile.companyLogo
+      };
+    }
+    console.log(body, "body")
+
+    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
+      $set: { ...body },
+    }, { new: true }).select([
       "-__v",
       "-password",
       "-margin",
@@ -49,45 +61,60 @@ export const updateSeller = async (req: ExtendedRequest, res: Response, next: Ne
   }
 };
 
+
+
 export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    // if (!req.file) {
-    //   return res.status(400).json({ message: 'No file uploaded' });
-    // }
-
     const sellerId = req.seller._id;
     const files = req.files as any;
 
     const { businessType, gstin, pan, photoUrl, submitted, verified } = req.body;
+
+    if (!files['document1Front'] || !files['document1Back'] || !files['document2Front'] || !files['document2Back']) {
+      return res.status(400).json({ message: 'All files are required' });
+    }
+    
+    // || !pan  is missing, have to add it
+    if (!businessType || !gstin || !photoUrl || !submitted || !verified) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
 
     const document1Front = files['document1Front'][0].buffer.toString('base64');
     const document1Back = files['document1Back'][0].buffer.toString('base64');
     const document2Front = files['document2Front'][0].buffer.toString('base64');
     const document2Back = files['document2Back'][0].buffer.toString('base64');
 
-    const companyID = `LS${Math.floor(1000 + Math.random() * 9000)}`
+    const companyID = `LS${Math.floor(1000 + Math.random() * 9000)}`;
 
+    // Retrieve existing seller document
+    const existingSeller = await SellerModel.findById(sellerId);
+    if (!existingSeller) {
+      throw new Error("Seller not found");
+    }
 
+    // Merge new KYC details with existing ones
+    const updatedKycDetails = {
+      ...existingSeller.kycDetails,
+      businessType,
+      gstin,
+      pan,
+      photoUrl: photoUrl.split(",")[1],
+      document1Front,
+      document1Back,
+      document2Front,
+      document2Back,
+      submitted,
+      verified
+    };
 
+    // Update seller document
     const updatedSeller = await SellerModel.findByIdAndUpdate(
       sellerId,
       {
         $set: {
-          kycDetails: {
-            businessType,
-            gstin,
-            pan,
-            photoUrl: photoUrl.split(",")[1],
-            document1Front,
-            document1Back,
-            document2Front,
-            document2Back,
-            submitted,
-            verified
-          },
-          companyProfile: {
-            companyId: companyID
-          }
+          kycDetails: updatedKycDetails,
+          // Ensure companyId remains unchanged
+          companyProfile: { ...existingSeller.companyProfile, companyId: companyID }
         }
       },
       { new: true }

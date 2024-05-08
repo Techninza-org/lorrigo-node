@@ -386,18 +386,18 @@ export const rateCalculation = async (
 
     if (!pickupDetails || !deliveryDetails) throw new Error("invalid pickup or delivery pincode");
 
-  // Convert vendor IDs to ObjectId format
-  const vendorIds = users_vendors.map(convertToObjectId).filter((id) => id !== null);
+    // Convert vendor IDs to ObjectId format
+    const vendorIds = users_vendors.map(convertToObjectId).filter((id) => id !== null);
 
     // Check if any IDs failed to convert
     if (vendorIds.length !== users_vendors.length) {
       console.error('Some vendor IDs could not be converted.');
     }
 
-  const vendors = await CourierModel.find({
-    _id: { $in: vendorIds },
-    isActive: true,
-  });
+    const vendors = await CourierModel.find({
+      _id: { $in: vendorIds },
+      isActive: true,
+    });
 
     let commonCouriers: any[] = [];
 
@@ -413,12 +413,14 @@ export const rateCalculation = async (
         },
       };
 
-    const response = await axios.get(url, config);
-    const courierCompanies = response?.data?.data?.available_courier_companies;
+      const response = await axios.get(url, config);
+      const courierCompanies = response?.data?.data?.available_courier_companies;
 
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
+      console.log("shiprocketNiceName", shiprocketNiceName, vendors)
       vendors.forEach((vendor: any) => {
         const courier = courierCompanies.find((company: { courier_company_id: number; }) => company.courier_company_id === vendor.carrierID);
+        console.log("shiprocketVendors", courier, shiprocketNiceName, courier && shiprocketNiceName)
         if (courier && shiprocketNiceName) {
 
           const shiprocketVendors = vendors.filter((vendor) => {

@@ -448,8 +448,6 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
     const shiprocketToken = await getShiprocketToken();
     if (!shiprocketToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
-    console.log("orderDetails", orderDetails?.pickupAddress?.name,)
-
     const orderPayload = {
       "order_id": orderDetails?.client_order_reference_id,
       "order_date": format(orderDetails?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
@@ -479,7 +477,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
       "order_items": [
         {
           "name": orderDetails.productId.name,
-          "sku": orderDetails.productId.name,
+          "sku": orderDetails.productId.category,
           "units": orderDetails.productId.quantity,
           "selling_price": Number(orderDetails.productId.taxable_value),
         }
@@ -503,8 +501,8 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
         orderDetails.shiprocket_shipment_id = shiprocketOrder.data.shipment_id;
         await orderDetails.save();
       }
-    } catch (error) {
-      console.log("error", error);
+    } catch (error: any) {
+      console.log("error", error.response.data.errors);
     }
 
     const shiprocketOrderID = orderDetails?.shiprocket_order_id ?? 0;
@@ -531,7 +529,8 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
       courierPartner: data2send,
       orderDetails,
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.log("error", error.response.data.errors)
     return next(error);
   }
 };

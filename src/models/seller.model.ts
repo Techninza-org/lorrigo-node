@@ -27,7 +27,7 @@ const sellerSchema = new mongoose.Schema({
     companyName: { type: String, required: false },
     website: { type: String, required: false },
     companyEmail: { type: String, required: false },
-    logo: { type: String, required: false },
+    companyLogo: { type: String, required: false },
   },
   billingAddress: {
     address_line_1: { type: String, required: false },
