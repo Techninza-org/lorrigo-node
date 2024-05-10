@@ -33,9 +33,9 @@ export const updateSeller = async (req: ExtendedRequest, res: Response, next: Ne
       throw new Error("Seller not found");
     }
 
-    if (existingSeller.companyProfile && existingSeller.companyProfile.companyId) {
+    if (existingSeller.companyProfile) {
       body.companyProfile = {
-        ...existingSeller.companyProfile, // Preserve existing fields
+        ...existingSeller.companyProfile,
         ...body.companyProfile,
         companyId: existingSeller.companyProfile.companyId,
         companyLogo: query['companyProfile.logo'] || existingSeller.companyProfile.companyLogo
@@ -73,9 +73,9 @@ export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: N
     if (!files['document1Front'] || !files['document1Back'] || !files['document2Front'] || !files['document2Back']) {
       return res.status(400).json({ message: 'All files are required' });
     }
-    
+
     // || !pan  is missing, have to add it
-    if (!businessType || !gstin || !photoUrl || !submitted || !verified) {
+    if (!businessType || !photoUrl || !submitted || !verified) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
