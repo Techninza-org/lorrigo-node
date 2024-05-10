@@ -14,6 +14,7 @@ import {
   validatePhone,
 } from "../utils/helpers";
 import Logger from "../utils/logger";
+import csvtojson from "csvtojson";
 
 // FIXME smartship doesn't expect the hub with same address is the address mateches with some other address hub would not be created.
 export const createHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
@@ -86,8 +87,6 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
         delivery_type_id: 2,
       },
     };
-
-    // console.log(phone.toString().slice(2, 12), "smartshipApiBody");
 
     const shiprocketHubPayload = {
       pickup_location: name,
@@ -171,6 +170,137 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
     console.log("error[CreateHub]", error);
   }
 };
+
+export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).send({ valid: false, message: "No file uploaded" });
+    }
+    const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
+
+
+    const hubs = json.map((hub: any) => {
+      return {
+        name: hub["FacilityName*"],
+        email: hub["Email*"],
+        pincode: hub["Pincode*"],
+        city: hub['City*'],
+        state: hub["State*"],
+        address1: hub["Address1*"],
+        address2: hub["Address2*"],
+        phone: "91" + hub["PickupLocationContact*"],
+        contactPersonName: hub["ContactPersonName*"],
+      };
+    })
+
+    if (hubs.length < 1) {
+      return res.status(200).send({
+        valid: false,
+        message: "empty payload",
+      });
+    }
+
+    const smartshipToken = await getSmartShipToken();
+    if (!smartshipToken) return res.status(200).send({ valid: false, message: "smartship ENVs not found" });
+
+    const smartshipAPIconfig = { headers: { Authorization: smartshipToken } };
+
+    const shiprocketToken = await getShiprocketToken();
+    if (!smartshipToken) return res.status(200).send({ valid: false, message: "smartship ENVs not found" });
+
+    const shiprocketAPIconfig = { headers: { Authorization: shiprocketToken } };
+
+    const savedHubs = [];
+    for (let i = 0; i < hubs.length; i++) {
+
+      const hub = hubs[i];
+      let savedHub;
+
+      let smartShipResponse;
+      let shiprocketResponse;
+      try {
+        const smartshipApiBody = {
+          hub_details: {
+            hub_name: hub.name,
+            pincode: hub.pincode,
+            city: hub.city,
+            state: hub.state,
+            address1: hub.address1,
+            address2: hub.address2,
+            hub_phone: hub.phone.toString().slice(2, 12),
+            delivery_type_id: 2,
+          },
+        };
+        smartShipResponse = await axios.post(
+          config.SMART_SHIP_API_BASEURL! + APIs.HUB_REGISTRATION,
+          smartshipApiBody,
+          smartshipAPIconfig
+        );
+      } catch (err) {
+        return next(err);
+      }
+
+      try {
+        const shiprocketPayload = {
+          pickup_location: hub.name,
+          name: hub.name,
+          email: "noreply@lorrigo.com",
+          phone: hub.phone.toString().slice(2, 12),
+          address: hub.address1,
+          address_2: hub.address2,
+          city: hub.city,
+          state: hub.state,
+          country: "India",
+          pin_code: hub.pincode,
+        }
+        shiprocketResponse = await axios.post(
+          config.SHIPROCKET_API_BASEURL + APIs.CREATE_PICKUP_LOCATION,
+          shiprocketPayload,
+          shiprocketAPIconfig
+        );
+      } catch (err) {
+        return next(err);
+      }
+
+      const smartShipData: SMARTSHIP_DATA = smartShipResponse.data;
+
+      let hubId = 0;
+      if (smartShipData.status && smartShipData.data.hub_id) {
+        hubId = smartShipData.data.hub_id;
+      } else if (smartShipData.data.message.registered_hub_id) {
+        hubId = Number(smartShipData.data.message.registered_hub_id);
+      }
+
+      try {
+        const toSaveHub = new HubModel({
+          sellerId: req.seller._id,
+          contactPersonName: hub.contactPersonName,
+          name: hub.name,
+          city: hub.city,
+          pincode: hub.pincode,
+          state: hub.state,
+          address1: hub.address1,
+          address2: hub.address2,
+          phone: hub.phone,
+          hub_id: hubId,
+          delivery_type_id: 2,
+        });
+        savedHub = await toSaveHub.save();
+      } catch (err) {
+        return next(err);
+      }
+      savedHubs.push(savedHub);
+    }
+
+    return res.status(200).send({
+      valid: true,
+      hubs: savedHubs,
+    });
+  } catch (error) {
+    console.log("error[bulk]", error);
+    return next(error);
+  }
+}
 
 export const getHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   const sellerId = req.seller._id;

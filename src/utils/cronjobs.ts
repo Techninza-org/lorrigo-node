@@ -163,7 +163,6 @@ export const CONNECT_SMARTR = async (): Promise<void> => {
 
 export const trackOrder_Smartship = async () => {
   const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK } });
-  console.log("CRON orders [SMARTSHIP]", orders.length)
 
   for (const orderWithOrderReferenceId of orders) {
     const orderCarrierName = orderWithOrderReferenceId?.carrierName?.split(" ").pop();
@@ -194,11 +193,8 @@ export const trackOrder_Smartship = async () => {
 
         const bucketInfo = getSmartshipBucketing(Number(requiredResponse?.status_code) ?? -1);
 
-        console.log("bucketInfo---[SMARTSHIP]",requiredResponse?.status_code, bucketInfo)
 
         if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {
-          console.log("Updating order status...[smartship]", orderWithOrderReferenceId._id, orderWithOrderReferenceId.order_reference_id);
-          // Update order status
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
@@ -224,7 +220,6 @@ export const trackOrder_Shiprocket = async () => {
   const orders = await B2COrderModel.find({
     bucket: { $in: ORDER_TO_TRACK },
   });
-  console.log("CRON: CRON orders [SHIPROCKET]", orders.length)
 
   for (const orderWithOrderReferenceId of orders) {
     try {
@@ -253,12 +248,9 @@ export const trackOrder_Shiprocket = async () => {
 
       if (response.data.tracking_data.shipment_status) {
         const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
-        console.log("bucketInfo---[SHIPROCKET]", response.data.tracking_data.shipment_status, bucketInfo)
 
 
         if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {
-          console.log("Updating order status...[shiprocket]", orderWithOrderReferenceId._id, orderWithOrderReferenceId.order_reference_id);
-          // Update order status
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,

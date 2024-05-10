@@ -42,8 +42,14 @@ const sellerSchema = new mongoose.Schema({
     photoUrl: { type: String, required: false },
     pan: { type: String, required: false },
     adhaar: { type: String, required: false },
+    
+    document1Type: { type: String, required: false },
+    document1Feild: { type: String, required: false },
     document1Front: { type: String, required: false },
     document1Back: { type: String, required: false },
+    
+    document2Type: { type: String, required: false },
+    document2Feild: { type: String, required: false },
     document2Front: { type: String, required: false },
     document2Back: { type: String, required: false },
     submitted: { type: Boolean, default: false },

@@ -68,7 +68,7 @@ export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: N
     const sellerId = req.seller._id;
     const files = req.files as any;
 
-    const { businessType, gstin, pan, photoUrl, submitted, verified } = req.body;
+    const { businessType, gstin, pan, photoUrl, submitted, verified, document1Feild, document2Feild, document1Type, document2Type } = req.body;
 
     if (!files['document1Front'] || !files['document1Back'] || !files['document2Front'] || !files['document2Back']) {
       return res.status(400).json({ message: 'All files are required' });
@@ -99,10 +99,14 @@ export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: N
       gstin,
       pan,
       photoUrl: photoUrl.split(",")[1],
+      document1Type,
       document1Front,
       document1Back,
+      document2Type,
       document2Front,
       document2Back,
+      document1Feild,
+      document2Feild,
       submitted,
       verified
     };
