@@ -2,6 +2,9 @@ import { NextFunction, Response } from "express";
 import { ExtendedRequest } from "../utils/middleware";
 import SellerModel from "../models/seller.model";
 import RemittanceModel from "../models/remittance-modal";
+import ChannelModel from "../models/channel.model";
+import axios from "axios";
+import APIs from "../utils/constants/third_party_apis";
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -179,6 +182,74 @@ export const getRemittaceByID = async (req: ExtendedRequest, res: Response, next
       remittanceOrder,
     });
   } catch (error) {
+    return next(error)
+  }
+}
+
+export const manageChannelPartner = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const {
+      channel: {
+        channelName,
+        isOrderSync,
+        storeUrl,
+        apiKey,
+        apiSk,
+        sharedSecret,
+      }
+    } = req.body;
+
+    if (!channelName || !isOrderSync || !storeUrl || !apiKey || !apiSk || !sharedSecret) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    const testChannel = await axios.get(`${storeUrl}${APIs.SHOPIFY_CUSTOMER}`, {
+      headers: {
+        "X-Shopify-Access-Token": sharedSecret,
+      }
+    });
+
+    const channel = await ChannelModel.create({
+      sellerId: req.seller._id,
+      channelName,
+      isOrderSync,
+      storeUrl,
+      apiKey,
+      apiSk,
+      sharedSecret,
+    });
+
+    const seller = await SellerModel.findByIdAndUpdate(req.seller._id, {
+      $push: { channelPartners: channel._id }
+    });
+
+    return res.status(200).send({
+      valid: true,
+      message: "Channel created successfully",
+      channel,
+    });
+  } catch (error) {
+    console.log(error, "error [manageChannelPartner]")
+    return next(error)
+  }
+}
+export const updateChannelPartner = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { channel: { isOrderSync } } = req.body;
+
+    const channel = await ChannelModel.findByIdAndUpdate(id, {
+      isOrderSync,
+    });
+
+    return res.status(200).send({
+      valid: true,
+      message: "Channel updated successfully",
+      channel,
+    });
+
+  } catch (error) {
+    console.log(error, "error [manageChannelPartner]")
     return next(error)
   }
 }

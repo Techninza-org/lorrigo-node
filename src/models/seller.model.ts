@@ -10,7 +10,7 @@ const sellerSchema = new mongoose.Schema({
   gst: { type: String, required: false },
   pan: { type: String, required: false },
   aadhar: { type: String, required: false },
-  
+
   prefix: { type: String, required: false },
   address: { type: String, required: false },
   margin: { type: Number, min: 0, max: 100, default: 20 },
@@ -42,12 +42,12 @@ const sellerSchema = new mongoose.Schema({
     photoUrl: { type: String, required: false },
     pan: { type: String, required: false },
     adhaar: { type: String, required: false },
-    
+
     document1Type: { type: String, required: false },
     document1Feild: { type: String, required: false },
     document1Front: { type: String, required: false },
     document1Back: { type: String, required: false },
-    
+
     document2Type: { type: String, required: false },
     document2Feild: { type: String, required: false },
     document2Front: { type: String, required: false },
@@ -61,7 +61,11 @@ const sellerSchema = new mongoose.Schema({
     ifscNumber: { type: String, required: false },
     accType: { type: String, required: false },
   },
+  channelPartners: [{ type: mongoose.Schema.Types.ObjectId, ref: "Channel" }],
   createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+}, {
+  timestamps: true,
 });
 
 const SellerModel = mongoose.model("Seller", sellerSchema);

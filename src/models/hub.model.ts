@@ -15,6 +15,7 @@ const HubSchema = new mongoose.Schema({
   delivery_type_id: { type: Number, required: false },
 
   isActive: { type: Boolean, required: false, default: true },
+  isPrimary: { type: Boolean, required: false, default: false },
   hub_id: { type: Number, required: false },
 });
 

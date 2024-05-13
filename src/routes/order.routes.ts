@@ -5,7 +5,8 @@ import {
   createB2BOrder,
   getCourier,
   getSpecificOrder,
-  updateB2COrder
+  updateB2COrder,
+  getChannelOrders
 } from "../controllers/order.controller";
 
 // ts-ignore is used as contollers request type is extended with custom property seller
@@ -14,6 +15,9 @@ const orderRouter = Router();
 
 // @ts-ignore
 orderRouter.get("/", getOrders);
+
+// @ts-ignore
+orderRouter.get("/channels", getChannelOrders);
 
 // @ts-ignore
 orderRouter.get("/:id", getSpecificOrder);

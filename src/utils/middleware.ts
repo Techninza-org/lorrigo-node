@@ -42,7 +42,7 @@ export const AuthMiddleware = async (req: ExtendedRequest, res: Response, next: 
       return next(err);
     }
 
-    const seller = await SellerModel.findOne({ email: sellerEmail }).lean();
+    const seller = await SellerModel.findOne({ email: sellerEmail }).populate("channelPartners");
     if (!seller) return res.status(200).send({ valid: false, message: "Seller no more exists" });
     req.seller = seller;
     next();
@@ -70,13 +70,13 @@ export const ErrorHandler = (err: any, req: Request, res: Response, next: NextFu
       });
     }
     Logger.log(err);
-    return res.status(200).send({
+    return res.status(400).send({
       valid: false,
       // @ts-ignore
       message: err?.response?.data?.message ?? err?.message ?? "Something went wrong",
     });
   } else {
-    return res.status(200).send({
+    return res.status(400).send({
       valid: false,
       message: "Something went wrong",
     });

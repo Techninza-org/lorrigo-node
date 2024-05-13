@@ -13,7 +13,8 @@ import { isValidObjectId } from "mongoose";
 import CustomPricingModel from "../models/custom_pricing.model";
 import envConfig from "./config";
 import { Types } from "mongoose";
-import { CANCELED, DELIVERED, IN_TRANSIT, LOST_DAMAGED, NDR, RTO } from "./lorrigo-bucketing-info";
+import { CANCELED, DELIVERED, IN_TRANSIT, LOST_DAMAGED, NDR, READY_TO_SHIP, RTO } from "./lorrigo-bucketing-info";
+import ChannelModel from "../models/channel.model";
 
 export const validateEmail = (email: string): boolean => {
   return /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)*[a-zA-Z]{2,}))$/.test(
@@ -141,7 +142,7 @@ export const getSellers = async (req: Request, res: Response, next: NextFunction
     limit = limit < 1 ? 1 : limit;
 
     const skip = (page - 1) * limit;
-    const sellers = await SellerModel.find({}, { password: 0, __v: 0 });
+    const sellers = await SellerModel.find().sort({ createdAt: -1 });
     res.status(200).send({
       valid: true,
       sellers: sellers,
@@ -674,6 +675,16 @@ export async function getSMARTRToken(): Promise<string | false> {
   // }
 }
 
+export async function getSellerChannelConfig(sellerId: string) {
+  try {
+    const channel = await ChannelModel.findOne({ sellerId }).lean();
+    const { sharedSecret, storeUrl } = channel as { sharedSecret: string, storeUrl: string };
+    return { sharedSecret, storeUrl };
+  } catch (error) {
+    console.log("error", error)
+  }
+}
+
 export async function getShiprocketToken(): Promise<string | false> {
   try {
     const env = await EnvModel.findOne({ name: "SHIPROCKET" }).lean();
@@ -705,7 +716,7 @@ export function getShiprocketBucketing(status: number) {
     10: { bucket: RTO, description: "RTO Delivered" },
     12: { bucket: LOST_DAMAGED, description: "Lost" },
     14: { bucket: RTO, description: "RTO Acknowledged" },
-    15: { bucket: NDR, description: "Customer Not Available/Contactable" },
+    15: { bucket: READY_TO_SHIP, description: "Customer Not Available/Contactable" },
     16: { bucket: CANCELED, description: "Cancellation Requested" },
     17: { bucket: IN_TRANSIT, description: "Out For Delivery" },
     18: { bucket: IN_TRANSIT, description: "In Transit" },

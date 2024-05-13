@@ -44,6 +44,11 @@ const GET_MANIFEST_SHIPROCKET = "/v1/external/courier/generate/pickup"
 const SHIPROCKET_ORDER_TRACKING = "/v1/external/courier/track/awb";
 const SHIPROCKET_ORDER_NDR = "/v1/external/ndr";
 
+/* Shopify */
+
+const SHOPIFY_CUSTOMER = '/admin/api/2024-04/customers.json';
+const SHOPIFY_ORDER = '/admin/api/2024-04/orders.json';
+
 const APIs = {
   HUB_REGISTRATION,
   HUB_UPDATE,
@@ -75,6 +80,9 @@ const APIs = {
   CANCEL_SHIPMENT_SHIPROCKET,
   GET_MANIFEST_SHIPROCKET,
   SHIPROCKET_ORDER_TRACKING,
-  SHIPROCKET_ORDER_NDR
+  SHIPROCKET_ORDER_NDR,
+
+  SHOPIFY_ORDER,
+  SHOPIFY_CUSTOMER
 };
 export default APIs;

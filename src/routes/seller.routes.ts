@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { deleteSeller, getSeller, updateSeller, getRemittaces, getRemittaceByID, uploadKycDocs } from "../controllers/seller.controller";
-import { imageStorage } from "../utils/multerConfig";
+import { deleteSeller, getSeller, updateSeller, getRemittaces, getRemittaceByID, uploadKycDocs, manageChannelPartner, updateChannelPartner } from "../controllers/seller.controller";
 
 import multer from 'multer';
 
@@ -32,5 +31,11 @@ sellerRouter.get("/remittance", getRemittaces);
 
 //@ts-ignore
 sellerRouter.get("/remittance/:id", getRemittaceByID);
+
+//@ts-ignore
+sellerRouter.post("/channels", manageChannelPartner);
+
+//@ts-ignore
+sellerRouter.put("/channels/:id", updateChannelPartner);
 
 export default sellerRouter;

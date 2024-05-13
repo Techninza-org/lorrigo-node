@@ -5,6 +5,7 @@ import ProductModel from "../models/product.model";
 import HubModel from "../models/hub.model";
 import { format } from "date-fns";
 import {
+  getSellerChannelConfig,
   getShiprocketToken,
   isValidPayload,
   rateCalculation,
@@ -333,6 +334,85 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
     return next(error);
   }
 };
+
+export const getChannelOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = req.seller._id;
+    const shopfiyConfig = await getSellerChannelConfig(sellerId);
+    console.log("shopfiyConfig", shopfiyConfig);
+    const shopifyOrders = await axios.get(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_ORDER}`, {
+      headers: {
+        "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+      },
+    });
+    const orders = shopifyOrders.data.orders;
+
+    for (let i = orders.length - 1; i >= 0; i--) {
+      const order = orders[i];
+      const orderDetails = await B2COrderModel.findOne({ sellerId, order_reference_id: order.name }).lean();
+      if (!orderDetails) {
+
+        const product2save = new ProductModel({
+          name: order.line_items[0]?.name,
+          category: order.line_items[0]?.name || order.line_items[0]?.sku,
+          quantity: order.line_items[0]?.quantity,
+          tax_rate: order?.current_total_tax,
+          taxable_value: order?.current_total_price,
+        });
+
+        await product2save.save()
+
+        const newOrder = new B2COrderModel({
+          sellerId,
+          bucket: NEW,
+          channelName: "shopify",
+          orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
+          order_reference_id: order.name,
+          order_invoice_date: order.created_at,
+          order_invoice_number: order.name,
+          orderWeight: order.total_weight,
+          orderWeightUnit: "kg",
+
+          // hard coded values
+          orderBoxHeight: 10,
+          orderBoxWidth: 10,
+          orderBoxLength: 10,
+          orderSizeUnit: "cm",
+
+          client_order_reference_id: order.name,
+          payment_mode: 0,  // 0 -> prepaid, 1 -> COD, Right now only prepaid, bcoz data not available
+          customerDetails: {
+            name: order.customer.first_name + " " + order.customer.last_name,
+            phone: order?.customer?.default_address?.phone,
+            email: order?.customer?.email,
+            address: order?.customer?.default_address?.address1,
+            pincode: order?.customer?.default_address?.zip,
+            city: order?.customer?.default_address?.city,
+            state: order?.customer?.default_address?.province,
+          },
+          sellerDetails: {
+            sellerName: order?.billing_address?.first_name,
+            isSellerAddressAdded: false,
+            sellerAddress: order?.billing_address?.address1,
+            sellerCity: order?.billing_address?.city,
+            sellerState: order?.billing_address?.province,
+            sellerPincode: 0,
+            sellerPhone: order?.billing_address?.phone,
+          },
+          productId: product2save._id.toString(),
+          pickupAddress: "6638e0b9023550a1dff71790",
+        });
+
+        await newOrder.save();
+      }
+    }
+
+    return res.status(200).send({ valid: true });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 
 export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {

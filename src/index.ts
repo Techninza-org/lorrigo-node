@@ -65,6 +65,11 @@ app.post("/api/vendor", addVendors);
 app.get("/api/getsellers", getSellers);    //admin
 app.post("/api/seller_vendor", updateVendor4Seller);
 
+app.post("/api/shopify", (req, res) => {
+  console.log(req.body);
+  return res.send("ok");
+});
+
 //@ts-ignore
 app.post("/api/ratecalculator", AuthMiddleware, ratecalculatorController);
 //@ts-ignore
