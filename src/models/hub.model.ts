@@ -13,6 +13,11 @@ const HubSchema = new mongoose.Schema({
   contactPersonName: { type: String, required: true },
   phone: { type: String, required: true },
   delivery_type_id: { type: Number, required: false },
+  isRTOAddressSame: { type: Boolean, required: true },
+  rtoAddress: { type: String, required: false },
+  rtoCity: { type: String, required: false },
+  rtoState: { type: String, required: false },
+  rtoPincode: { type: String, required: false },
 
   isActive: { type: Boolean, required: false, default: true },
   isPrimary: { type: Boolean, required: false, default: false },

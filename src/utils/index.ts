@@ -2,6 +2,8 @@ import { Types } from "mongoose";
 import { B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
 import { startOfWeek, addDays } from "date-fns";
+import { validateEmail } from "./helpers";
+
 
 export function calculateShipmentDetails(orders: any[]) {
   let totalShipments: any[] = [];
@@ -227,3 +229,30 @@ export function csvJSON(csv: any) {
   }
   return result;
 }
+
+export const validateField = (value: any, fieldName: string, hub: any, alreadyExistingHubsName: any): string | null => {
+  switch (fieldName) {
+    case 'name':
+      // if (!value || value.trim().length === 0) {
+      //   return 'Name is required';
+      // }
+      if (alreadyExistingHubsName.find((item:any) => item.name.includes(value))) {
+        return "Name must be unique";
+      }
+      break;
+    case "email":
+      if (!value || !validateEmail(value)) {
+        return "Invalid email format";
+      }
+      break;
+    case "phone":
+      if (!value || !(value.toString().slice(2, 12).length === 10)) {
+        return "Invalid PickupLocationContact";
+      }
+      break;
+    // Add validation cases for other fields as needed
+    default:
+      break;
+  }
+  return null;
+};

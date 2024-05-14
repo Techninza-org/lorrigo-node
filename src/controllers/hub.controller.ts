@@ -15,6 +15,8 @@ import {
 } from "../utils/helpers";
 import Logger from "../utils/logger";
 import csvtojson from "csvtojson";
+import exceljs from "exceljs";
+import { validateField } from "../utils";
 
 // FIXME smartship doesn't expect the hub with same address is the address mateches with some other address hub would not be created.
 export const createHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
@@ -30,7 +32,20 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       });
     }
 
-    let { name, pincode, address1, address2, phone, contactPersonName } = req.body;
+    let {
+      name,
+      pincode,
+      address1,
+      address2,
+      phone,
+      contactPersonName,
+      isRTOAddressSame,
+      rtoAddress,
+      rtoCity,
+      rtoState,
+      rtoPincode
+    } = req.body;
+
     pincode = Number(pincode);
     phone = Number(phone);
 
@@ -153,6 +168,11 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
         address1,
         address2,
         phone,
+        isRTOAddressSame,
+        rtoAddress,
+        rtoCity,
+        rtoState,
+        rtoPincode,
 
         hub_id: hubId,
         delivery_type_id,
@@ -176,10 +196,15 @@ export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: N
     if (!req.file || !req.file.buffer) {
       return res.status(400).send({ valid: false, message: "No file uploaded" });
     }
+
+    const alreadyExistingHubs = await HubModel.find({ sellerId: req.seller._id }).select(["name"]);
+    console.log(alreadyExistingHubs, "alreadyExistingHubs")
+
     const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
 
 
     const hubs = json.map((hub: any) => {
+      const isRTOAddressSame = hub["IsRTOAddressSame*"]?.toUpperCase() === "TRUE";
       return {
         name: hub["FacilityName*"],
         email: hub["Email*"],
@@ -190,6 +215,11 @@ export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: N
         address2: hub["Address2*"],
         phone: "91" + hub["PickupLocationContact*"],
         contactPersonName: hub["ContactPersonName*"],
+        isRTOAddressSame: Boolean(isRTOAddressSame),
+        rtoAddress: hub["RTOAddress*"],
+        rtoCity: hub["RTOCity*"],
+        rtoState: hub["RTOState*"],
+        rtoPincode: hub["RTOPincode*"],
       };
     })
 
@@ -198,6 +228,52 @@ export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: N
         valid: false,
         message: "empty payload",
       });
+    }
+
+    try {
+      const errorWorkbook = new exceljs.Workbook();
+      const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
+
+      errorWorksheet.columns = [
+        { header: 'FacilityName', key: 'name', width: 20 },
+        { header: 'Email', key: 'email', width: 20 },
+        { header: 'Error Message', key: 'errors', width: 40 },
+      ];
+
+      const errorRows: any = [];
+
+      hubs.forEach((hub) => {
+        const errors: string[] = [];
+        Object.entries(hub).forEach(([fieldName, value]) => {
+          console.log(fieldName, value);
+          const error = validateField(value, fieldName, hubs, alreadyExistingHubs);
+          if (error) {
+            errors.push(error);
+          }
+        });
+
+        if (errors.length > 0) {
+          errorRows.push({
+            name: hub.name,
+            email: hub.email,
+            pincode: hub.pincode,
+            errors: errors.join(", ")
+          });
+        }
+      });
+
+      if (errorRows.length > 0) {
+        errorWorksheet.addRows(errorRows);
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+
+        await errorWorkbook.csv.write(res);
+        return res.end();
+      }
+
+    } catch (error) {
+      return next(error);
     }
 
     const smartshipToken = await getSmartShipToken();
@@ -237,6 +313,7 @@ export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: N
           smartshipAPIconfig
         );
       } catch (err) {
+        console.log(err);
         return next(err);
       }
 
@@ -259,6 +336,7 @@ export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: N
           shiprocketAPIconfig
         );
       } catch (err) {
+        console.log(err);
         return next(err);
       }
 
@@ -266,7 +344,7 @@ export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: N
 
       let hubId = 0;
       if (smartShipData.status && smartShipData.data.hub_id) {
-        hubId = smartShipData.data.hub_id;
+        hubId = smartShipData.data.hub_id || 0;
       } else if (smartShipData.data.message.registered_hub_id) {
         hubId = Number(smartShipData.data.message.registered_hub_id);
       }
@@ -282,6 +360,11 @@ export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: N
           address1: hub.address1,
           address2: hub.address2,
           phone: hub.phone,
+          isRTOAddressSame: hub.isRTOAddressSame,
+          rtoAddress: hub.rtoAddress,
+          rtoCity: hub.rtoCity,
+          rtoState: hub.rtoState,
+          rtoPincode: hub.rtoPincode,
           hub_id: hubId,
           delivery_type_id: 2,
         });
@@ -391,43 +474,80 @@ export const updateHub = async (req: ExtendedRequest, res: Response, next: NextF
     const sellerId = req.seller._id;
     const hubId = req.params.id;
     const body = req.body;
+
     if (!body) {
-      return res.status(200).send({
+      return res.status(400).send({
         valid: false,
-        message: "payload required",
+        message: "Payload required",
       });
     }
 
     if (!isValidPayload(body, [])) {
-      return res.status(200).send({
+      return res.status(400).send({
         valid: false,
-        message: "invalid payload",
+        message: "Invalid payload",
       });
     }
-    if (!isValidObjectId(sellerId)) {
-      return res.status(200).send({
+
+    if (!isValidObjectId(sellerId) || !isValidObjectId(hubId)) {
+      return res.status(400).send({
         valid: false,
-        message: "invalid sellerId",
+        message: "Invalid sellerId or hubId",
       });
     }
-    if (!isValidObjectId(hubId)) {
-      return res.status(200).send({
+
+    const sellerHubs = await HubModel.find({ sellerId });
+
+    const activeHubs = sellerHubs.filter((hub) => hub.isActive === true);
+    const primaryHubs = sellerHubs.filter((hub) => hub.isPrimary === true);
+
+    if (activeHubs.length === 0) {
+      return res.status(400).send({
         valid: false,
-        message: "invalid hubId",
+        message: "At least one hub should be active",
       });
     }
-    if (body.isActive === undefined) return res.status(200).send({ valid: false, message: "isActive required" });
 
-    const hubData = await HubModel.findOne({ _id: hubId, sellerId: sellerId });
-    if (!hubData) return res.status(200).send({ valid: false, message: "hub not found" });
+    if (body.isPrimary && !body.isActive) {
+      return res.status(400).send({
+        valid: false,
+        message: "Only active hub can become primary",
+      });
+    }
 
+    if (body.isPrimary && primaryHubs.length > 0 && primaryHubs[0]._id.toString() !== hubId) {
+      await HubModel.findByIdAndUpdate(primaryHubs[0]._id, { isPrimary: false });
+    }
 
+    if (!body.isPrimary && primaryHubs.length === 1 && primaryHubs[0]._id.toString() === hubId) {
+      return res.status(400).send({
+        valid: false,
+        message: "Cannot make the primary hub inactive",
+      });
+    }
+
+    if (body.isPrimary && primaryHubs.length > 1) {
+      return res.status(400).send({
+        valid: false,
+        message: "Only one hub can be primary",
+      });
+    }
+
+    if (!body.isActive && activeHubs.length === 1 && activeHubs[0]._id.toString() === hubId) {
+      return res.status(400).send({
+        valid: false,
+        message: "Cannot make the last active hub inactive",
+      });
+    }
+
+    // Update the hub
     let updatedHub;
     try {
       updatedHub = await HubModel.findOneAndUpdate(
         { _id: hubId, sellerId: sellerId },
         {
           isActive: body.isActive,
+          isPrimary: body.isPrimary,
         },
         { new: true }
       );
@@ -435,22 +555,15 @@ export const updateHub = async (req: ExtendedRequest, res: Response, next: NextF
       return next(err);
     }
 
-    if (!updatedHub) {
-      return res.status(200).send({
-        valid: false,
-        message: "Hub not found",
-      });
-    }
-
     return res.status(200).send({
       valid: true,
       message: "Hub updated successfully",
-      hub: updatedHub,
+      updatedHub: updatedHub,
     });
-  } catch (error) {
-    return next(error);
-  }
 
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const deleteHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
