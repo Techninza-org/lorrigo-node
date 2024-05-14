@@ -339,7 +339,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
   try {
     const sellerId = req.seller._id;
     const shopfiyConfig = await getSellerChannelConfig(sellerId);
-    console.log("shopfiyConfig", shopfiyConfig);
+    const primaryHub = await HubModel.findOne({ sellerId, isPrimary: true });
     const shopifyOrders = await axios.get(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_ORDER}`, {
       headers: {
         "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
@@ -400,7 +400,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
             sellerPhone: order?.billing_address?.phone,
           },
           productId: product2save._id.toString(),
-          pickupAddress: "6638e0b9023550a1dff71790",
+          pickupAddress: primaryHub?._id.toString(),
         });
 
         await newOrder.save();
