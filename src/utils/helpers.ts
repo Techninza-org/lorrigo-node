@@ -419,8 +419,8 @@ export const rateCalculation = async (
 
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
       console.log("shiprocketNiceName", shiprocketNiceName, vendors)
-      vendors.forEach((vendor: any) => {
-        const courier = courierCompanies.find((company: { courier_company_id: number; }) => company.courier_company_id === vendor.carrierID);
+      vendors?.forEach((vendor: any) => {
+        const courier = courierCompanies?.find((company: { courier_company_id: number; }) => company.courier_company_id === vendor.carrierID);
         console.log("shiprocketVendors", courier, shiprocketNiceName, courier && shiprocketNiceName)
         if (courier && shiprocketNiceName) {
 

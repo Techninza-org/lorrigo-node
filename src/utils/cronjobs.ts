@@ -266,7 +266,8 @@ export const trackOrder_Shiprocket = async () => {
       }
 
     } catch (err) {
-      console.log(err, "SR_error");
+      // Need to fix shiprocket throwing error "Too many attempt" 
+      // console.log(err, "SR_error");
 
       Logger.err(err);
     }

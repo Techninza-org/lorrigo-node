@@ -1,5 +1,5 @@
 import { type Response, type NextFunction } from "express";
-import { getSMARTRToken, getShiprocketToken, getSmartShipToken, isValidPayload } from "../utils/helpers";
+import { getSMARTRToken, getSellerChannelConfig, getShiprocketToken, getSmartShipToken, isValidPayload } from "../utils/helpers";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import { Types, isValidObjectId } from "mongoose";
 import axios from "axios";
@@ -29,6 +29,7 @@ import { CANCELED, CANCELLED_ORDER_DESCRIPTION, SMARTSHIP_COURIER_ASSIGNED_ORDER
 export async function createShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {
     const body = req.body;
+    const sellerId = req.seller._id;
 
     if (!isValidPayload(body, ["orderId", "orderType", "carrierId", "carrierNickName"])) {
       return res.status(200).send({ valid: false, message: "Invalid payload" });
@@ -92,8 +93,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       if (orderWeight < 1) {
         orderWeight = orderWeight * 1000;
       }
-
-      console.log(client_order_reference_id, "order.orderWeight")
 
       const shipmentAPIBody = {
         request_info: {
@@ -168,7 +167,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       } catch (err: unknown) {
         return next(err);
       }
-      Logger.log(externalAPIResponse);
 
       if (externalAPIResponse?.status === "403") {
         return res.status(500).send({ valid: true, message: "Smartship ENVs is expired." });
@@ -193,6 +191,48 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           order.awb = awbNumber;
           order.carrierName = carrierName
           const updatedOrder = await order.save();
+
+          if (order.channelName === "shopify") {
+            try {
+              const shopfiyConfig = await getSellerChannelConfig(sellerId);
+              const shopifyOrders = await axios.get(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`, {
+                headers: {
+                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                },
+              });
+
+              const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
+
+              const shopifyFulfillment = {
+                fulfillment: {
+                  line_items_by_fulfillment_order: [
+                    {
+                      fulfillment_order_id: fulfillmentOrderId
+                    }
+                  ],
+                  tracking_info: {
+                    company: carrierName,
+                    number: awbNumber,
+                    url: `https://lorrigo.in/track/${order?._id}`,
+                  }
+                }
+              };
+
+
+              const shopifyFulfillmentResponse = await axios.post(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`, shopifyFulfillment, {
+                headers: {
+                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                },
+              });
+
+              order.channelFulfillmentId = fulfillmentOrderId;
+              await order.save();
+            } catch (error) {
+              console.log("Error[shopify]", error)
+            }
+
+          }
+
           return res.status(200).send({ valid: true, order: updatedOrder, shipment: savedShipmentResponse });
         } catch (err) {
           console.log(err, "erro")
@@ -240,6 +280,39 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           await order.save();
 
+          if (order.channelName === "shopify") {
+            const shopfiyConfig = await getSellerChannelConfig(sellerId);
+            const shopifyOrders = await axios.get(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`, {
+              headers: {
+                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+              },
+            });
+
+            const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
+
+            const shopifyFulfillment = {
+              fulfillment: {
+                line_items_by_fulfillment_order: [
+                  {
+                    fulfillment_order_id: fulfillmentOrderId
+                  }
+                ],
+                tracking_info: {
+                  company: awbResponse?.data?.response?.data?.awb_code,
+                  number: awbResponse?.data?.response?.data.courier_name + " " + (vendorName?.nickName),
+                  url: `https://lorrigo.in/track/${order?._id}`,
+                }
+              }
+            };
+            const shopifyFulfillmentResponse = await axios.post(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`, shopifyFulfillment, {
+              headers: {
+                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+              },
+            });
+
+            order.channelFulfillmentId = fulfillmentOrderId;
+            await order.save();
+          }
           return res.status(200).send({ valid: true, order });
         } catch (error) {
           console.log(error, 'erro')
@@ -334,6 +407,22 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             order.awb = null;
             order.carrierName = null;
             order.save();
+
+            try {
+              if (order.channelName === "shopify") {
+                const shopfiyConfig = await getSellerChannelConfig(req.seller._id);
+                const shopifyOrders = await axios.get(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_CANCEL}/${order.channelFulfillmentId}/cancel.json`, {
+                  headers: {
+                    "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                  },
+                });
+
+                console.log(shopifyOrders.data, "shopifyOrders.data")
+
+              }
+            } catch (error) {
+              console.log(error, "error")
+            }
 
             await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
             await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);

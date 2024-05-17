@@ -48,6 +48,9 @@ const SHIPROCKET_ORDER_NDR = "/v1/external/ndr";
 
 const SHOPIFY_CUSTOMER = '/admin/api/2024-04/customers.json';
 const SHOPIFY_ORDER = '/admin/api/2024-04/orders.json';
+const SHOPIFY_FULFILLMENT_ORDER = '/admin/api/2023-01/orders';
+const SHOPIFY_FULFILLMENT = '/admin/api/2024-04/fulfillments.json';
+const SHOPIFY_FULFILLMENT_CANCEL = '/admin/api/2024-04/orders';
 
 const APIs = {
   HUB_REGISTRATION,
@@ -83,6 +86,9 @@ const APIs = {
   SHIPROCKET_ORDER_NDR,
 
   SHOPIFY_ORDER,
-  SHOPIFY_CUSTOMER
+  SHOPIFY_CUSTOMER,
+  SHOPIFY_FULFILLMENT_ORDER,
+  SHOPIFY_FULFILLMENT,
+  SHOPIFY_FULFILLMENT_CANCEL
 };
 export default APIs;

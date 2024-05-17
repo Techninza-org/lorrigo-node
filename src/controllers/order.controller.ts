@@ -340,6 +340,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
     const sellerId = req.seller._id;
     const shopfiyConfig = await getSellerChannelConfig(sellerId);
     const primaryHub = await HubModel.findOne({ sellerId, isPrimary: true });
+    
     const shopifyOrders = await axios.get(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_ORDER}`, {
       headers: {
         "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
@@ -364,6 +365,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
 
         const newOrder = new B2COrderModel({
           sellerId,
+          channelOrderId: order.id,
           bucket: NEW,
           channelName: "shopify",
           orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
