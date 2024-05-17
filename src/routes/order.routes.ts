@@ -6,8 +6,12 @@ import {
   getCourier,
   getSpecificOrder,
   updateB2COrder,
-  getChannelOrders
+  getChannelOrders,
+  createBulkB2COrder
 } from "../controllers/order.controller";
+import multer from "multer";
+
+const upload = multer();
 
 // ts-ignore is used as contollers request type is extended with custom property seller
 
@@ -25,6 +29,9 @@ orderRouter.get("/:id", getSpecificOrder);
 
 // @ts-ignore
 orderRouter.post("/b2c", createB2COrder);
+
+// @ts-ignore
+orderRouter.put("/b2c/bulk", upload.single("file"), createBulkB2COrder);
 
 // @ts-ignore
 orderRouter.patch("/update/b2c", updateB2COrder);

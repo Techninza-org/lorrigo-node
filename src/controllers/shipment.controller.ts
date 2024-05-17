@@ -201,6 +201,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
                 },
               });
 
+              console.log(shopifyOrders.data?.fulfillment_orders[0], "shopifyOrders.data")
+
               const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
 
               const shopifyFulfillment = {

@@ -236,7 +236,7 @@ export const validateField = (value: any, fieldName: string, hub: any, alreadyEx
       // if (!value || value.trim().length === 0) {
       //   return 'Name is required';
       // }
-      if (alreadyExistingHubsName.find((item:any) => item.name.includes(value))) {
+      if (alreadyExistingHubsName.find((item: any) => item.name.includes(value))) {
         return "Name must be unique";
       }
       break;
@@ -255,4 +255,29 @@ export const validateField = (value: any, fieldName: string, hub: any, alreadyEx
       break;
   }
   return null;
+};
+export const validateBulkOrderField = (value: any, fieldName: string, order: any, alreadyExistingOrders: any): string | null => {
+  switch (fieldName) {
+    case 'order_reference_id':
+      console.log("order_reference_id", fieldName)
+      if (alreadyExistingOrders.find((item: any) => item.order_reference_id.includes(value))) {
+        console.log("error orcer_ref", alreadyExistingOrders)
+        return "order_id / order_reference_id must be unique";
+      }
+      break;
+    // case "email":
+    //   if (!value || !validateEmail(value)) {
+    //     return "Invalid email format";
+    //   }
+    //   break;
+    // case "phone":
+    //   if (!value || !(value.toString().slice(2, 12).length === 10)) {
+    //     return "Invalid PickupLocationContact";
+    //   }
+    //   break;
+    // Add validation cases for other fields as needed
+    default:
+      break;
+  }
+  return "";
 };

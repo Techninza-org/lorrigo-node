@@ -15,7 +15,12 @@ import type { ObjectId } from "mongoose";
 import envConfig from "../utils/config";
 import axios from "axios";
 import APIs from "../utils/constants/third_party_apis";
+
+import csvtojson from "csvtojson";
+import exceljs from "exceljs";
+
 import { DELIVERED, IN_TRANSIT, NDR, NEW, NEW_ORDER_DESCRIPTION, NEW_ORDER_STATUS, READY_TO_SHIP, RTO } from "../utils/lorrigo-bucketing-info";
+import { validateBulkOrderField } from "../utils";
 
 // TODO create api to delete orders
 
@@ -147,6 +152,238 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
   }
 }
 
+export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body;
+    if (!body) return res.status(200).send({ valid: false, message: "Invalid payload" });
+
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).send({ valid: false, message: "No file uploaded" });
+    }
+    const existingOrders = await B2COrderModel.find({ sellerId: req.seller._id }).lean();
+    const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
+
+    const orders = json.map((hub: any) => {
+      const isPaymentCOD = hub["payment_mode*"]?.toUpperCase() === "TRUE" ? 1 : 0;
+      const isContainFragileItem = hub["isContainFragileItem*"]?.toUpperCase() === "TRUE" ? true : false;
+      return {
+        order_reference_id: hub["order_reference_id"],
+        pickupAddress: hub["pickupAddress"],
+        productDetails: {
+          name: hub["ProductName"],
+          category: hub["category"],
+          quantity: hub["quantity"],
+          hsn_code: hub["hsn_code"],
+          taxRate: hub["tax_rate"],
+          taxableValue: hub["shipment_value"]
+        },
+        order_invoice_date: hub["order_invoice_date"],
+        order_invoice_number: hub["order_invoice_number"],
+        isContainFragileItem: Boolean(isContainFragileItem),
+        numberOfBoxes: hub["numberOfBoxes"],
+        orderBoxHeight: hub["orderBoxHeight(cm)"],
+        orderBoxWidth: hub["orderBoxWidth(cm)"],
+        orderBoxLength: hub["orderBoxLength(cm)"],
+        orderWeight: hub["orderWeight (Kg)"],
+        orderWeightUnit: "kg",
+        orderSizeUnit: "cm",
+        payment_mode: isPaymentCOD,
+        amount2Collect: hub['amount2Collect*'],
+        customerDetails: {
+          name: hub['customerName'],
+          phone: "+91" + hub['customerPhone'],
+          address: hub['customerAdd'],
+          pincode: hub['customerPincode'],
+          city: hub['customerCity'],
+          state: hub['customerState']
+        },
+        sellerDetails: {
+          sellerName: hub['customerState*'],
+          sellerGSTIN: hub['customerState*'],
+          isSellerAddressAdded: hub['customerState*'],
+          sellerAddress: hub['customerState*'],
+          sellerPincode: hub['customerState*'],
+          sellerCity: hub['customerState*'],
+          sellerState: hub['customerState*'],
+          sellerPhone: "+91" + hub['sellerPhone*']
+        },
+      };
+    })
+
+    if (orders.length < 1) {
+      return res.status(200).send({
+        valid: false,
+        message: "empty payload",
+      });
+    }
+
+    try {
+      const errorWorkbook = new exceljs.Workbook();
+      const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
+
+      errorWorksheet.columns = [
+        { header: 'order_reference_id', key: 'order_reference_id', width: 20 },
+        { header: 'Error Message', key: 'errors', width: 40 },
+      ];
+
+      const errorRows: any = [];
+
+      orders.forEach((order) => {
+        const errors: string[] = [];
+        Object.entries(order).forEach(([fieldName, value]) => {
+          const error = validateBulkOrderField(value, fieldName, orders, existingOrders);
+          if (error) {
+            errors.push(error);
+          }
+        });
+
+        if (errors.length > 0) {
+          errorRows.push({
+            order_reference_id: order.order_reference_id,
+            errors: errors.join(", ")
+          });
+        }
+
+      });
+
+      if (errorRows.length > 0) {
+        errorWorksheet.addRows(errorRows);
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+
+        await errorWorkbook.csv.write(res);
+        return res.end();
+      }
+    } catch (error) {
+      return next(error);
+    }
+
+
+    for (let i = 0; i < orders.length; i++) {
+      const order = orders[i];
+      const customerDetails = order?.customerDetails;
+      const productDetails = order?.productDetails;
+
+      if (
+        !isValidPayload(order, [
+          "order_reference_id",
+          "payment_mode",
+          "customerDetails",
+          "productDetails",
+          "pickupAddress",
+        ])
+      )
+        return res.status(200).send({ valid: false, message: "Invalid payload" });
+
+      if (!isValidPayload(productDetails, ["name", "category", "quantity", "taxRate", "taxableValue"]))
+        return res.status(200).send({ valid: false, message: "Invalid payload: productDetails" });
+      if (!isValidPayload(customerDetails, ["name", "phone", "address", "pincode"]))
+        return res.status(200).send({ valid: false, message: "Invalid payload: customerDetails" });
+      if (!isValidObjectId(order.pickupAddress))
+        return res.status(200).send({ valid: false, message: "Invalid pickupAddress" });
+
+      if (!(order.payment_mode === 0 || order.payment_mode === 1))
+        return res.status(200).send({ valid: false, message: "Invalid payment mode" });
+      if (order.payment_mode === 1) {
+        if (!order?.amount2Collect) {
+          return res.status(200).send({ valid: false, message: "amount2Collect > 0 for COD order" });
+        }
+      }
+      // if (order.total_order_value > 50000) {
+      //   if (!isValidPayload(order, ["ewaybill"]))
+      //     return res.status(200).send({ valid: false, message: "Ewaybill required." });
+      // }
+
+      try {
+        const orderWithOrderReferenceId = await B2COrderModel.findOne({
+          sellerId: req.seller._id,
+          order_reference_id: order?.order_reference_id,
+        }).lean();
+
+        if (orderWithOrderReferenceId) {
+          const newError = new Error("Order reference Id already exists.");
+          return next(newError);
+        }
+      }
+      catch (err) {
+        return next(err);
+      }
+
+      let hubDetails;
+      try {
+        hubDetails = await HubModel.findById(order?.pickupAddress);
+        if (!hubDetails) return res.status(200).send({ valid: false, message: "Pickup address doesn't exists" });
+
+      } catch (err) {
+        return next(err);
+      }
+
+      let savedProduct;
+      try {
+        const { name, category, hsn_code, quantity, taxRate, taxableValue } = productDetails;
+        const product2save = new ProductModel({
+          name,
+          category,
+          hsn_code,
+          quantity,
+          tax_rate: taxRate,
+          taxable_value: taxableValue,
+        });
+        savedProduct = await product2save.save();
+      } catch (err) {
+        return next(err);
+      }
+      const orderboxUnit = "kg";
+
+      const orderboxSize = "cm";
+      let savedOrder;
+
+      const data = {
+        sellerId: req.seller?._id,
+        bucket: NEW,
+        client_order_reference_id: order?.order_reference_id,
+        orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
+        pickupAddress: order?.pickupAddress,
+        productId: savedProduct._id,
+        order_reference_id: order?.order_reference_id,
+        payment_mode: order?.payment_mode,
+        order_invoice_date: order?.order_invoice_date,
+        order_invoice_number: order?.order_invoice_number.toString(),
+        isContainFragileItem: order?.isContainFragileItem,
+        numberOfBoxes: order?.numberOfBoxes, // if undefined, default=> 0
+        orderBoxHeight: order?.orderBoxHeight,
+        orderBoxWidth: order?.orderBoxWidth,
+        orderBoxLength: order?.orderBoxLength,
+        orderSizeUnit: order?.orderSizeUnit,
+        orderWeight: order?.orderWeight,
+        orderWeightUnit: order?.orderWeightUnit,
+        amount2Collect: order?.amount2Collect,
+        customerDetails: order?.customerDetails,
+        sellerDetails: {
+          sellerName: order?.sellerDetails.sellerName,
+          sellerGSTIN: order?.sellerDetails.sellerGSTIN,
+          sellerAddress: order?.sellerDetails.sellerAddress,
+          isSellerAddressAdded: order?.sellerDetails.isSellerAddressAdded,
+          sellerPincode: Number(order?.sellerDetails.sellerPincode),
+          sellerCity: order?.sellerDetails.sellerCity,
+          sellerState: order?.sellerDetails.sellerState,
+          sellerPhone: order?.sellerDetails.sellerPhone,
+        },
+      };
+
+      // if (order?.total_order_value > 50000) {
+      //   //@ts-ignore
+      //   data.ewaybill = order?.ewaybill;
+      // }
+      const order2save = new B2COrderModel(data);
+      savedOrder = await order2save.save();
+    }
+    return res.status(200).send({ valid: true });
+  } catch (error) {
+    return next(error);
+  }
+}
 
 export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -340,7 +577,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
     const sellerId = req.seller._id;
     const shopfiyConfig = await getSellerChannelConfig(sellerId);
     const primaryHub = await HubModel.findOne({ sellerId, isPrimary: true });
-    
+
     const shopifyOrders = await axios.get(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_ORDER}`, {
       headers: {
         "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
@@ -357,8 +594,8 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
           name: order.line_items[0]?.name,
           category: order.line_items[0]?.name || order.line_items[0]?.sku,
           quantity: order.line_items[0]?.quantity,
-          tax_rate: order?.current_total_tax,
-          taxable_value: order?.current_total_price,
+          tax_rate: 0,
+          taxable_value: order?.current_subtotal_price,
         });
 
         await product2save.save()
@@ -372,7 +609,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
           order_reference_id: order.name,
           order_invoice_date: order.created_at,
           order_invoice_number: order.name,
-          orderWeight: order.total_weight,
+          orderWeight: order.line_items[0]?.grams / 1000,
           orderWeightUnit: "kg",
 
           // hard coded values
@@ -382,7 +619,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
           orderSizeUnit: "cm",
 
           client_order_reference_id: order.name,
-          payment_mode: 0,  // 0 -> prepaid, 1 -> COD, Right now only prepaid, bcoz data not available
+          payment_mode: order?.financial_status === "pending" ? 1 : 0,  // 0 -> prepaid, 1 -> COD, Right now only prepaid, bcoz data not available
           customerDetails: {
             name: order.customer.first_name + " " + order.customer.last_name,
             phone: order?.customer?.default_address?.phone,
