@@ -412,6 +412,7 @@ export const rateCalculation = async (
       };
 
       const response = await axios.get(url, config);
+      console.log(response.data)
       const courierCompanies = response?.data?.data?.available_courier_companies;
       console.log("courierCompanies", response?.data?.data, vendors)
 

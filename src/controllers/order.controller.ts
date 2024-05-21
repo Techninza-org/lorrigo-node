@@ -3,7 +3,7 @@ import type { ExtendedRequest } from "../utils/middleware";
 import { B2COrderModel, B2BOrderModel } from "../models/order.model";
 import ProductModel from "../models/product.model";
 import HubModel from "../models/hub.model";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import {
   getSellerChannelConfig,
   getShiprocketToken,
@@ -20,7 +20,7 @@ import csvtojson from "csvtojson";
 import exceljs from "exceljs";
 
 import { DELIVERED, IN_TRANSIT, NDR, NEW, NEW_ORDER_DESCRIPTION, NEW_ORDER_STATUS, READY_TO_SHIP, RTO } from "../utils/lorrigo-bucketing-info";
-import { validateBulkOrderField } from "../utils";
+import { convertToISO, validateBulkOrderField } from "../utils";
 
 // TODO create api to delete orders
 
@@ -334,6 +334,8 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
 
       let savedOrder;
 
+      console.log("order", new Date(order?.order_invoice_date))
+
       const data = {
         sellerId: req.seller?._id,
         bucket: NEW,
@@ -343,7 +345,7 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
         productId: savedProduct._id,
         order_reference_id: order?.order_reference_id,
         payment_mode: order?.payment_mode,
-        order_invoice_date: order?.order_invoice_date,
+        order_invoice_date: convertToISO(order?.order_invoice_date),
         order_invoice_number: order?.order_invoice_number.toString(),
         isContainFragileItem: order?.isContainFragileItem,
         numberOfBoxes: order?.numberOfBoxes, // if undefined, default=> 0
@@ -877,7 +879,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
       "order_items": [
         {
           "name": orderDetails.productId.name,
-          "sku": orderDetails.productId.category,
+          "sku": orderDetails.productId.category.slice(0, 40),
           "units": orderDetails.productId.quantity,
           "selling_price": Number(orderDetails.productId.taxable_value),
         }

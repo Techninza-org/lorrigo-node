@@ -289,3 +289,20 @@ export function cleanPhoneNumber(phoneNumber: string) {
   cleanedNumber = cleanedNumber.replace(/\s+/g, '');
   return cleanedNumber;
 }
+
+export function convertToISO(invoice_date: string) {
+  // Split the input date into day, month, and year
+  const [day, month, year] = invoice_date.split('-');
+
+  // Create a new Date object using the parsed values
+  const date = new Date(`${year}-${month}-${day}`);
+
+  // Add the current time to the date object
+  date.setHours(new Date().getHours());
+  date.setMinutes(new Date().getMinutes());
+  date.setSeconds(new Date().getSeconds());
+  date.setMilliseconds(new Date().getMilliseconds());
+
+  // Convert the date object to ISO string and return
+  return date.toISOString();
+}
