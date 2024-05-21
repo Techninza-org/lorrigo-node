@@ -236,17 +236,14 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
 
     const vendors = await CourierModel.find({
       _id: { $in: vendorIds },
-    })
-      .populate("vendor_channel_id")
+    }).populate("vendor_channel_id")
       .lean();
 
     const loopLength = vendors.length;
 
     for (let i = 0; i < loopLength; i++) {
-      console.log(weight, "wright");
       let orderWeight = volumetricWeight > Number(weight) ? volumetricWeight : Number(weight);
       const cv = vendors[i];
-      console.log("cv", cv);
 
       let order_zone = "";
       let increment_price = null;
@@ -416,6 +413,7 @@ export const rateCalculation = async (
 
       const response = await axios.get(url, config);
       const courierCompanies = response?.data?.data?.available_courier_companies;
+      console.log("courierCompanies", response?.data?.data, vendors)
 
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
       console.log("shiprocketNiceName", shiprocketNiceName, vendors)

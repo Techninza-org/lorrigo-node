@@ -281,3 +281,11 @@ export const validateBulkOrderField = (value: any, fieldName: string, order: any
   }
   return "";
 };
+
+export function cleanPhoneNumber(phoneNumber: string) {
+  // Remove +91
+  let cleanedNumber = phoneNumber.replace(/\+91/, '');
+  // Remove all whitespace characters
+  cleanedNumber = cleanedNumber.replace(/\s+/g, '');
+  return cleanedNumber;
+}

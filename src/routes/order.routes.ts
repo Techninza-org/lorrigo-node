@@ -22,7 +22,7 @@ const orderRouter = Router();
 orderRouter.get("/", getOrders);
 
 // @ts-ignore
-orderRouter.get("/channels", getChannelOrders);
+orderRouter.get("/b2c/channels", getChannelOrders);
 
 // @ts-ignore
 orderRouter.post("/b2c", createB2COrder);

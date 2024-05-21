@@ -164,11 +164,11 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
     const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
 
     const orders = json.map((hub: any) => {
-      const isPaymentCOD = hub["payment_mode*"]?.toUpperCase() === "TRUE" ? 1 : 0;
-      const isContainFragileItem = hub["isContainFragileItem*"]?.toUpperCase() === "TRUE" ? true : false;
+      const isPaymentCOD = hub["payment_mode"]?.toUpperCase() === "TRUE" ? 1 : 0;
+      const isContainFragileItem = hub["isContainFragileItem"]?.toUpperCase() === "TRUE" ? true : false;
+      const isSellerAddressAdded = hub["isSellerAddressAdded"]?.toUpperCase() === "TRUE" ? true : false;
       return {
         order_reference_id: hub["order_reference_id"],
-        pickupAddress: hub["pickupAddress"],
         productDetails: {
           name: hub["ProductName"],
           category: hub["category"],
@@ -198,14 +198,14 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
           state: hub['customerState']
         },
         sellerDetails: {
-          sellerName: hub['customerState*'],
-          sellerGSTIN: hub['customerState*'],
-          isSellerAddressAdded: hub['customerState*'],
-          sellerAddress: hub['customerState*'],
-          sellerPincode: hub['customerState*'],
-          sellerCity: hub['customerState*'],
-          sellerState: hub['customerState*'],
-          sellerPhone: "+91" + hub['sellerPhone*']
+          sellerName: hub['sellerName'],
+          sellerGSTIN: hub['sellerGSTIN'],
+          isSellerAddressAdded: Boolean(isSellerAddressAdded),
+          sellerAddress: hub['sellerAddress'],
+          sellerPincode: hub['sellerPincode'],
+          sellerCity: hub['sellerCity'],
+          sellerState: hub['sellerState'],
+          sellerPhone: "+91" + hub['sellerPhone']
         },
       };
     })
@@ -279,7 +279,6 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
           "payment_mode",
           "customerDetails",
           "productDetails",
-          "pickupAddress",
         ])
       )
         return res.status(200).send({ valid: false, message: "Invalid payload" });
@@ -288,8 +287,6 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
         return res.status(200).send({ valid: false, message: "Invalid payload: productDetails" });
       if (!isValidPayload(customerDetails, ["name", "phone", "address", "pincode"]))
         return res.status(200).send({ valid: false, message: "Invalid payload: customerDetails" });
-      if (!isValidObjectId(order.pickupAddress))
-        return res.status(200).send({ valid: false, message: "Invalid pickupAddress" });
 
       if (!(order.payment_mode === 0 || order.payment_mode === 1))
         return res.status(200).send({ valid: false, message: "Invalid payment mode" });
@@ -342,7 +339,7 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
         bucket: NEW,
         client_order_reference_id: order?.order_reference_id,
         orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
-        pickupAddress: order?.pickupAddress,
+        pickupAddress: hubDetails?._id,
         productId: savedProduct._id,
         order_reference_id: order?.order_reference_id,
         payment_mode: order?.payment_mode,
@@ -655,6 +652,7 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
 
 export const getChannelOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
+    const seller = req.seller;
     const sellerId = req.seller._id;
     const shopfiyConfig = await getSellerChannelConfig(sellerId);
     const primaryHub = await HubModel.findOne({ sellerId, isPrimary: true });
@@ -676,7 +674,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
           category: order.line_items[0]?.name || order.line_items[0]?.sku,
           quantity: order.line_items[0]?.quantity,
           tax_rate: 0,
-          taxable_value: order?.current_subtotal_price,
+          taxable_value: order?.total_price,
         });
 
         await product2save.save()
@@ -701,9 +699,10 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
 
           client_order_reference_id: order.name,
           payment_mode: order?.financial_status === "pending" ? 1 : 0,  // 0 -> prepaid, 1 -> COD, Right now only prepaid, bcoz data not available
+          amount2Collect: order?.financial_status === "pending" ? order?.current_subtotal_price : 0,
           customerDetails: {
             name: order.customer.first_name + " " + order.customer.last_name,
-            phone: order?.customer?.default_address?.phone,
+            phone: order?.customer?.default_address?.phone?.replace(/\s+/g, ''),
             email: order?.customer?.email,
             address: order?.customer?.default_address?.address1,
             pincode: order?.customer?.default_address?.zip,
@@ -711,13 +710,13 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
             state: order?.customer?.default_address?.province,
           },
           sellerDetails: {
-            sellerName: order?.billing_address?.first_name,
+            sellerName: order?.billing_address?.first_name || seller?.companyProfile?.companyName || seller?.name,
             isSellerAddressAdded: false,
-            sellerAddress: order?.billing_address?.address1,
+            sellerAddress: order?.billing_address?.address1 || primaryHub?.address1,
             sellerCity: order?.billing_address?.city,
             sellerState: order?.billing_address?.province,
             sellerPincode: 0,
-            sellerPhone: order?.billing_address?.phone,
+            sellerPhone: order?.billing_address?.phone?.replace(/\s+/g, ''),
           },
           productId: product2save._id.toString(),
           pickupAddress: primaryHub?._id.toString(),
@@ -729,6 +728,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
 
     return res.status(200).send({ valid: true });
   } catch (error) {
+    console.log("error", error)
     return next(error);
   }
 }
@@ -862,7 +862,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
       "billing_state": orderDetails?.customerDetails.get("state"),
       "billing_country": "India",
       "billing_email": orderDetails?.customerDetails.get("email") || "noreply@lorrigo.com",
-      "billing_phone": orderDetails?.customerDetails.get("phone"),
+      "billing_phone": orderDetails?.customerDetails.get("phone").replace("+91", ""),
       "shipping_is_billing": true,
       "shipping_customer_name": orderDetails?.sellerDetails.get("sellerName") || "",
       "shipping_last_name": orderDetails?.sellerDetails.get("sellerName") || "",
