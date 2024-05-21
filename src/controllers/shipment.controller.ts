@@ -336,139 +336,145 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
 export async function cancelShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {
-    const { orderId, type } = req.body;
+    const { orderIds, type } = req.body;
 
-    if (!(orderId && isValidObjectId(orderId))) {
-      return res.status(400).send({ valid: false, message: "Invalid payload" });
+    if (!orderIds?.length) {
+      return res.status(200).send({ valid: false, message: "Invalid payload" });
     }
 
-    const order = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id });
-    if (!order) {
-      return res.status(404).send({ valid: false, message: `No active order found with orderId=${orderId}` });
+    const orders = await B2COrderModel.find({ _id: { $in: orderIds }, sellerId: req.seller._id });
+
+    if (!orders.length) {
+      return res.status(200).send({ valid: false, message: "No active orders found" });
     }
 
-    if (!order.awb && type === "order") {
-      await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
-      return res.status(200).send({ valid: true, message: "Order cancelled successfully" });
-    }
+    for (let i = 0; i < orders.length; i++) {
+      const order = orders[i];
 
-    const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
-
-    const vendorName = await EnvModel.findOne({ nickName: assignedVendorNickname });
-
-
-    if (vendorName?.name === "SMARTSHIP") {
-      const smartshipToken = await getSmartShipToken();
-      if (!smartshipToken) {
-        return res.status(500).send({ valid: false, message: "Smartship environment variables not found" });
+      if (!order.awb && type === "order") {
+        await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+        continue;
       }
 
-      const shipmentAPIConfig = { headers: { Authorization: smartshipToken } };
+      const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
 
-      let requestBody = {
-        request_info: {},
-        orders: {
-          client_order_reference_ids: [order.client_order_reference_id],
-        },
-      };
+      const vendorName = await EnvModel.findOne({ nickName: assignedVendorNickname });
 
-      try {
-        const externalAPIResponse = await axios.post(
-          config.SMART_SHIP_API_BASEURL + APIs.CANCEL_SHIPMENT,
-          requestBody,
-          shipmentAPIConfig
-        );
-
-        if (externalAPIResponse.data.status === "403") {
-          return res.status(500).send({ valid: false, message: "Smartship environment variables expired" });
+      if (vendorName?.name === "SMARTSHIP") {
+        const smartshipToken = await getSmartShipToken();
+        if (!smartshipToken) {
+          return res.status(500).send({ valid: false, message: "Smartship environment variables not found" });
         }
 
-        const orderCancellationDetails = externalAPIResponse.data?.data?.order_cancellation_details;
+        const shipmentAPIConfig = { headers: { Authorization: smartshipToken } };
 
-        if (orderCancellationDetails?.failure) {
+        let requestBody = {
+          request_info: {},
+          orders: {
+            client_order_reference_ids: [order.client_order_reference_id],
+          },
+        };
 
-          const failureMessage = externalAPIResponse?.data?.data?.order_cancellation_details?.failure[order?.order_reference_id]?.message;
-          if (failureMessage?.includes("Already Cancelled.")) {
-            // Order already cancelled
-            await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+        try {
+          const externalAPIResponse = await axios.post(
+            config.SMART_SHIP_API_BASEURL + APIs.CANCEL_SHIPMENT,
+            requestBody,
+            shipmentAPIConfig
+          );
 
-            return res.status(200).send({ valid: false, message: "Order already cancelled" });
-          } else if (failureMessage?.includes("Cancellation already requested.")) {
-            // Cancellation already requested
-            await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
-
-            return res.status(200).send({ valid: false, message: "Cancellation already requested" });
-          } else {
-            return res.status(500).send({ valid: false, message: "Incomplete route section", orderCancellationDetails });
+          if (externalAPIResponse.data.status === "403") {
+            return res.status(500).send({ valid: false, message: "Smartship environment variables expired" });
           }
-        } else {
 
+          const orderCancellationDetails = externalAPIResponse.data?.data?.order_cancellation_details;
+
+          if (orderCancellationDetails?.failure) {
+
+            const failureMessage = externalAPIResponse?.data?.data?.order_cancellation_details?.failure[order?.order_reference_id]?.message;
+            if (failureMessage?.includes("Already Cancelled.")) {
+              // Order already cancelled
+              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+
+              return res.status(200).send({ valid: false, message: "Order already cancelled" });
+            } else if (failureMessage?.includes("Cancellation already requested.")) {
+              // Cancellation already requested
+              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+
+              return res.status(200).send({ valid: false, message: "Cancellation already requested" });
+            } else {
+              return res.status(500).send({ valid: false, message: "Incomplete route section", orderCancellationDetails });
+            }
+          } else {
+
+            if (type === "order") {
+              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+            } else {
+              order.awb = null;
+              order.carrierName = null;
+              order.save();
+
+              try {
+                if (order.channelName === "shopify") {
+                  const shopfiyConfig = await getSellerChannelConfig(req.seller._id);
+                  const shopifyOrders = await axios.get(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_CANCEL}/${order.channelFulfillmentId}/cancel.json`, {
+                    headers: {
+                      "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                    },
+                  });
+
+                  console.log(shopifyOrders.data, "shopifyOrders.data")
+
+                }
+              } catch (error) {
+                console.log(error, "error")
+              }
+
+              await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
+              await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
+            }
+
+            return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
+          }
+        } catch (error) {
+          return next(error);
+        }
+      }
+      else if (vendorName?.name === "SHIPROCKET") {
+        try {
+          const cancelShipmentPayload = {
+            awbs: [order.awb],
+          };
+          const shiprocketToken = await getShiprocketToken();
+          const cancelShipmentResponse = await axios.post(
+            config.SHIPROCKET_API_BASEURL + APIs.CANCEL_SHIPMENT_SHIPROCKET,
+            cancelShipmentPayload,
+            {
+              headers: {
+                Authorization: shiprocketToken,
+              },
+            }
+          );
+          console.log(cancelShipmentResponse.data, "cancelShipmentResponse.data");
           if (type === "order") {
             await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
           } else {
             order.awb = null;
-            order.carrierName = null;
+            order.carrierName = null
             order.save();
-
-            try {
-              if (order.channelName === "shopify") {
-                const shopfiyConfig = await getSellerChannelConfig(req.seller._id);
-                const shopifyOrders = await axios.get(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_CANCEL}/${order.channelFulfillmentId}/cancel.json`, {
-                  headers: {
-                    "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-                  },
-                });
-
-                console.log(shopifyOrders.data, "shopifyOrders.data")
-
-              }
-            } catch (error) {
-              console.log(error, "error")
-            }
 
             await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
             await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
           }
-
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
+
+        } catch (error) {
+          return next(error);
+
         }
-      } catch (error) {
-        return next(error);
       }
     }
-    else if (vendorName?.name === "SHIPROCKET") {
-      try {
-        const cancelShipmentPayload = {
-          awbs: [order.awb],
-        };
-        const shiprocketToken = await getShiprocketToken();
-        const cancelShipmentResponse = await axios.post(
-          config.SHIPROCKET_API_BASEURL + APIs.CANCEL_SHIPMENT_SHIPROCKET,
-          cancelShipmentPayload,
-          {
-            headers: {
-              Authorization: shiprocketToken,
-            },
-          }
-        );
-        console.log(cancelShipmentResponse.data, "cancelShipmentResponse.data");
-        if (type === "order") {
-          await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
-        } else {
-          order.awb = null;
-          order.carrierName = null
-          order.save();
 
-          await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
-          await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
-        }
-        return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
-
-      } catch (error) {
-        return next(error);
-
-      }
-    }
+    return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
   } catch (error) {
     return next(error);
   }

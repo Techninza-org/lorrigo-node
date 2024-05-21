@@ -259,6 +259,14 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
       return next(error);
     }
 
+    let hubDetails;
+    try {
+      hubDetails = await HubModel.findOne({ sellerId: req.seller._id, isPrimary: true });
+      if (!hubDetails) return res.status(200).send({ valid: false, message: "Pickup address doesn't exists" });
+
+    } catch (err) {
+      return next(err);
+    }
 
     for (let i = 0; i < orders.length; i++) {
       const order = orders[i];
@@ -310,14 +318,6 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
         return next(err);
       }
 
-      let hubDetails;
-      try {
-        hubDetails = await HubModel.findById(order?.pickupAddress);
-        if (!hubDetails) return res.status(200).send({ valid: false, message: "Pickup address doesn't exists" });
-
-      } catch (err) {
-        return next(err);
-      }
 
       let savedProduct;
       try {
@@ -334,9 +334,7 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
       } catch (err) {
         return next(err);
       }
-      const orderboxUnit = "kg";
 
-      const orderboxSize = "cm";
       let savedOrder;
 
       const data = {
@@ -518,6 +516,89 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
     return next(error);
   }
 };
+
+export const updateBulkPickupOrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body;
+    if (!body) return res.status(200).send({ valid: false, message: "Invalid payload" });
+
+    const { pickupAddress, orderIds } = body;
+
+    if (!isValidObjectId(pickupAddress))
+      return res.status(200).send({ valid: false, message: "Invalid pickupAddress" });
+    if (!Array.isArray(orderIds))
+      return res.status(200).send({ valid: false, message: "Invalid orderIds" });
+
+    try {
+      const hubDetails = await HubModel.findById(pickupAddress);
+      if (!hubDetails) return res.status(200).send({ valid: false, message: "Pickup address doesn't exists" });
+
+    } catch (err) {
+      return next(err);
+    }
+
+    let savedOrders = [];
+    for (let i = 0; i < orderIds.length; i++) {
+      const orderId = orderIds[i];
+      try {
+        const order = await B2COrderModel.findByIdAndUpdate(orderId, { pickupAddress });
+        savedOrders.push(order);
+      }
+      catch (err) {
+        return next(err);
+      }
+    }
+    return res.status(200).send({ valid: true, orders: savedOrders });
+
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export const updateB2CBulkShopifyOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+
+  try {
+    const body = req.body;
+    if (!body) return res.status(200).send({ valid: false, message: "Invalid payload" });
+
+    const {
+      orderIds,
+      pickupAddressId,
+      orderSizeUnit,
+      orderBoxHeight,
+      orderBoxWidth,
+      orderBoxLength,
+      orderWeight,
+    } = body;
+
+    if (!Array.isArray(orderIds))
+      return res.status(200).send({ valid: false, message: "Invalid orderIds" });
+
+    if (!isValidObjectId(pickupAddressId))
+      return res.status(200).send({ valid: false, message: "Invalid pickupAddressId" });
+
+    const bulkUpdateOrder = await B2COrderModel.bulkWrite(
+      orderIds.map((orderId: ObjectId) => ({
+        updateOne: {
+          filter: { _id: orderId },
+          update: {
+            pickupAddress: pickupAddressId,
+            orderSizeUnit,
+            orderBoxHeight,
+            orderBoxWidth,
+            orderBoxLength,
+            orderWeight,
+          },
+        },
+      }))
+    );
+
+    return res.status(200).send({ valid: true, orders: bulkUpdateOrder });
+
+  } catch (error) {
+    return next(error)
+  }
+}
 
 
 export const getOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
@@ -860,7 +941,7 @@ export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next
       return res.status(200).send({ valid: false, message: "Invalid orderId" });
     }
     //@ts-ignore
-    const order = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller?._id }).populate(["pickupAddress", "productId"]).lean();
+    const order = await B2COrderModel.findById(orderId).populate(["pickupAddress", "productId"]).lean();
 
     return !order
       ? res.status(200).send({ valid: false, message: "No such order found." })

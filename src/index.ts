@@ -18,6 +18,9 @@ import runCron, { CONNECT_SHIPROCKET, CONNECT_SMARTR, CONNECT_SMARTSHIP } from "
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
 import PincodeModel from "./models/pincode.model";
+import HubModel from "./models/hub.model";
+import SellerModel from "./models/seller.model";
+import { getSpecificOrder } from "./controllers/order.controller";
 
 app.use(cors({ origin: "*" }));
 
@@ -47,6 +50,24 @@ if (!config.MONGODB_URI) {
 
 // }
 
+// async function toUpdatePrimaryHubDB() {
+//   const updateQuery = {
+//     $set: {
+//       isPrimary: true
+//     }
+//   }
+//   const allSeller = await SellerModel.find();
+
+
+//   for (let i = 0; i < allSeller.length; i++) {
+//     // console.log(allSeller[i]._id.toString())
+//     const update = await HubModel.updateOne({ sellerId: allSeller[i]._id.toString() }, updateQuery);
+//     console.log(update)
+//   }
+// }
+
+
+
 
 mongoose
   .connect(config.MONGODB_URI)
@@ -64,6 +85,9 @@ app.use("/api/auth", authRouter);
 app.post("/api/vendor", addVendors);
 app.get("/api/getsellers", getSellers);    //admin
 app.post("/api/seller_vendor", updateVendor4Seller);
+
+// @ts-ignore
+app.get("/api/order/:id", getSpecificOrder);
 
 app.post("/api/shopify", (req, res) => {
   console.log(req.body);
