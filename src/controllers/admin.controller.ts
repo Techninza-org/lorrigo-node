@@ -156,8 +156,6 @@ export const uploadPincodes = async (req: ExtendedRequest, res: Response, next: 
     try {
       const result = await PincodeModel.bulkWrite(bulkOperations);
   
-      console.log(`${result.insertedCount} documents inserted`);
-      console.log(`${result.modifiedCount} documents updated`);
     } catch (err) {
       return next(err);
     }                         

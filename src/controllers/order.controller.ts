@@ -334,8 +334,6 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
 
       let savedOrder;
 
-      console.log("order", new Date(order?.order_invoice_date))
-
       const data = {
         sellerId: req.seller?._id,
         bucket: NEW,
@@ -385,7 +383,6 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
 export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const body = req.body;
-    // console.log("body", body);
     if (!body) return res.status(200).send({ valid: false, message: "Invalid payload" });
 
     const customerDetails = body?.customerDetails;

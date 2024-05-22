@@ -71,8 +71,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
     if (vendorName?.name === "SMARTSHIP") {
 
-      console.log("SMARTSHIP", vendorName?.name);
-
       const productValueWithTax =
         Number(productDetails.taxable_value) +
         (Number(productDetails.tax_rate) / 100) * Number(productDetails.taxable_value);
@@ -201,8 +199,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
                 },
               });
 
-              console.log(shopifyOrders.data?.fulfillment_orders[0], "shopifyOrders.data")
-
               const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
 
               const shopifyFulfillment = {
@@ -249,8 +245,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         const shiprocketToken = await getShiprocketToken();
 
-        console.log(shiprocketToken, "shiprocketToken")
-
         const genAWBPayload = {
           shipment_id: order.shiprocket_shipment_id,
           courier_id: body?.carrierId.toString(),
@@ -263,7 +257,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             },
           });
 
-          console.log(awbResponse?.data?.response?.data, "awbResponse.data");
           const { awb_code, courier_name } = awbResponse?.data?.response?.data;
 
           if (!awb_code || !courier_name) {
@@ -351,6 +344,23 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
     for (let i = 0; i < orders.length; i++) {
       const order = orders[i];
 
+      try {
+        if (order.channelName === "shopify") {
+          const shopfiyConfig = await getSellerChannelConfig(req.seller._id);
+          const shopifyOrders = await axios.post(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_CANCEL}/${order.channelOrderId}/cancel.json`, {
+            "cancellation_request": {
+              "message": "The customer changed his mind."
+            }
+          }, {
+            headers: {
+              "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+            },
+          });
+        }
+      } catch (error) {
+        console.log(error, "error")
+      }
+
       if (!order.awb && type === "order") {
         await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
         continue;
@@ -359,6 +369,8 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
       const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
 
       const vendorName = await EnvModel.findOne({ nickName: assignedVendorNickname });
+
+
 
       if (vendorName?.name === "SMARTSHIP") {
         const smartshipToken = await getSmartShipToken();
@@ -413,22 +425,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
               order.carrierName = null;
               order.save();
 
-              try {
-                if (order.channelName === "shopify") {
-                  const shopfiyConfig = await getSellerChannelConfig(req.seller._id);
-                  const shopifyOrders = await axios.get(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_CANCEL}/${order.channelFulfillmentId}/cancel.json`, {
-                    headers: {
-                      "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-                    },
-                  });
-
-                  console.log(shopifyOrders.data, "shopifyOrders.data")
-
-                }
-              } catch (error) {
-                console.log(error, "error")
-              }
-
               await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
               await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
             }
@@ -454,7 +450,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
               },
             }
           );
-          console.log(cancelShipmentResponse.data, "cancelShipmentResponse.data");
           if (type === "order") {
             await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
           } else {
@@ -541,7 +536,6 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
           shipmentAPIConfig
         );
 
-        // console.log(externalAPIResponse.data, "externalAPIResponse manifest");
         if (externalAPIResponse.data.status === "403") {
           return res.status(500).send({ valid: false, message: "Smartships ENVs expired" });
         }
@@ -620,8 +614,6 @@ export async function orderReattempt(req: ExtendedRequest, res: Response, next: 
 
     const vendorName = await EnvModel.findOne({ nickName: carrierName });
 
-    console.log(vendorName?.name, "vendorName?.name", carrierName, "carrierName", order.carrierName)
-
     if (vendorName?.name === "SMARTSHIP") {
       const smartshipToken = await getSmartShipToken();
       if (!smartshipToken) return res.status(200).send({ valid: false, message: "Smartship ENVs not found" });
@@ -642,8 +634,6 @@ export async function orderReattempt(req: ExtendedRequest, res: Response, next: 
         ],
 
       };
-
-      console.log(requestBody, "requestBody[SMARTSHIP]")
 
       try {
         const externalAPIResponse = await axios.post(
@@ -673,8 +663,6 @@ export async function orderReattempt(req: ExtendedRequest, res: Response, next: 
     else if (vendorName?.name === "SHIPROCKET") {
       const shiprocketToken = await getShiprocketToken();
 
-      console.log(type, comment, "type, comment")
-
       interface OrderReattemptPayload {
         action: "fake-attempt" | "re-attempt" | "return";
         comment?: string;
@@ -690,8 +678,6 @@ export async function orderReattempt(req: ExtendedRequest, res: Response, next: 
             Authorization: shiprocketToken,
           },
         });
-
-        console.log(schduleRes.data, "schduleRes.data[SHIPROCKET]");
 
         await updateOrderStatus(order._id, NDR, SMARTSHIP_ORDER_REATTEMPT_DESCRIPTION);
         return res.status(200).send({ valid: true, message: "Order reattempt request generated" });
@@ -726,14 +712,12 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
       .populate("pickupAddress")
       .lean();
     if (!order) return res.status(200).send({ valid: false, message: "order not found" });
-    // console.log(order, 0);
     const smartr_token = await getSMARTRToken();
     if (!smartr_token) return res.status(500).send({ valid: false, message: "SMARTR token not found" });
 
     // TODO: adjust totalOrderWeight according to their unit.
     // @ts-ignore
     const totalOrderWeight = order?.packageDetails?.reduce((acc, cv) => acc + cv?.boxWeight, 0);
-    // console.log(totalOrderWeight, 0);
     // let data = [
     //   {
     //     packageDetails: {
@@ -871,9 +855,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
 
     try {
       const response = await axios.post(APIs.CREATE_SMARTR_ORDER, data, apiConfig);
-      // console.log("response", response.data);
     } catch (error) {
-      // console.log("error", error);
       return next(error);
     }
 
@@ -975,7 +957,6 @@ export async function getShipemntDetails(req: ExtendedRequest, res: Response, ne
       B2COrderModel.find({ sellerId: sellerID, createdAt: { $gte: startOfToday, $lt: endOfToday } }),
       B2COrderModel.find({ sellerId: sellerID, createdAt: { $gte: startOfYesterday, $lt: endOfYesterday } })
     ]);
-    // console.log(orders, "orders")
     // Extract shipment details
     const shipmentDetails = calculateShipmentDetails(orders);
 

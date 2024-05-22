@@ -12,6 +12,8 @@ const PORT = Number(process.env.PORT) || 8000;
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET;
+
 const SMART_SHIP_USERNAME = "logistics@lorrigo.com";
 
 const SMART_SHIP_PASSWORD = process.env.PASSWORD;
@@ -45,6 +47,7 @@ const envConfig = {
   SALT_ROUND,
   PORT,
   JWT_SECRET,
+  ADMIN_JWT_SECRET,
   SMART_SHIP_USERNAME,
   SMART_SHIP_PASSWORD,
   SMART_SHIP_CLIENT_ID,

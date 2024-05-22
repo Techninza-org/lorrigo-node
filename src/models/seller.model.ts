@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 const sellerSchema = new mongoose.Schema({
   name: { type: String, required: true },
+  role: { type: String, default: "seller" },
   email: { type: String, required: true },
   password: { type: String, required: true },
   walletBalance: { type: Number, default: 0, min: 0 },

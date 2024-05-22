@@ -46,7 +46,6 @@ if (!config.MONGODB_URI) {
 //     }
 //   }
 //   const update = await PincodeModel.updateMany({ StateName: "Delhi" }, updateQuery);
-//   console.log(update)
 
 // }
 
@@ -60,9 +59,7 @@ if (!config.MONGODB_URI) {
 
 
 //   for (let i = 0; i < allSeller.length; i++) {
-//     // console.log(allSeller[i]._id.toString())
 //     const update = await HubModel.updateOne({ sellerId: allSeller[i]._id.toString() }, updateQuery);
-//     console.log(update)
 //   }
 // }
 
@@ -107,7 +104,7 @@ app.use("/api/order", AuthMiddleware, orderRouter);
 //@ts-ignore
 app.use("/api/shipment", AuthMiddleware, shipmentRouter);
 //@ts-ignore
-app.use("/api/admin", adminRouter); //AuthMiddleware
+app.use("/api/admin", adminRouter);
 
 app.use(ErrorHandler);
 app.use("*", (req: Request, res: Response) => {

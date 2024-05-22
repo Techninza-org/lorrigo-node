@@ -73,7 +73,6 @@ export const addVendors = async (req: Request, res: Response, next: NextFunction
     try {
       savedVendor = await vendor.save();
     } catch (err) {
-      // console.log(err);
       return next(err);
     }
     return res.status(200).send({
@@ -313,7 +312,6 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
         cod = codPrice > codAfterPercent ? codPrice : codAfterPercent;
       }
       const weightIncrementRatio = Math.ceil(orderWeight / cv.incrementWeight);
-      // console.log("weightIncrementRatio", weightIncrementRatio)
       totalCharge += increment_price.incrementPrice * weightIncrementRatio + cod;
 
       data2send.push({
@@ -412,7 +410,6 @@ export const rateCalculation = async (
       };
 
       const response = await axios.get(url, config);
-      console.log(response.data)
       const courierCompanies = response?.data?.data?.available_courier_companies;
       console.log("courierCompanies", response?.data?.data, vendors)
 
@@ -420,7 +417,6 @@ export const rateCalculation = async (
       console.log("shiprocketNiceName", shiprocketNiceName, vendors)
       vendors?.forEach((vendor: any) => {
         const courier = courierCompanies?.find((company: { courier_company_id: number; }) => company.courier_company_id === vendor.carrierID);
-        console.log("shiprocketVendors", courier, shiprocketNiceName, courier && shiprocketNiceName)
         if (courier && shiprocketNiceName) {
 
           const shiprocketVendors = vendors.filter((vendor) => {
@@ -556,7 +552,6 @@ export const rateCalculation = async (
         cod = codPrice > codAfterPercent ? codPrice : codAfterPercent;
       }
       const weightIncrementRatio = Math.ceil(orderWeight / cv.incrementWeight);
-      // console.log("weightIncrementRatio", weightIncrementRatio)
       totalCharge += increment_price.incrementPrice * weightIncrementRatio + cod;
 
       data2send.push({
@@ -816,7 +811,6 @@ export async function isSmartr_surface_servicable(pincode: number): Promise<bool
   axios
     .request(config)
     .then((response) => {
-      // console.log(JSON.stringify(response.data));
     })
     .catch((error) => {
       // console.log(error);

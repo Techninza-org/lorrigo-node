@@ -1,22 +1,38 @@
 import { Router } from "express";
-import { getAllOrdersAdmin, getAllRemittances, getSellerDetails, getSellerSpecificOrderAdmin, getSpecificOrderAdmin, updateSellerAdmin, uploadPincodes } from "../controllers/admin.controller";
+import {
+    getAllOrdersAdmin,
+    getAllRemittances,
+    getSellerDetails,
+    getSellerSpecificOrderAdmin,
+    getSpecificOrderAdmin,
+    updateSellerAdmin,
+    uploadPincodes,
+
+} from "../controllers/admin.controller";
+import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
+import { AdminAuthMiddleware } from "../utils/middleware";
+
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 const adminRouter = Router();
 
+
+adminRouter.post("/login", handleAdminLogin);
+
+
 //@ts-ignore
-adminRouter.get("/all-orders", getAllOrdersAdmin);
+adminRouter.get("/all-orders", AdminAuthMiddleware, getAllOrdersAdmin);
 //@ts-ignore
-adminRouter.get("/order/:id", getSpecificOrderAdmin);
+adminRouter.get("/order/:id", AdminAuthMiddleware, getSpecificOrderAdmin);
 //@ts-ignore
-adminRouter.get("/orders/seller/:id", getSellerSpecificOrderAdmin);
+adminRouter.get("/orders/seller/:id", AdminAuthMiddleware, getSellerSpecificOrderAdmin);
 //@ts-ignore
-adminRouter.get("/all-remittances", getAllRemittances);
+adminRouter.get("/all-remittances", AdminAuthMiddleware, getAllRemittances);
 //@ts-ignore
-adminRouter.put("/seller", updateSellerAdmin);
+adminRouter.put("/seller", AdminAuthMiddleware, updateSellerAdmin);
 //@ts-ignore
-adminRouter.get("/seller", getSellerDetails);
+adminRouter.get("/seller", AdminAuthMiddleware, getSellerDetails);
 
 //@ts-ignore
 adminRouter.put("/pincodes", upload.single('file'), uploadPincodes);

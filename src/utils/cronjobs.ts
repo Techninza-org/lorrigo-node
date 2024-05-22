@@ -110,7 +110,6 @@ export const CONNECT_SHIPROCKET = async (): Promise<void> => {
     );
 
     const token = `Bearer ${responseBody.token}`;
-    console.log("Shiprocket token: ", token);
     Logger.plog("Shiprocket environment updated successfully");
   } catch (err) {
     console.log(err);
@@ -267,8 +266,6 @@ export const trackOrder_Shiprocket = async () => {
 
     } catch (err) {
       // Need to fix shiprocket throwing error "Too many attempt" 
-      // console.log(err, "SR_error");
-
       Logger.err(err);
     }
   }
@@ -285,7 +282,7 @@ export const calculateRemittance = async () => {
       const existingRemittance = await RemittanceModel.findOne({ sellerId: sellerId, remittanceDate: fridayDate });
       if (existingRemittance) {
         console.log(`Remittance already exists for seller: ${sellerId} on ${fridayDate}`);
-        continue; // Skip adding remittance for this seller on this Friday
+        continue; 
       }
 
       const remittanceId = generateRemittanceId(companyName, sellerId._id.toString(), fridayDate);

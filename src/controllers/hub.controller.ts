@@ -124,7 +124,6 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
         smartshipApiBody,
         smartshipAPIconfig
       );
-      console.log('smartShipResponse', smartShipResponse.data);
     } catch (err) {
       return next(err);
     }
@@ -135,11 +134,9 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
         shiprocketHubPayload,
         shiprocketAPIconfig
       );
-      console.log(shiprocketResponse.data, "shiprocketResponse");
     } catch (err) {
       // @ts-ignore
       const isExistingHub = err?.response?.data.errors.pickup_location[0].includes("Address nick name already in use")
-      console.log(isExistingHub, "err");
       if (!isExistingHub) return next(err);
     }
 
@@ -198,8 +195,6 @@ export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: N
     }
 
     const alreadyExistingHubs = await HubModel.find({ sellerId: req.seller._id }).select(["name"]);
-    console.log(alreadyExistingHubs, "alreadyExistingHubs")
-
     const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
 
 
@@ -245,7 +240,6 @@ export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: N
       hubs.forEach((hub) => {
         const errors: string[] = [];
         Object.entries(hub).forEach(([fieldName, value]) => {
-          console.log(fieldName, value);
           const error = validateField(value, fieldName, hubs, alreadyExistingHubs);
           if (error) {
             errors.push(error);
@@ -577,7 +571,6 @@ export const deleteHub = async (req: ExtendedRequest, res: Response, next: NextF
     } catch (err) {
       return next(err);
     }
-    // console.log(hubData);
     if (hubData.length < 1) return res.status(200).send({ valid: false, message: "hub not found" });
 
     const env = await EnvModel.findOne({}).lean();

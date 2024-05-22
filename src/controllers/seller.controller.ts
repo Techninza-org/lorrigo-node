@@ -44,7 +44,6 @@ export const updateSeller = async (req: ExtendedRequest, res: Response, next: Ne
         companyLogo: query['companyProfile.logo'] || existingSeller.companyProfile.companyLogo
       };
     }
-    console.log(body, "body")
 
     const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
       $set: { ...body },

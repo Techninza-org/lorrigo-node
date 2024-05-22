@@ -259,9 +259,7 @@ export const validateField = (value: any, fieldName: string, hub: any, alreadyEx
 export const validateBulkOrderField = (value: any, fieldName: string, order: any, alreadyExistingOrders: any): string | null => {
   switch (fieldName) {
     case 'order_reference_id':
-      console.log("order_reference_id", fieldName)
       if (alreadyExistingOrders.find((item: any) => item.order_reference_id.includes(value))) {
-        console.log("error orcer_ref", alreadyExistingOrders)
         return "order_id / order_reference_id must be unique";
       }
       break;
@@ -291,18 +289,24 @@ export function cleanPhoneNumber(phoneNumber: string) {
 }
 
 export function convertToISO(invoice_date: string) {
-  // Split the input date into day, month, and year
-  const [day, month, year] = invoice_date.split('-');
+  let day, month, year;
 
-  // Create a new Date object using the parsed values
+  if (invoice_date.includes('-')) {
+    // Format: DD-MM-YYYY
+    [day, month, year] = invoice_date.split('-');
+  } else if (invoice_date.includes('/')) {
+    // Format: MM/DD/YYYY
+    [day, month, year]= invoice_date.split('/');
+  } else {
+    throw new Error("Invalid date format");
+  }
+
   const date = new Date(`${year}-${month}-${day}`);
+  const now = new Date();
+  date.setHours(now.getHours());
+  date.setMinutes(now.getMinutes());
+  date.setSeconds(now.getSeconds());
+  date.setMilliseconds(now.getMilliseconds());
 
-  // Add the current time to the date object
-  date.setHours(new Date().getHours());
-  date.setMinutes(new Date().getMinutes());
-  date.setSeconds(new Date().getSeconds());
-  date.setMilliseconds(new Date().getMilliseconds());
-
-  // Convert the date object to ISO string and return
   return date.toISOString();
 }

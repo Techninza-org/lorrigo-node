@@ -116,6 +116,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         name: existingUser.name,
         id: existingUser._id,
         isVerified: false,
+        role: "seller",
         token,
       },
     });
@@ -275,6 +276,52 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
     return res.status(200).send({
       valid: true,
       message: "password changed successfully",
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export const handleAdminLogin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body: LoginBodyType = req.body;
+
+    if (!(body?.email && body?.password)) {
+      return res.status(200).send({
+        valid: false,
+        message: "Invalid login credentials",
+      });
+    }
+
+    const existingUser = await SellerModel.findOne({ email: body.email, role: "admin" }).select(["name", "email", "password", "walletBalance", "isVerified"]).lean();
+    if (!existingUser) {
+      return res.status(200).send({
+        valid: false,
+        message: "User doesn't exist",
+      });
+    }
+
+    const isValidPassword = bcrypt.compareSync(body?.password, existingUser.password);
+
+    if (!isValidPassword) {
+      return res.status(200).send({
+        valid: false,
+        message: "incorrect password",
+      });
+    }
+
+    const token = jwt.sign(existingUser, config.ADMIN_JWT_SECRET!, { expiresIn: "7d" });
+
+    return res.status(200).send({
+      valid: true,
+      user: {
+        email: existingUser.email,
+        name: existingUser.name,
+        id: existingUser._id,
+        isVerified: false,
+        token,
+        role: "admin"
+      },
     });
   } catch (error) {
     return next(error);
