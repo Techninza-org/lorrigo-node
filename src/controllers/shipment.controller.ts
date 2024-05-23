@@ -320,6 +320,80 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         return next(error);
       }
 
+    } else if (vendorName?.name === "SMARTR") {
+      const smartrToken = await getSMARTRToken();
+      if (!smartrToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+      const smartrShipmentPayload = {
+        packageDetails: {
+          awbNumber: "",
+          orderNumber: order.order_reference_id,
+          productType: "WKO",
+          collectableValue: order.amount2Collect,
+          declaredValue: productDetails.taxable_value,
+          itemDesc: productDetails.name,
+          dimensions: "10~10~10~1~0.5~0/",
+          pieces: productDetails.quantity,
+          weight: order.orderWeight,
+          invoiceNumber: order.order_invoice_number,
+        },
+        deliveryDetails: {
+          toName: order.customerDetails.get("name"),
+          toAdd: order.customerDetails.get("address"),
+          toCity: order.customerDetails.get("city"),
+          toState: order.customerDetails.get("state"),
+          toPin: order.customerDetails.get("pincode"),
+          toMobile: order.customerDetails.get("phone"),
+          toEmail: order.customerDetails.get("email"),
+        },
+        pickupDetails: {
+          fromName: hubDetails.name,
+          fromAdd: hubDetails.address1,
+          fromCity: hubDetails.city,
+          fromState: hubDetails.state,
+          fromPin: hubDetails.pincode,
+          fromMobile: hubDetails.phone,
+          fromEmail: "",
+        },
+        returnDetails: {
+          rtoName: hubDetails.name,
+          rtoAdd: hubDetails.rtoAddress,
+          rtoCity: hubDetails.rtoCity,
+          rtoState: hubDetails.rtoState,
+          rtoPin: hubDetails.rtoPincode,
+          rtoMobile: hubDetails.phone,
+          rtoEmail: "",
+        },
+        additionalInformation: {
+          customerCode: "DELLORRIGO001",
+          essentialFlag: "",
+          otpFlag: "",
+          dgFlag: "",
+          isSurface: true,
+          isReverse: false,
+          sellerGSTIN: req.seller.gstno,
+          sellerERN: "",
+        },
+      };
+
+      try {
+        // TODO: fix the API URL
+        const smartrShipmentResponse = await axios.post(
+          `${config.SMARTR_API_BASEURL}${APIs.SMARTR_CREATE_SHIPMENT}`,
+          smartrShipmentPayload,
+          {
+            headers: {
+              Authorization: `${smartrToken}`,  // Ensure the token is correctly formatted
+              'Content-Type': 'application/json'      // Ensure content type is set to JSON
+            },
+          }
+        );
+        console.log(smartrShipmentResponse.data)
+        return res.status(200).send({ valid: true, response: smartrShipmentResponse.data });
+      } catch (error) {
+        console.error("Error creating SMARTR shipment:", error);
+        return next(error);
+      }
     }
   } catch (error) {
     return next(error)

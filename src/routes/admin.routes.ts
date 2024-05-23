@@ -7,11 +7,14 @@ import {
     getSpecificOrderAdmin,
     updateSellerAdmin,
     uploadPincodes,
-
+    getAllCouriers,
+    getSellerCouriers,
+    manageSellerCourier
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
 import { AdminAuthMiddleware } from "../utils/middleware";
+import { updateVendor4Seller } from "../utils/helpers";
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
@@ -19,7 +22,6 @@ const adminRouter = Router();
 
 
 adminRouter.post("/login", handleAdminLogin);
-
 
 //@ts-ignore
 adminRouter.get("/all-orders", AdminAuthMiddleware, getAllOrdersAdmin);
@@ -33,6 +35,18 @@ adminRouter.get("/all-remittances", AdminAuthMiddleware, getAllRemittances);
 adminRouter.put("/seller", AdminAuthMiddleware, updateSellerAdmin);
 //@ts-ignore
 adminRouter.get("/seller", AdminAuthMiddleware, getSellerDetails);
+
+//@ts-ignore
+adminRouter.get("/couriers", AdminAuthMiddleware, getAllCouriers);
+
+//@ts-ignore
+adminRouter.get("/seller-couriers", AdminAuthMiddleware, getSellerCouriers);
+
+//@ts-ignore
+adminRouter.post("/update-seller-courier", AdminAuthMiddleware, updateVendor4Seller);
+
+//@ts-ignore
+adminRouter.post("/manage-seller-couriers", AdminAuthMiddleware, manageSellerCourier);
 
 //@ts-ignore
 adminRouter.put("/pincodes", upload.single('file'), uploadPincodes);

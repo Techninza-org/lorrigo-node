@@ -128,7 +128,7 @@ export const CONNECT_SMARTR = async (): Promise<void> => {
   };
 
   try {
-    const response = await axios.post("https://uat.smartr.in/api/v1/get-token/", requestBody, {
+    const response = await axios.post("https://api.smartr.in/api/v1/get-token/", requestBody, {
       httpsAgent: new https.Agent({
         rejectUnauthorized: false, // Set to true to verify the certificate
       }),

@@ -7,6 +7,8 @@ import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
 import { csvJSON } from "../utils";
 import PincodeModel from "../models/pincode.model";
+import CourierModel from "../models/courier.model";
+import CustomPricingModel from "../models/custom_pricing.model";
 
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -145,21 +147,21 @@ export const uploadPincodes = async (req: ExtendedRequest, res: Response, next: 
     const pincodes = csvJSON(data);
     console.log(pincodes, 'pincodes');
 
-    const bulkOperations = pincodes.map(object => ({    
+    const bulkOperations = pincodes.map(object => ({
       updateOne: {
-        filter: { pincode: object.pincode }, 
-        update: { $set: object }, 
-        upsert: true 
+        filter: { pincode: object.pincode },
+        update: { $set: object },
+        upsert: true
       }
     }));
 
     try {
       const result = await PincodeModel.bulkWrite(bulkOperations);
-  
+
     } catch (err) {
       return next(err);
-    }                         
-  
+    }
+
     return res.status(200).json({
       valid: true,
       message: "File uploaded successfully",
@@ -168,3 +170,103 @@ export const uploadPincodes = async (req: ExtendedRequest, res: Response, next: 
     return next(err);
   }
 };
+
+export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const couriers = await CourierModel.find().populate("vendor_channel_id").lean();
+    if (!couriers) return res.status(200).send({ valid: false, message: "No Couriers found" })
+    const courierWNickName = couriers.map((courier) => {
+
+      const { vendor_channel_id, ...courierData } = courier;
+      // @ts-ignore
+      const nameWNickname = `${courierData.name} ${vendor_channel_id?.nickName}`;
+      return {
+        ...courierData,
+        nameWNickname,
+      };
+    });
+    return res.status(200).send({
+      valid: true,
+      couriers: courierWNickName,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = req.query?.sellerId as string;
+
+    if (!sellerId || !isValidObjectId(sellerId)) {
+      return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
+    }
+
+    const seller = await SellerModel.findById(sellerId).lean();
+    if (!seller) {
+      return res.status(404).send({ valid: false, message: "Seller not found" });
+    }
+
+    const [couriers, customPricings] = await Promise.all([
+      CourierModel.find({ _id: { $in: seller.vendors } }).populate("vendor_channel_id").lean(),
+      CustomPricingModel.find({ sellerId })
+        .populate({
+          path: 'vendorId',
+          populate: {
+            path: 'vendor_channel_id'
+          }
+        })
+        .lean(),
+    ]);
+
+    // @ts-ignore
+    const customPricingMap = new Map(customPricings.map(courier => [courier.vendorId._id.toString(), courier]));
+    
+    const couriersWithNickname = couriers.map((courier) => {
+      const customPricing = customPricingMap.get(courier._id.toString());
+      // @ts-ignore
+      const { vendor_channel_id, ...courierData } = customPricing || courier;
+      // @ts-ignore
+      const nameWithNickname = `${courierData?.name || courierData?.vendorId?.name} ${vendor_channel_id?.nickName || courierData?.vendorId?.vendor_channel_id?.nickName}`.trim();
+      return {
+        ...courierData,
+        nameWithNickname,
+      };
+    });
+
+    return res.status(200).send({
+      valid: true,
+      couriers: couriersWithNickname,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export const manageSellerCourier = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { sellerId, couriers } = req.body;
+    if (!sellerId || !isValidObjectId(sellerId) || !couriers) {
+      return res.status(400).send({ valid: false, message: "Invalid or missing sellerId or courierId" });
+    }
+
+    if (!Array.isArray(couriers)) {
+      return res.status(400).send({ valid: false, message: "couriers should be an array" });
+    }
+
+    const seller = await SellerModel.findById(sellerId);
+    if (!seller) {
+      return res.status(404).send({ valid: false, message: "Seller not found" });
+    }
+
+    seller.vendors = couriers;
+    await seller.save();
+
+    return res.status(200).send({
+      valid: true,
+      message: "Courier managed successfully",
+    });
+  } catch (err) {
+    return next(err);
+  }
+}

@@ -81,7 +81,6 @@ mongoose
 app.use("/api/auth", authRouter);
 app.post("/api/vendor", addVendors);
 app.get("/api/getsellers", getSellers);    //admin
-app.post("/api/seller_vendor", updateVendor4Seller);
 
 // @ts-ignore
 app.get("/api/order/:id", getSpecificOrder);

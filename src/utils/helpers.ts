@@ -395,6 +395,8 @@ export const rateCalculation = async (
       isActive: true,
     });
 
+    console.log("vendors", vendors)
+
     let commonCouriers: any[] = [];
 
     try {
@@ -411,7 +413,6 @@ export const rateCalculation = async (
 
       const response = await axios.get(url, config);
       const courierCompanies = response?.data?.data?.available_courier_companies;
-      console.log("courierCompanies", response?.data?.data, vendors)
 
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
       console.log("shiprocketNiceName", shiprocketNiceName, vendors)
@@ -459,6 +460,42 @@ export const rateCalculation = async (
             };
           });
           commonCouriers.push(...smartShipVendorsWithNickname);
+        }
+      }
+    } catch (error) {
+      console.log("error", error);
+    }
+
+    try {
+      const smartrToken = await getSMARTRToken();
+      if (!smartrToken) {
+        throw new Error("Failed to retrieve SMARTR token");
+      }
+
+      const isSMARTRServicable = await axios.get(
+        `${config.SMARTR_API_BASEURL}${APIs.SMARTR_PINCODE_SERVICEABILITY}?pincode=${deliveryPincode}`,
+        {
+          headers: {
+            Authorization: `${smartrToken}`,
+          },
+        }
+      );
+
+      if (!isSMARTRServicable.data.errors) {
+        const smartrNiceName = await EnvModel.findOne({ name: "SMARTR" }).select("_id nickName");
+        if (smartrNiceName) {
+          const smartrVendors = vendors.filter((vendor) =>
+            vendor?.vendor_channel_id?.toString() === smartrNiceName._id.toString()
+          );
+          if (smartrVendors.length > 0) {
+            // commonCouriers.push(...smartrVendors);
+            smartrVendors.forEach((vendor) => {
+              commonCouriers.push({
+                ...vendor.toObject(),
+                nickName: smartrNiceName.nickName
+              });
+            });
+          }
         }
       }
     } catch (error) {

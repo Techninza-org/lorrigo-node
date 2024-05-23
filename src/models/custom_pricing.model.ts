@@ -7,7 +7,7 @@ const pricingSchema = {
 const CustomPricingSchema = new mongoose.Schema(
   {
     sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", unique: true },
-    vendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
+    vendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Courier" },
     withinCity: { type: pricingSchema, required: true },
     withinZone: { type: pricingSchema, required: true },
     withinMetro: { type: pricingSchema, required: true },
