@@ -2,7 +2,7 @@ import axios from "axios";
 import { B2COrderModel } from "../models/order.model";
 import config from "./config";
 import APIs from "./constants/third_party_apis";
-import { getShiprocketBucketing, getShiprocketToken, getSmartShipToken, getSmartshipBucketing } from "./helpers";
+import { getSMARTRToken, getShiprocketBucketing, getShiprocketToken, getSmartShipToken, getSmartshipBucketing } from "./helpers";
 import * as cron from "node-cron";
 import EnvModel from "../models/env.model";
 import https from "node:https";
@@ -271,6 +271,46 @@ export const trackOrder_Shiprocket = async () => {
   }
 };
 
+export const trackOrder_Smartr = async () => {
+
+  const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: "SMR" } });
+
+  // console.log(orders.length);
+  // console.log(orders);
+  for (let ordersReferenceIdOrders of orders) {
+    try {
+      const orderCarrierName = ordersReferenceIdOrders?.carrierName?.split(" ").pop();
+      const vendorNickname = await EnvModel.findOne({ name: "SMARTR" }).select("nickName")
+
+      const isSmartR = vendorNickname && (orderCarrierName === vendorNickname.nickName);
+
+      if (!isSmartR) {
+        continue;
+      }
+
+      const smartRToken = await getSMARTRToken();
+      if (!smartRToken) {
+        console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
+        return;
+      }
+      console.log(ordersReferenceIdOrders.awb, APIs.TRACK_SMARTR_ORDER);
+      const apiUrl = `${config.SMARTR_API_BASEURL}${APIs.TRACK_SMARTR_ORDER}${ordersReferenceIdOrders.awb}`;
+      // console.log(apiUrl);
+      try {
+        const res = await axios.get(apiUrl, { headers: { authorization: smartRToken } });
+        console.log(res.data);
+      } catch (err) {
+        console.log(err);
+      }
+
+      // console.log(res);
+
+    } catch (err) {
+      console.log("err");
+    }
+  }
+}
+
 export const calculateRemittance = async () => {
   try {
     const companyName = 'L';
@@ -282,7 +322,7 @@ export const calculateRemittance = async () => {
       const existingRemittance = await RemittanceModel.findOne({ sellerId: sellerId, remittanceDate: fridayDate });
       if (existingRemittance) {
         console.log(`Remittance already exists for seller: ${sellerId} on ${fridayDate}`);
-        continue; 
+        continue;
       }
 
       const remittanceId = generateRemittanceId(companyName, sellerId._id.toString(), fridayDate);
@@ -320,7 +360,7 @@ export default async function runCron() {
   if (cron.validate(expression4every2Minutes)) {
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every2Minutes, trackOrder_Shiprocket);
-
+    cron.schedule(expression4every2Minutes, trackOrder_Smartr);
     const expression4every5Minute = "5 * * * *";
     const expression4every59Minute = "59 * * * *";
     const expression4every9_59Hr = "59 9 * * * ";
