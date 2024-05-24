@@ -328,12 +328,12 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         packageDetails: {
           awbNumber: "",
           orderNumber: order.order_reference_id,
-          productType: order.payment_mode ? "ACC"  : "ACP",
+          productType: order.payment_mode ? "ACC" : "ACP",
           collectableValue: order.payment_mode ? order.amount2Collect : 0,
           declaredValue: productDetails.taxable_value,
           itemDesc: productDetails.name,
-          dimensions: "10~10~10~1~0.5~0/",
-          pieces: 1,
+          dimensions: `${order.orderBoxLength}~${order.orderBoxWidth}~${order.orderBoxHeight}~${productDetails.quantity}~${order.orderWeight}~0 /`, // LBH-No. of pieces~Weight~0/
+          pieces: productDetails.quantity,
           weight: order.orderWeight,
           invoiceNumber: order.order_invoice_number,
         },
@@ -388,68 +388,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
 
       try {
-        let data = JSON.stringify([
-          {
-            "packageDetails": {
-              "awbNumber": "",
-              "orderNumber": "576567854120",
-              "productType": "ACP", // WKO, ACP, COD, RTN
-              "collectableValue": "0",
-              "declaredValue": "99",
-              "itemDesc": "Nykaa lipstik",
-              "dimensions": "10~10~10~1~0.5~0/", // LBH-No. of pieces~Weight~0/
-              "pieces": "1",
-              "weight": "0.5",
-              "invoiceNumber": "34543"
-            },
-            "deliveryDetails": {
-              "toName": "Alok",
-              "toAdd": "I-10 plot no. 969, Noida-110085",
-              "toCity": "Noida",
-              "toState": "Noida",
-              "toPin": "110097",
-              "toMobile": "7011609262",
-              "toAddType": "Home",
-              "toLat": "26.00",
-              "toLng": "78.00",
-              "toEmail": "aloksharma@gmail.com"
-            },
-            "pickupDetails": {
-              "fromName": "Smartr Express",
-              "fromAdd": "plot no. 198, sector-110, Gurgaon",
-              "fromCity": "Gurgaon",
-              "fromState": "Haryana",
-              "fromPin": "110080",
-              "fromMobile": "9711908116",
-              "fromAddType": "Seller",
-              "fromLat": "26.00",
-              "fromLng": "78.00",
-              "fromEmail": "ankurs@smartr.in"
-            },
-            "returnDetails": {
-              "rtoName": "Smartr Express",
-              "rtoAdd": "plot no. 198, sector-110, Gurgaon",
-              "rtoCity": "Gurgaon",
-              "rtoState": "Haryana",
-              "rtoPin": "110080",
-              "rtoMobile": "9711908116",
-              "rtoAddType": "Seller",
-              "rtoLat": "26.00",
-              "rtoLng": "78.00",
-              "rtoEmail": "ankurs@smartr.in"
-            },
-            "additionalInformation": {
-              "customerCode": "DELLORRIGO001",
-              "essentialFlag": "",
-              "otpFlag": "",
-              "dgFlag": "",
-              "isSurface": "false",
-              "isReverse": "false",
-              "sellerGSTIN": "06GSTIN678YIOIN",
-              "sellerERN": ""
-            }
-          }
-        ]);
 
         let config = {
           method: 'post',

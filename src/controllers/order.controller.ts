@@ -698,10 +698,10 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
 
           client_order_reference_id: order.name,
           payment_mode: order?.financial_status === "pending" ? 1 : 0,  // 0 -> prepaid, 1 -> COD, Right now only prepaid, bcoz data not available
-          amount2Collect: order?.financial_status === "pending" ? order?.current_subtotal_price : 0,
+          amount2Collect: order?.financial_status === "pending" ? order?.total_price : 0,
           customerDetails: {
             name: order.customer.first_name + " " + order.customer.last_name,
-            phone: order?.customer?.default_address?.phone?.replace(/\s+/g, ''),
+            phone: order?.customer?.default_address?.phone,
             email: order?.customer?.email,
             address: order?.customer?.default_address?.address1,
             pincode: order?.customer?.default_address?.zip,
@@ -709,13 +709,13 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
             state: order?.customer?.default_address?.province,
           },
           sellerDetails: {
-            sellerName: order?.billing_address?.first_name || seller?.companyProfile?.companyName || seller?.name,
+            sellerName: seller?.companyProfile?.companyName || seller?.name,
             isSellerAddressAdded: false,
             sellerAddress: order?.billing_address?.address1 || primaryHub?.address1,
             sellerCity: order?.billing_address?.city,
             sellerState: order?.billing_address?.province,
             sellerPincode: 0,
-            sellerPhone: order?.billing_address?.phone?.replace(/\s+/g, ''),
+            sellerPhone: order?.billing_address?.phone,
           },
           productId: product2save._id.toString(),
           pickupAddress: primaryHub?._id.toString(),
