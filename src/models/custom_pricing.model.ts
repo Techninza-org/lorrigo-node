@@ -6,7 +6,7 @@ const pricingSchema = {
 };
 const CustomPricingSchema = new mongoose.Schema(
   {
-    sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", unique: true },
+    sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },
     vendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Courier" },
     withinCity: { type: pricingSchema, required: true },
     withinZone: { type: pricingSchema, required: true },

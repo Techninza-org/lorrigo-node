@@ -324,16 +324,16 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       const smartrToken = await getSMARTRToken();
       if (!smartrToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
-      const smartrShipmentPayload = {
+      const smartrShipmentPayload = [{
         packageDetails: {
           awbNumber: "",
           orderNumber: order.order_reference_id,
-          productType: "WKO",
-          collectableValue: order.amount2Collect,
+          productType: order.payment_mode ? "ACC"  : "ACP",
+          collectableValue: order.payment_mode ? order.amount2Collect : 0,
           declaredValue: productDetails.taxable_value,
           itemDesc: productDetails.name,
           dimensions: "10~10~10~1~0.5~0/",
-          pieces: productDetails.quantity,
+          pieces: 1,
           weight: order.orderWeight,
           invoiceNumber: order.order_invoice_number,
         },
@@ -343,8 +343,12 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           toCity: order.customerDetails.get("city"),
           toState: order.customerDetails.get("state"),
           toPin: order.customerDetails.get("pincode"),
-          toMobile: order.customerDetails.get("phone"),
+          // @ts-ignore
+          toMobile: order.customerDetails.get("phone").toString().slice(-10),
           toEmail: order.customerDetails.get("email"),
+          toAddType: "Home", // Mendatory 
+          toLat: order.customerDetails.get("lat") || "",
+          toLng: order.customerDetails.get("lng") || "",
         },
         pickupDetails: {
           fromName: hubDetails.name,
@@ -352,17 +356,23 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           fromCity: hubDetails.city,
           fromState: hubDetails.state,
           fromPin: hubDetails.pincode,
-          fromMobile: hubDetails.phone,
+          fromMobile: hubDetails.phone.toString().slice(-10),
           fromEmail: "",
+          fromLat: "",
+          fromLng: "",
+          fromAddType: "Seller", // Mendatory
         },
         returnDetails: {
           rtoName: hubDetails.name,
-          rtoAdd: hubDetails.rtoAddress,
-          rtoCity: hubDetails.rtoCity,
-          rtoState: hubDetails.rtoState,
-          rtoPin: hubDetails.rtoPincode,
-          rtoMobile: hubDetails.phone,
+          rtoAdd: hubDetails.rtoAddress || hubDetails.address1, // Mendatory
+          rtoCity: hubDetails.rtoCity || hubDetails.city, // Mendatory
+          rtoState: hubDetails.rtoState || hubDetails.state, // Mendatory
+          rtoPin: hubDetails.rtoPincode || hubDetails.pincode, // Mendatory
+          rtoMobile: hubDetails.phone.toString().slice(-10),
           rtoEmail: "",
+          rtoAddType: "Seller", // Mendatory
+          rtoLat: "",
+          rtoLng: "",
         },
         additionalInformation: {
           customerCode: "DELLORRIGO001",
@@ -371,25 +381,94 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           dgFlag: "",
           isSurface: true,
           isReverse: false,
-          sellerGSTIN: req.seller.gstno,
+          sellerGSTIN: req.seller.gstno || "", // Mendatory
           sellerERN: "",
         },
-      };
+      }];
+
 
       try {
-        // TODO: fix the API URL
-        const smartrShipmentResponse = await axios.post(
-          `${config.SMARTR_API_BASEURL}${APIs.SMARTR_CREATE_SHIPMENT}`,
-          smartrShipmentPayload,
+        let data = JSON.stringify([
           {
-            headers: {
-              Authorization: `${smartrToken}`,  // Ensure the token is correctly formatted
-              'Content-Type': 'application/json'      // Ensure content type is set to JSON
+            "packageDetails": {
+              "awbNumber": "",
+              "orderNumber": "576567854120",
+              "productType": "ACP", // WKO, ACP, COD, RTN
+              "collectableValue": "0",
+              "declaredValue": "99",
+              "itemDesc": "Nykaa lipstik",
+              "dimensions": "10~10~10~1~0.5~0/", // LBH-No. of pieces~Weight~0/
+              "pieces": "1",
+              "weight": "0.5",
+              "invoiceNumber": "34543"
             },
+            "deliveryDetails": {
+              "toName": "Alok",
+              "toAdd": "I-10 plot no. 969, Noida-110085",
+              "toCity": "Noida",
+              "toState": "Noida",
+              "toPin": "110097",
+              "toMobile": "7011609262",
+              "toAddType": "Home",
+              "toLat": "26.00",
+              "toLng": "78.00",
+              "toEmail": "aloksharma@gmail.com"
+            },
+            "pickupDetails": {
+              "fromName": "Smartr Express",
+              "fromAdd": "plot no. 198, sector-110, Gurgaon",
+              "fromCity": "Gurgaon",
+              "fromState": "Haryana",
+              "fromPin": "110080",
+              "fromMobile": "9711908116",
+              "fromAddType": "Seller",
+              "fromLat": "26.00",
+              "fromLng": "78.00",
+              "fromEmail": "ankurs@smartr.in"
+            },
+            "returnDetails": {
+              "rtoName": "Smartr Express",
+              "rtoAdd": "plot no. 198, sector-110, Gurgaon",
+              "rtoCity": "Gurgaon",
+              "rtoState": "Haryana",
+              "rtoPin": "110080",
+              "rtoMobile": "9711908116",
+              "rtoAddType": "Seller",
+              "rtoLat": "26.00",
+              "rtoLng": "78.00",
+              "rtoEmail": "ankurs@smartr.in"
+            },
+            "additionalInformation": {
+              "customerCode": "DELLORRIGO001",
+              "essentialFlag": "",
+              "otpFlag": "",
+              "dgFlag": "",
+              "isSurface": "false",
+              "isReverse": "false",
+              "sellerGSTIN": "06GSTIN678YIOIN",
+              "sellerERN": ""
+            }
           }
-        );
-        console.log(smartrShipmentResponse.data)
-        return res.status(200).send({ valid: true, response: smartrShipmentResponse.data });
+        ]);
+
+        let config = {
+          method: 'post',
+          maxBodyLength: Infinity,
+          url: 'https://api.smartr.in/api/v1/add-order/',
+          headers: {
+            'Authorization': 'Bearer bbQ5itWPMTWK6TKWkD6DV9PfMAy0DY',
+            'Content-Type': 'application/json',
+          },
+          data: JSON.stringify(smartrShipmentPayload)
+        };
+
+        const axisoRes = await axios.request(config)
+        console.log("New")
+        console.log(axisoRes.data);
+
+
+        // @ts-ignore
+        return res.send({ valid: true });
       } catch (error) {
         console.error("Error creating SMARTR shipment:", error);
         return next(error);
