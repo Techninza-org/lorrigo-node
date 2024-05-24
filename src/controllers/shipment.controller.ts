@@ -39,9 +39,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
     if (req.seller?.gstno) return res.status(200).send({ valid: false, message: "KYC required. (GST number) " });
 
-    const vendorDetails = await CourierModel.findOne({ carrierID: Number(body.carrierId) }).lean();
-    if (!vendorDetails) return res.status(200).send({ valid: false, message: "Invalid carrier" });
-
     let order;
     try {
       order = await B2COrderModel.findOne({ _id: body.orderId, sellerId: req.seller._id });
@@ -63,11 +60,14 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         return res.status(200).send({ valid: false, message: "Product details not found" });
       }
     } catch (err) {
-
       return next(err);
     }
 
+
+
     const vendorName = await EnvModel.findOne({ nickName: body.carrierNickName });
+
+    const courier = await CourierModel.findOne({ vendor_channel_id: vendorName?._id.toString() })
 
     if (vendorName?.name === "SMARTSHIP") {
 
@@ -401,12 +401,29 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         };
 
         const axisoRes = await axios.request(config)
-        console.log("New")
-        console.log(axisoRes.data);
+        const smartRShipmentResponse = axisoRes.data;
 
 
-        // @ts-ignore
-        return res.send({ valid: true });
+        order.awb = smartRShipmentResponse.total_success[0].awbNumber;
+        order.carrierName = courier?.name + " " + (vendorName?.nickName);
+
+        order.bucket = IN_TRANSIT;
+        order.orderStages.push({
+          stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,  // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
+          action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
+          stageDateTime: new Date(),
+        }, {
+          stage: SMARTSHIP_MANIFEST_ORDER_STATUS,
+          action: MANIFEST_ORDER_DESCRIPTION,
+          stageDateTime: new Date(),
+        }, {
+          stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
+          action: PICKUP_SCHEDULED_DESCRIPTION,
+          stageDateTime: new Date(),
+        });
+        await order.save();
+
+        return res.status(200).send({ valid: true, order });
       } catch (error) {
         console.error("Error creating SMARTR shipment:", error);
         return next(error);
