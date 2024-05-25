@@ -9,6 +9,7 @@ import { csvJSON } from "../utils";
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
 import CustomPricingModel from "../models/custom_pricing.model";
+import { nextFriday } from "date-fns";
 
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -88,8 +89,6 @@ export const getAllRemittances = async (req: ExtendedRequest, res: Response, nex
   try {
     const remittanceOrders = await RemittanceModel.find({}).populate("sellerId").lean();
     if (!remittanceOrders) return res.status(200).send({ valid: false, message: "No Remittance found" });
-    console.log(remittanceOrders);
-
     return res.status(200).send({
       valid: true,
       remittanceOrders,
@@ -98,6 +97,56 @@ export const getAllRemittances = async (req: ExtendedRequest, res: Response, nex
     return res.status(200).send({ valid: false, message: "Error in fetching remittance" });
   }
 };
+
+export const getFutureRemittances = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const currentDate = new Date();
+    const futureFriday = nextFriday(currentDate);
+
+    const futureRemittances = await RemittanceModel.find({
+      remittanceDate: { $gte: futureFriday },
+    });
+    return res.status(200).send({
+      valid: true,
+      remittanceOrders: futureRemittances,
+    });
+  } catch (error) {
+    return res.status(200).send({ valid: false, message: "Error in fetching remittance" });
+  }
+};
+
+export const getSellerRemittance = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { sellerId, remittanceId } = req.query;
+    console.log(sellerId, remittanceId, 'sellerId, remittanceId')
+
+    if (!sellerId || !isValidObjectId(sellerId)) {
+      return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
+    }
+
+    if (!remittanceId) {
+      return res.status(400).send({ valid: false, message: "Invalid or missing remittanceId" });
+    }
+
+    const seller = await SellerModel.findById(sellerId);
+    if (!seller) {
+      return res.status(404).send({ valid: false, message: "Seller not found" });
+    }
+
+    const remittance = await RemittanceModel.findOne({remittanceId, sellerId});
+    if (!remittance) {
+      return res.status(404).send({ valid: false, message: "Remittance not found" });
+    }
+
+    return res.status(200).send({
+      valid: true,
+      remittance,
+    });
+
+  } catch (err) {
+    return next(err);
+  }
+}
 
 export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   let body = req.body;
@@ -221,7 +270,7 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
 
     // @ts-ignore
     const customPricingMap = new Map(customPricings.map(courier => [courier.vendorId._id.toString(), courier]));
-    
+
     const couriersWithNickname = couriers.map((courier) => {
       const customPricing = customPricingMap.get(courier._id.toString());
       // @ts-ignore

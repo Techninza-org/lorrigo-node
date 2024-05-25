@@ -9,7 +9,9 @@ import {
     uploadPincodes,
     getAllCouriers,
     getSellerCouriers,
-    manageSellerCourier
+    manageSellerCourier,
+    getSellerRemittance,
+    getFutureRemittances
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -31,6 +33,13 @@ adminRouter.get("/order/:id", AdminAuthMiddleware, getSpecificOrderAdmin);
 adminRouter.get("/orders/seller/:id", AdminAuthMiddleware, getSellerSpecificOrderAdmin);
 //@ts-ignore
 adminRouter.get("/all-remittances", AdminAuthMiddleware, getAllRemittances);
+
+//@ts-ignore
+adminRouter.get('/remittances/future', AdminAuthMiddleware, getFutureRemittances);
+
+//@ts-ignore
+adminRouter.get("/seller-remittance", AdminAuthMiddleware, getSellerRemittance);
+
 //@ts-ignore
 adminRouter.put("/seller", AdminAuthMiddleware, updateSellerAdmin);
 //@ts-ignore
@@ -50,5 +59,6 @@ adminRouter.post("/manage-seller-couriers", AdminAuthMiddleware, manageSellerCou
 
 //@ts-ignore
 adminRouter.put("/pincodes", upload.single('file'), uploadPincodes);
+
 
 export default adminRouter;
