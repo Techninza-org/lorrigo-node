@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
-import { startOfWeek, addDays } from "date-fns";
+import { startOfWeek, addDays, getDay } from "date-fns";
 import { validateEmail } from "./helpers";
 
 
@@ -309,4 +309,21 @@ export function convertToISO(invoice_date: string) {
   date.setMilliseconds(now.getMilliseconds());
 
   return date.toISOString();
+}
+
+
+export function getNextToNextFriday() {
+  let currentDate = new Date(); // Get the current date
+  let dayOfWeek = getDay(currentDate); // Get the current day of the week (0: Sunday, 1: Monday, ..., 6: Saturday)
+
+  // Calculate the number of days to add to reach next Friday
+  let daysToAdd = (dayOfWeek <= 5) ? 5 - dayOfWeek + 7 : 5 - dayOfWeek;
+
+  // Add the days to the current date to get next Friday
+  let nextFriday = addDays(currentDate, daysToAdd);
+
+  // Add 7 more days to get the next to next Friday
+  let nextToNextFriday = addDays(nextFriday, 7);
+
+  return nextToNextFriday;
 }

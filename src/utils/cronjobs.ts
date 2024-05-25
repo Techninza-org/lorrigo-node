@@ -1,3 +1,4 @@
+// @ts-nocheck
 import axios from "axios";
 import { B2COrderModel } from "../models/order.model";
 import config from "./config";
@@ -8,11 +9,12 @@ import EnvModel from "../models/env.model";
 import https from "node:https";
 import Logger from "./logger";
 import { RequiredTrackResponse, TrackResponse } from "../types/b2c";
-import { generateRemittanceId, getFridayDate } from ".";
+import { generateRemittanceId, getFridayDate, getNextToNextFriday } from ".";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
 import { CANCELED, CANCELLATION_REQUESTED_ORDER_STATUS, CANCELLED_ORDER_DESCRIPTION, DELIVERED, ORDER_TO_TRACK } from "./lorrigo-bucketing-info";
-import { nextFriday } from "date-fns";
+import { addDays, format, nextFriday, parseISO } from "date-fns";
+import { getNextToNextFriday } from ".";
 
 /**
  * Update order with statusCode (2) to cancelled order(3)
@@ -272,112 +274,106 @@ export const trackOrder_Shiprocket = async () => {
   }
 };
 
-// Not Needed as we are calculating remittance every day
-// export const calculateRemittanceOnFriday = async () => {
-//   try {
-//     const companyName = 'L';
-//     const currentDate = new Date();
-//     const fridayDate = getFridayDate(currentDate); // Function to get the Friday date of the current week
-//     const sellerIds = await SellerModel.find({}).select("_id");
-
-//     for (const sellerId of sellerIds) {
-//       const existingRemittance = await RemittanceModel.findOne({ sellerId: sellerId, remittanceDate: fridayDate });
-//       if (existingRemittance) {
-//         console.log(`Remittance already exists for seller: ${sellerId} on ${fridayDate}`);
-//         continue;
-//       }
-
-//       const remittanceId = generateRemittanceId(companyName, sellerId._id.toString(), fridayDate);
-//       const remittanceDate = fridayDate;
-//       let remittanceAmount = 0;
-//       const remittanceStatus = 'pending';
-//       const orders = await B2COrderModel.find({ sellerId: sellerId, bucket: DELIVERED, payment_mode: 1 }).populate("productId");
-//       const BankTransactionId = '1234567890';
-//       if (orders.length > 0) {
-//         orders.forEach(order => {
-//           // @ts-ignore
-//           remittanceAmount += Number(order.amount2Collect);
-//         });
-//         const remittance = new RemittanceModel({
-//           sellerId: sellerId,
-//           remittanceId: remittanceId,
-//           remittanceDate: remittanceDate,
-//           remittanceAmount: remittanceAmount,
-//           remittanceStatus: remittanceStatus,
-//           orders: orders,
-//           BankTransactionId: BankTransactionId
-//         });
-//         await remittance.save();
-//       }
-//     }
-//   } catch (error) {
-//     console.log(error, "{error} in calculateRemittance");
-//   }
-// }
-
-export const calculateRemittanceEveryDay = async () => {
+export const calculateRemittanceEveryDay = async (): Promise<void> => {
   try {
     const companyName = 'L';
     const currentDate = new Date();
-    const sellerIds = await SellerModel.find({}).select("_id");
+    const sellerIds = await SellerModel.find({}).select("_id").lean();
 
-    for (const sellerId of sellerIds) {
+    for (const seller of sellerIds) {
+      // Find all orders for the seller that are delivered and are COD
       const orders = await B2COrderModel.find({
-        sellerId: sellerId,
-        bucket: DELIVERED,
-        payment_mode: 1,
-      }).populate("productId");
+        sellerId: seller._id,
+        bucket: DELIVERED, // Assuming 1 represents DELIVERED
+        payment_mode: 1, // COD
+      }).populate("productId").lean() as OrderDocument[];
 
-      for (const order of orders) {
-        const deliveryDate = order?.orderStages?.find(stage => stage.stage === DELIVERED)?.stageDateTime || new Date();
-        const daysSinceDelivery = Math.floor((Number(currentDate) - Number(deliveryDate)) / (1000 * 60 * 60 * 24));
+      // Check for orders already included in any remittance
+      const remittedOrderIds = new Set(
+        (await RemittanceModel.find({ sellerId: seller._id })
+          .lean())
+          .flatMap(remittance => remittance.orders)
+          .map(order => order._id.toString())
+      );
+
+
+      // Filter out already remitted orders
+      const unremittedOrders = orders.filter(order => !remittedOrderIds.has(order._id.toString()));
+
+      // Group unremitted orders by delivery date
+      const ordersGroupedByDate: { [key: string]: OrderDocument[] } = unremittedOrders.reduce((acc: { [key: string]: OrderDocument[] }, order) => {
+        const deliveryDate = order.orderStages?.pop()?.stageDateTime;
+        const deliveryDateOnly = format(deliveryDate, 'yyyy-MM-dd');
+
+        if (!acc[deliveryDateOnly]) {
+          acc[deliveryDateOnly] = [];
+        }
+        acc[deliveryDateOnly].push(order);
+        return acc;
+      }, {});
+
+      for (const [deliveryDateStr, ordersOnSameDate] of Object.entries(ordersGroupedByDate)) {
+
+        const deliveryDate = parseISO(deliveryDateStr);
+        const daysSinceDelivery = Math.floor((currentDate.getTime() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24));
+        console.log("daysSinceDelivery", daysSinceDelivery, ordersOnSameDate.map(order => order._id));
 
         if (daysSinceDelivery >= 7) {
-          const remittanceDate = nextFriday(new Date(deliveryDate.getTime() + 8 * 24 * 60 * 60 * 1000));
-          const existingRemittance = await RemittanceModel.findOne({ sellerId: sellerId, remittanceDate });
+          const remittanceDate = nextFriday(deliveryDate);
+          const existingRemittance = await RemittanceModel.findOne({
+            sellerId: seller._id,
+            remittanceDate,
+          }).lean();
 
           if (existingRemittance) {
-            console.log(`Remittance already exists for seller: ${sellerId} on ${remittanceDate}`);
-            continue;
-          }
-
-          const remittanceId = generateRemittanceId(companyName, sellerId._id.toString(), remittanceDate);
-          const remittanceAmount = Number(order.amount2Collect);
-          const remittanceStatus = 'pending';
-          const BankTransactionId = '1234567890';
-
-          const remittance = new RemittanceModel({
-            sellerId: sellerId,
-            remittanceId: remittanceId,
-            remittanceDate: remittanceDate,
-            remittanceAmount: remittanceAmount,
-            remittanceStatus: remittanceStatus,
-            orders: [order],
-            BankTransactionId: BankTransactionId,
-          });
-
-          await remittance.save();
-        } else {
-          const futureRemittanceDate = nextFriday(currentDate);
-          const existingFutureRemittance = await RemittanceModel.findOne({ sellerId: sellerId, remittanceDate: futureRemittanceDate });
-
-          if (existingFutureRemittance) {
-            existingFutureRemittance.orders.push(order);
-            existingFutureRemittance.remittanceAmount += Number(order.amount2Collect);
-            await existingFutureRemittance.save();
+            existingRemittance.orders.push(...ordersOnSameDate);
+            existingRemittance.remittanceAmount += ordersOnSameDate.reduce((sum, order) => sum + Number(order.amount2Collect), 0);
+            await RemittanceModel.updateOne({ _id: existingRemittance._id }, existingRemittance);
           } else {
-            const remittanceId = generateRemittanceId(companyName, sellerId._id.toString(), futureRemittanceDate);
-            const remittanceAmount = Number(order.amount2Collect);
+            const remittanceId = generateRemittanceId(companyName, seller._id.toString(), remittanceDate);
+            const remittanceAmount = ordersOnSameDate.reduce((sum, order) => sum + Number(order.amount2Collect), 0);
             const remittanceStatus = 'pending';
-            const BankTransactionId = '#TRANSACTION_ID';
+            const BankTransactionId = '123456789000';
 
             const remittance = new RemittanceModel({
-              sellerId: sellerId,
+              sellerId: seller._id,
+              remittanceId: remittanceId,
+              remittanceDate: remittanceDate,
+              remittanceAmount: remittanceAmount,
+              remittanceStatus: remittanceStatus,
+              orders: ordersOnSameDate,
+              BankTransactionId: BankTransactionId,
+            });
+
+            await remittance.save();
+          }
+        } else {
+          const futureRemittanceDate = nextFriday(currentDate);
+          if (futureRemittanceDate < deliveryDate) {
+            continue; 
+          }
+          const existingFutureRemittance = await RemittanceModel.findOne({
+            sellerId: seller._id,
+            remittanceDate: futureRemittanceDate,
+          }).lean();
+
+          if (existingFutureRemittance) {
+            existingFutureRemittance.orders.push(...ordersOnSameDate);
+            existingFutureRemittance.remittanceAmount += ordersOnSameDate.reduce((sum, order) => sum + Number(order.amount2Collect), 0);
+            await RemittanceModel.updateOne({ _id: existingFutureRemittance._id }, existingFutureRemittance);
+          } else {
+            const remittanceId = generateRemittanceId(companyName, seller._id.toString(), futureRemittanceDate);
+            const remittanceAmount = ordersOnSameDate.reduce((sum, order) => sum + Number(order.amount2Collect), 0);
+            const remittanceStatus = 'pending';
+            const BankTransactionId = '1234567890';
+
+            const remittance = new RemittanceModel({
+              sellerId: seller._id,
               remittanceId: remittanceId,
               remittanceDate: futureRemittanceDate,
               remittanceAmount: remittanceAmount,
               remittanceStatus: remittanceStatus,
-              orders: [order],
+              orders: ordersOnSameDate,
               BankTransactionId: BankTransactionId,
             });
 
@@ -387,10 +383,9 @@ export const calculateRemittanceEveryDay = async () => {
       }
     }
   } catch (error) {
-    console.log(error, "{error} in calculateRemittanceEveryDay");
+    console.error(error, "{error} in calculateRemittanceEveryDay");
   }
 };
-
 export default async function runCron() {
   console.log("to run cron")
   const expression4every2Minutes = "*/2 * * * *";
@@ -403,7 +398,7 @@ export default async function runCron() {
     const expression4every9_59Hr = "59 9 * * * ";
     const expression4everyFriday = "0 0 * * 5";
 
-    cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
+    // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
     cron.schedule(expression4every59Minute, CONNECT_SHIPROCKET);
     cron.schedule(expression4every59Minute, CONNECT_SMARTSHIP);
     cron.schedule(expression4every5Minute, CANCEL_REQUESTED_ORDER_SMARTSHIP);

@@ -102,10 +102,9 @@ export const getFutureRemittances = async (req: ExtendedRequest, res: Response, 
   try {
     const currentDate = new Date();
     const futureFriday = nextFriday(currentDate);
-
     const futureRemittances = await RemittanceModel.find({
-      remittanceDate: { $gte: futureFriday },
-    });
+      remittanceDate: { $gte: currentDate },
+    }).populate("sellerId").lean();;
     return res.status(200).send({
       valid: true,
       remittanceOrders: futureRemittances,
