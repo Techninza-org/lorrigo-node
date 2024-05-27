@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
-import { startOfWeek, addDays, getDay } from "date-fns";
+import { startOfWeek, addDays, getDay, format } from "date-fns";
 import { validateEmail } from "./helpers";
 
 
@@ -209,6 +209,7 @@ export const getFridayDate = (date: Date) => {
   return fridayDate;
 };
 
+// What is this function doing? 
 export function csvJSON(csv: any) {
   var lines = csv.split("\n");
   var result = [];
@@ -289,27 +290,40 @@ export function cleanPhoneNumber(phoneNumber: string) {
 }
 
 export function convertToISO(invoice_date: string) {
-  let day, month, year;
+  let day, month, year, hour, minute, second;
 
   if (invoice_date.includes('-')) {
-    // Format: DD-MM-YYYY
-    [day, month, year] = invoice_date.split('-');
+    // Format: DD-MM-YYYY or DD-MM-YYYY HH:MM:SS
+    const [datePart, timePart] = invoice_date.split(' ');
+    [day, month, year] = datePart.split('-');
+    if (timePart) {
+      [hour, minute, second] = timePart.split(':');
+    } else {
+      const now = new Date();
+      hour = now.getHours();
+      minute = now.getMinutes();
+      second = now.getSeconds();
+    }
   } else if (invoice_date.includes('/')) {
-    // Format: MM/DD/YYYY
-    [day, month, year]= invoice_date.split('/');
+    // Format: MM/DD/YYYY or MM/DD/YYYY HH:MM:SS
+    const [datePart, timePart] = invoice_date.split(' ');
+    [month, day, year] = datePart.split('/');
+    if (timePart) {
+      [hour, minute, second] = timePart.split(':');
+    } else {
+      const now = new Date();
+      hour = now.getHours();
+      minute = now.getMinutes();
+      second = now.getSeconds();
+    }
   } else {
     throw new Error("Invalid date format");
   }
 
-  const date = new Date(`${year}-${month}-${day}`);
-  const now = new Date();
-  date.setHours(now.getHours());
-  date.setMinutes(now.getMinutes());
-  date.setSeconds(now.getSeconds());
-  date.setMilliseconds(now.getMilliseconds());
-
+  const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:00`);
   return date.toISOString();
 }
+
 
 
 export function getNextToNextFriday() {
@@ -326,4 +340,168 @@ export function getNextToNextFriday() {
   let nextToNextFriday = addDays(nextFriday, 7);
 
   return nextToNextFriday;
+}
+
+export const validateClientBillingFeilds = (value: any, fieldName: string, bill: any, alreadyExistingBills: any): string | null => {
+  switch (fieldName) {
+    case 'orderRefId':
+      if (!value || alreadyExistingBills.find((item: any) => item.orderRefId.includes(value))) {
+        return "Order ID / Order Reference ID must be unique and cannot be empty";
+      }
+      break;
+    case 'billingDate':
+      if (!value) {
+        return "Billing date is required";
+      }
+      break;
+    case 'awb':
+      if (!value) {
+        return "AWB is required";
+      }
+      break;
+    case 'rtoAwb':
+      if (!value) {
+        return "RTO AWB is required";
+      }
+      break;
+    case 'recipientName':
+      if (!value) {
+        return "Recipient name is required";
+      }
+      break;
+    case 'shipmentType':
+      if (value !== 0 && value !== 1) {
+        return "Shipment type is required and must be either 0 or 1";
+      }
+      break;
+    case 'fromCity':
+      if (!value) {
+        return "Origin city is required";
+      }
+      break;
+    case 'toCity':
+      if (!value) {
+        return "Destination city is required";
+      }
+      break;
+    case 'chargedWeight':
+      if (!value || isNaN(value)) {
+        return "Charged weight is required and must be a number";
+      }
+      break;
+    case 'zone':
+      if (!value) {
+        return "Zone is required";
+      }
+      break;
+    case 'isForwardApplicable':
+      if (value === null || value === undefined) {
+        return "Forward applicable flag is required";
+      }
+      break;
+    case 'isRTOApplicable':
+      if (value === null || value === undefined) {
+        return "RTO applicable flag is required";
+      }
+      break;
+    default:
+      break;
+  }
+  return null;
+};
+
+export async function sendMailToScheduleShipment({orders, pickupDate}: {orders: any[], pickupDate: string}) {
+  const Template = `
+  <!DOCTYPE html
+  PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html dir="ltr" lang="en">
+
+<head>
+  <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+  <style>
+      table {
+          border-collapse: collapse;
+          border: 1px solid black;
+          /* Border around the table */
+      }
+      th,td {
+          border: 1px solid black;
+          /* Border around each cell */
+          padding: 8px;
+          /* Adding padding for better readability */
+      }
+  </style>
+</head>
+<div style="display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0">
+</div>
+<body style="margin: 0 auto;max-width:50.5em;background-color:#f6f9fc;padding:10px 0">
+  <table align="center" width="100%" border="0" cellPadding="0" cellSpacing="0" role="presentation"
+      style="background-color:#ffffff;padding:45px">
+          <p
+              style="font-size:16px;line-height:26px;margin:16px 0;font-family:&#x27;Open Sans&#x27;, &#x27;HelveticaNeue-Light&#x27;, &#x27;Helvetica Neue Light&#x27;, &#x27;Helvetica Neue&#x27;, Helvetica, Arial, &#x27;Lucida Grande&#x27;, sans-serif;font-weight:300;color:#404040">
+              Hi Please arrange the pickups for following orders.
+          </p>
+          <table>
+              <thead>
+                  <tr>
+                      <th>Awb</th>
+                      <th>Date Of Pickup</th>
+                      <th>No. Boxes</th>
+                      <th>Total Weight(kgs)</th>
+                      <th>Pickup Address</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  ${
+                    orders.map((order) => {
+                      return `
+                      <tr>
+                          <td>${order.awb}</td>
+                          <td>${format(pickupDate.replaceAll(" ","-"), "dd/MM/yyyy")}</td>
+                          <td>${order.productId.quantity}</td>
+                          <td>${order.orderWeight}</td>
+                          <td>${order.pickupAddress.address1}</td>
+                      </tr>
+                      `;
+                    })
+                  }
+              </tbody>
+          </table>
+  </table>
+  </td>
+  </tr>
+  </tbody>
+  </table>
+</body>
+</html>
+    `;
+  let transporter = nodemailer.createTransport({
+    service: "Gmail",
+    auth: {
+      user: process.env.SMTP_ID,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+
+  let mailOptions = {
+    from: `"Lorrigo Logistic" <${process.env.SMTP_ID}>`,
+    to: "aloksharma10969@gmail.com",
+    subject: "Rescheduled orders | Lorrigo",
+    text: "Please arrange the pickups for following orders.",
+    html: Template,
+  };
+
+  try {
+    let info = await transporter.sendMail(mailOptions);
+    return {
+      status: 200,
+      message: "Email sent successfully",
+    };
+  } catch (error: any) {
+    console.error("Error occurred:", error.message);
+    return {
+      status: 500,
+      message: "Failed to send email: " + error.message,
+    };
+  }
 }

@@ -20,6 +20,7 @@ import {
   calculateNDRDetails,
   calculateRevenue,
   calculateShipmentDetails,
+  sendMailToScheduleShipment,
   updateOrderStatus,
 } from "../utils";
 import { format, parse, } from "date-fns";
@@ -345,7 +346,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           toPin: order.customerDetails.get("pincode"),
           // @ts-ignore
           toMobile: order.customerDetails.get("phone").toString().slice(-10),
-          toEmail: order.customerDetails.get("email"),
+          toEmail: order.customerDetails.get("email")  || "noreply@lorrigo.com",
           toAddType: "Home", // Mendatory 
           toLat: order.customerDetails.get("lat") || "",
           toLng: order.customerDetails.get("lng") || "",
@@ -386,7 +387,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         },
       }];
 
-
       try {
 
         let config = {
@@ -394,7 +394,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           maxBodyLength: Infinity,
           url: 'https://api.smartr.in/api/v1/add-order/',
           headers: {
-            'Authorization': 'Bearer bbQ5itWPMTWK6TKWkD6DV9PfMAy0DY',
+            'Authorization': smartrToken,
             'Content-Type': 'application/json',
           },
           data: JSON.stringify(smartrShipmentPayload)
@@ -403,22 +403,13 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         const axisoRes = await axios.request(config)
         const smartRShipmentResponse = axisoRes.data;
 
-
-        order.awb = smartRShipmentResponse.total_success[0].awbNumber;
+        order.awb = smartRShipmentResponse.total_success[0]?.awbNumber;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
 
         order.bucket = IN_TRANSIT;
         order.orderStages.push({
           stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,  // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
           action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
-          stageDateTime: new Date(),
-        }, {
-          stage: SMARTSHIP_MANIFEST_ORDER_STATUS,
-          action: MANIFEST_ORDER_DESCRIPTION,
-          stageDateTime: new Date(),
-        }, {
-          stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
-          action: PICKUP_SCHEDULED_DESCRIPTION,
           stageDateTime: new Date(),
         });
         await order.save();
@@ -595,7 +586,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
 
     let order;
     try {
-      order = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id });
+      order = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate(["productId", "pickupAddress"]);
     } catch (err) {
       return next(err);
     }
@@ -694,6 +685,29 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
       } catch (error) {
         return next(error);
       }
+    }else if (vendorName?.name === "SMARTR") {
+      const smartrToken = await getSMARTRToken();
+      if (!smartrToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+      const isEmailSend = await sendMailToScheduleShipment({ orders:[order] , pickupDate });
+
+      // try {
+      //   order.bucket = READY_TO_SHIP;
+      //   order.orderStages.push({
+      //     stage: SHIPROCKET_MANIFEST_ORDER_STATUS,   // Evantuallly change this to SMARTR_COURIER_ASSIGNED_ORDER_STATUS
+      //     action: PICKUP_SCHEDULED_DESCRIPTION,
+      //     stageDateTime: new Date(),
+      //   });
+
+      //   await order.save();
+
+      //   return res.status(200).send({ valid: true, message: "Order manifest request generated" });
+
+      // } catch (error) {
+      //   return next(error);
+      // }
+
+      return res.status(200).send({ valid: true, message: "Order manifest request generated", isEmailSend });
+
     }
   } catch (error) {
     return next(error);

@@ -5,11 +5,15 @@ import { DELIVERED, IN_TRANSIT, NDR, NEW, READY_TO_SHIP, RTO } from "../utils/lo
 import { isValidObjectId } from "mongoose";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
-import { csvJSON } from "../utils";
+import { convertToISO, csvJSON, validateClientBillingFeilds } from "../utils";
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
 import CustomPricingModel from "../models/custom_pricing.model";
 import { nextFriday } from "date-fns";
+import ClientBillingModal from "../models/client.billing.modal";
+import csvtojson from "csvtojson";
+import exceljs from "exceljs";
+
 
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -132,7 +136,7 @@ export const getSellerRemittance = async (req: ExtendedRequest, res: Response, n
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
 
-    const remittance = await RemittanceModel.findOne({remittanceId, sellerId});
+    const remittance = await RemittanceModel.findOne({ remittanceId, sellerId });
     if (!remittance) {
       return res.status(404).send({ valid: false, message: "Remittance not found" });
     }
@@ -316,5 +320,117 @@ export const manageSellerCourier = async (req: ExtendedRequest, res: Response, n
     });
   } catch (err) {
     return next(err);
+  }
+}
+
+export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).send({ valid: false, message: "No file uploaded" });
+  }
+  const alreadyExistingBills = await ClientBillingModal.find({}).select(["orderRefId", "awb", "rtoAwb"]);
+  const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
+
+  const bills = json.map((bill: any) => {
+    const isForwardApplicable = Boolean(bill["Forward Applicable*"]?.toUpperCase() === "YES");
+    const isRTOApplicable = Boolean(bill["RTO Applicable*"]?.toUpperCase() === "YES");
+    return {
+      billingDate: convertToISO(bill["Date"]),
+      awb: bill["Awb"],
+      rtoAwb: bill["RTO Awb"],
+      orderRefId: bill["Order id"],
+      recipientName: bill["Recipient Name"],
+      shipmentType: bill["Shipment Type"] === "COD" ? 1 : 0,
+      fromCity: bill["Origin City"],
+      toCity: bill["Destination City"],
+      chargedWeight: Number(bill["Charged Weight"]),
+      zone: bill["Zone"],
+      isForwardApplicable,
+      isRTOApplicable,
+    };
+  })
+
+
+  if (bills.length < 1) {
+    return res.status(200).send({
+      valid: false,
+      message: "empty payload",
+    });
+  }
+
+  try {
+    const errorWorkbook = new exceljs.Workbook();
+    const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
+
+    errorWorksheet.columns = [
+      { header: 'Awb', key: 'awb', width: 20 },
+      { header: 'Error Message', key: 'errors', width: 40 },
+    ];
+
+    const errorRows: any = [];
+
+    bills.forEach((bill) => {
+      const errors: string[] = [];
+      Object.entries(bill).forEach(([fieldName, value]) => {
+        const error = validateClientBillingFeilds(value, fieldName, bill, alreadyExistingBills);
+        if (error) {
+          errors.push(error);
+        }
+      });
+
+      if (errors.length > 0) {
+        errorRows.push({
+          awb: bill.awb,
+          errors: errors.join(", ")
+        });
+      }
+    });
+
+
+    if (errorRows.length > 0) {
+      errorWorksheet.addRows(errorRows);
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+
+      await errorWorkbook.csv.write(res);
+      return res.end();
+    }
+
+    // find sellerId from orderRefId from B2COrderModel
+    const orderRefIds = bills.map(bill => bill.orderRefId);
+    const orderRefIdToSellerIdMap = new Map();
+    const orders = await B2COrderModel.find({ order_reference_id: { $in: orderRefIds } }).select(["order_reference_id", "sellerId"]);
+    orders.forEach(order => {
+      orderRefIdToSellerIdMap.set(order.order_reference_id, order.sellerId);
+    });
+
+    bills.forEach(bill => {
+      // @ts-ignore
+      bill.sellerId = orderRefIdToSellerIdMap.get(bill.orderRefId);
+    });
+
+
+    const bulkInsertBills = await ClientBillingModal.insertMany(bills);
+
+    return res.status(200).send({
+      valid: true,
+      message: "Billing uploaded successfully",
+    });
+
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export const getClientBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const data = await ClientBillingModal.find({}).populate("sellerId").lean();
+    if (!data) return res.status(200).send({ valid: false, message: "No Client Billing found" });
+    return res.status(200).send({
+      valid: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
   }
 }
