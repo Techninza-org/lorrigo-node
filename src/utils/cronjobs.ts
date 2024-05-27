@@ -2,7 +2,7 @@ import axios from "axios";
 import { B2COrderModel } from "../models/order.model";
 import config from "./config";
 import APIs from "./constants/third_party_apis";
-import { getSMARTRToken, getShiprocketBucketing, getShiprocketToken, getSmartShipToken, getSmartshipBucketing } from "./helpers";
+import { getSMARTRToken, getShiprocketBucketing, getShiprocketToken, getSmartRBucketing, getSmartShipToken, getSmartshipBucketing } from "./helpers";
 import * as cron from "node-cron";
 import EnvModel from "../models/env.model";
 import https from "node:https";
@@ -161,7 +161,7 @@ export const CONNECT_SMARTR = async (): Promise<void> => {
  */
 
 export const trackOrder_Smartship = async () => {
-  const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK } });
+  const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, });
 
   for (const orderWithOrderReferenceId of orders) {
     const orderCarrierName = orderWithOrderReferenceId?.carrierName?.split(" ").pop();
@@ -283,6 +283,7 @@ export const trackOrder_Smartr = async () => {
       const vendorNickname = await EnvModel.findOne({ name: "SMARTR" }).select("nickName")
 
       const isSmartR = vendorNickname && (orderCarrierName === vendorNickname.nickName);
+      console.log(isSmartR, " is smartR")
 
       if (!isSmartR) {
         continue;
@@ -293,17 +294,43 @@ export const trackOrder_Smartr = async () => {
         console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
         return;
       }
-      console.log(ordersReferenceIdOrders.awb, APIs.TRACK_SMARTR_ORDER);
       const apiUrl = `${config.SMARTR_API_BASEURL}${APIs.TRACK_SMARTR_ORDER}${ordersReferenceIdOrders.awb}`;
-      // console.log(apiUrl);
+      console.log(apiUrl);
       try {
         const res = await axios.get(apiUrl, { headers: { authorization: smartRToken } });
+        if (!res.data?.success) return;
         console.log(res.data);
+        if (res.data.data[0]) {
+          const shipment_status = res.data.data[0].shipmentStatus[0]
+
+          const bucketInfo = getSmartRBucketing(shipment_status.statusCode, shipment_status.statusDescription);
+          console.log(bucketInfo);
+          if ((bucketInfo.bucket !== -1) && (ordersReferenceIdOrders.bucket !== bucketInfo.bucket)) {
+            ordersReferenceIdOrders.bucket = bucketInfo.bucket;
+            ordersReferenceIdOrders.orderStages.push({ stage: bucketInfo.bucket, action: bucketInfo.description, stageDateTime: new Date(), });
+            try {
+              await ordersReferenceIdOrders.save();
+            } catch (error) {
+              console.log("Error occurred while saving order status:", error);
+            }
+          }
+        }
       } catch (err) {
         console.log(err);
       }
 
-      // console.log(res);
+
+      //   // status_code: "NOI"	, status_description: "No info	MSC	inDevelopment		
+      //   // status_code: "RDN"	, status_description: "Redirection	MSC	inDevelopment		
+
+      //   // status_code: "NIF"	, status_description: "No info"	MSC	Upcoming		
+      //   // status_code: "RMK"	, status_description: "Remarks	MSC	Upcoming		
+      //   // status_code: "SUD"	, status_description: "APEX or SFC AWB RECD,SHIPMENT NOT RECEIVED"				
+      //   // status_code: "SUD"	, status_description: "Shipment Impounded By Regulatory Authority",
+      //   // status_code: "SUD"	, status_description: "Correction Of Status Code",
+      //   // status_code: "PKF"	, status_description: "Correction Of Status Code				
+
+
 
     } catch (err) {
       console.log("err");
@@ -357,20 +384,21 @@ export const calculateRemittance = async () => {
 export default async function runCron() {
   console.log("to run cron")
   const expression4every2Minutes = "*/2 * * * *";
+  // console.log(cron.validate(expression4every2Minutes))
   if (cron.validate(expression4every2Minutes)) {
-    cron.schedule(expression4every2Minutes, trackOrder_Smartship);
-    cron.schedule(expression4every2Minutes, trackOrder_Shiprocket);
-    cron.schedule(expression4every2Minutes, trackOrder_Smartr);
-    const expression4every5Minute = "5 * * * *";
-    const expression4every59Minute = "59 * * * *";
-    const expression4every9_59Hr = "59 9 * * * ";
-    const expression4everyFriday = "0 0 * * 5";
+    // cron.schedule(expression4every2Minutes, trackOrder_Smartship);
+    // cron.schedule(expression4every2Minutes, trackOrder_Shiprocket);
+    // cron.schedule(expression4every2Minutes, trackOrder_Smartr);
+    // const expression4every5Minute = "5 * * * *";
+    // const expression4every59Minute = "59 * * * *";
+    // const expression4every9_59Hr = "59 9 * * * ";
+    // const expression4everyFriday = "0 0 * * 5";
 
-    cron.schedule(expression4everyFriday, calculateRemittance);
-    cron.schedule(expression4every59Minute, CONNECT_SHIPROCKET);
-    cron.schedule(expression4every59Minute, CONNECT_SMARTSHIP);
-    cron.schedule(expression4every5Minute, CANCEL_REQUESTED_ORDER_SMARTSHIP);
-    cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);
+    // cron.schedule(expression4everyFriday, calculateRemittance);
+    // cron.schedule(expression4every59Minute, CONNECT_SHIPROCKET);
+    // cron.schedule(expression4every59Minute, CONNECT_SMARTSHIP);
+    // cron.schedule(expression4every5Minute, CANCEL_REQUESTED_ORDER_SMARTSHIP);
+    // cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);
 
     Logger.log("cron scheduled");
   } else {

@@ -23,7 +23,7 @@ export const CREATE_SMARTR_ORDER = "https://uat.smartr.in/api/v1/add-order";
  * append awbnumber
  * eg:TRACK_SMARTR_ORDER + ""=awbNumber"
  */
-const TRACK_SMARTR_ORDER = "/api/v1/tracking/surface/?awbs=";
+const TRACK_SMARTR_ORDER = "/api/v1/tracking/?awb=";
 const CANCEL_SMARTR_ORDER = "https://uat.smartr.in/api/v1/cancellation/";
 /**
  * for signle apply query with key pincode=pincodeNumber

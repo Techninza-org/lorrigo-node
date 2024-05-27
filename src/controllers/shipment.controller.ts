@@ -574,6 +574,16 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           return next(error);
 
         }
+      } else if (vendorName?.name === "SMARTR") {
+        try {
+          const payload = [{
+            waybillNumber: "SLAWB00269",
+            WaybillStatus: "Cancelled",
+            cancelledRemarks: ""
+          }]
+        } catch (error) {
+          return next(error);
+        }
       }
     }
 

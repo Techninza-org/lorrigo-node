@@ -14,12 +14,9 @@ import customerRouter from "./routes/customer.routes";
 import morgan from "morgan";
 import shipmentRouter from "./routes/shipment.routes";
 import sellerRouter from "./routes/seller.routes";
-import runCron, { CONNECT_SHIPROCKET, CONNECT_SMARTR, CONNECT_SMARTSHIP } from "./utils/cronjobs";
+import runCron, { CONNECT_SHIPROCKET, CONNECT_SMARTR, CONNECT_SMARTSHIP, trackOrder_Smartr } from "./utils/cronjobs";
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
-import PincodeModel from "./models/pincode.model";
-import HubModel from "./models/hub.model";
-import SellerModel from "./models/seller.model";
 import { getSpecificOrder } from "./controllers/order.controller";
 
 app.use(cors({ origin: "*" }));
@@ -73,6 +70,7 @@ mongoose
     CONNECT_SHIPROCKET();
     CONNECT_SMARTSHIP();
     CONNECT_SMARTR();
+    trackOrder_Smartr()
   })
   .catch((err) => {
     Logger.log(err.message);

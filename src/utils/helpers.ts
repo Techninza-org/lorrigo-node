@@ -782,6 +782,99 @@ export function getShiprocketBucketing(status: number) {
     }
   );
 }
+export function getSmartRBucketing(status: string, desc: string) {
+  type SSTYPE = {
+    status_code: string;
+    status_description: string;
+    our_status: string;
+    our_code: number;
+  }
+  const smarRBuckets: SSTYPE[] = [
+    { status_code: "MAN", status_description: "Shipment manifested", our_status: "New", our_code: 0 },
+    { status_code: "CAN", status_description: "Shipment Cancelled", our_status: "Cancelled", our_code: 6 },
+    { status_code: "PKA", status_description: "Pickup assigned", our_status: "Pickup Scheduled", our_code: 1 },
+    { status_code: "PKU", status_description: "Pickup un-assigned", our_status: "Pickup Cancelled", our_code: 6 },
+    { status_code: "OFP", status_description: "Out for Pickup", our_status: "Pickup Scheduled", our_code: 1 },
+    { status_code: "PKF", status_description: "Pickup Failed", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKD", status_description: "Shipment Picked up", our_status: "In Transit", our_code: 2 },
+    { status_code: "IND", status_description: "Shipment Inscan at facility", our_status: "In Transit", our_code: 2 },
+    { status_code: "BGD", status_description: "Shipment Bagged", our_status: "In Transit", our_code: 2 },
+    { status_code: "BGU", status_description: "Shipment de-Bagged", our_status: "In Transit", our_code: 2 },
+    { status_code: "DPD", status_description: "Shipment Departed", our_status: "In Transit", our_code: 2 },
+    { status_code: "ARD", status_description: "Shipment Arrived", our_status: "In Transit", our_code: 2 },
+    { status_code: "RDC", status_description: "Shipment Reached at DC", our_status: "In Transit", our_code: 2 },
+    { status_code: "OFD", status_description: "Out for Delivery", our_status: "Out for Delivery", our_code: 2 },
+    { status_code: "SUD", status_description: "Undelivered", our_status: "Pending", our_code: 2 },
+    { status_code: "DDL", status_description: "Delivered", our_status: "Delivered", our_code: 4 },
+    { status_code: "SDL", status_description: "Delivered-Self Pickup", our_status: "Delivered", our_code: 4 },
+    { status_code: "PDL", status_description: "Delivered-partially", our_status: "Partially Delivered", our_code: 4 },
+    { status_code: "RTL", status_description: "RTO Locked", our_status: "Rto Initiated", our_code: 5 },
+    { status_code: "RTR", status_description: "RTO Lock Revoked", our_status: "In Transit", our_code: 2 },
+    { status_code: "RTS", status_description: "Return to Shipper", our_status: "Rto In Transit", our_code: 5 },
+    { status_code: "RTD", status_description: "RTO Delivered", our_status: "Rto Delivered", our_code: 5 },
+    { status_code: "LST", status_description: "Shipment Lost", our_status: "Lost/ Damaged", our_code: 7 },
+    { status_code: "DMG", status_description: "Damaged", our_status: "Lost / Damaged", our_code: 7 },
+    { status_code: "DSD", status_description: "Destroyed", our_status: "Lost / Damaged", our_code: 7 },
+    { status_code: "DLD", status_description: "Delayed", our_status: "In Transit Delayed", our_code: 2 },
+    { status_code: "HLD", status_description: "Hold", our_status: "In Transit", our_code: 2 },
+    { status_code: "SUD", status_description: "Shippers or Consignee Request to Hold at Location", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Non Serviceable Area or Pin code", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Residence or Office Closed", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Holiday:Scheduled for Delivery on Next Working Day", our_status: "In Transit Delayed", our_code: 2 },
+    { status_code: "SUD", status_description: "Address Incomplete or Incorrect Can not Deliver", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Consignee Refused To Accept", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "No Such Consignee At Given Address", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Consignee Not Available At Given Address", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Consignee Shifted", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Tender Schedule Expired", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Disturbance or Natural Disaster or Strike", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Consignee Not Yet Checked In", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Consignee Out Of Station", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Shipment Lost", our_status: "Lost / Damaged", our_code: 7 },
+    { status_code: "SUD", status_description: "Shipment Destroyed or Abandoned", our_status: "Lost / Damaged", our_code: 7 },
+    { status_code: "SUD", status_description: "Shipment Redirected to Alternate Address", our_status: "In Transit Rerouted", our_code: 2 },
+    { status_code: "SUD", status_description: "Package Interchanged At Org or Dest", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Late Arrival or Scheduled For Next Working Day Delivery", our_status: "Intransit Delay", our_code: 2 },
+    { status_code: "SUD", status_description: "Shipment Held-Regulartory Paperworks Required", our_status: "Intransit Delay", our_code: 2 },
+    { status_code: "SUD", status_description: "Shipment Misrouted In Network", our_status: "Intransit Delay", our_code: 2 },
+    { status_code: "SUD", status_description: "Schedule for Next Business Day Delivery", our_status: "Intransit Delay", our_code: 2 },
+    { status_code: "SUD", status_description: "Security Cleared", our_status: "Intransit", our_code: 2 },
+    { status_code: "SUD", status_description: "Shipment or Package Damaged", our_status: "Lost / Damaged", our_code: 7 },
+    { status_code: "SUD", status_description: "Shipment Partially Delivered", our_status: "Partially Delivered", our_code: 4 },
+    { status_code: "SUD", status_description: "Attempt in Secondary Address", our_status: "Intransit", our_code: 2 },
+    { status_code: "SUD", status_description: "SHIPMENT RECEIVED;PAPERWORK NOT RECEIVED", our_status: "Intransit Delay", our_code: 2 },
+    { status_code: "SUD", status_description: "DOD or FOD or COD not ready", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "Entry restricted, no response on call", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "No response from consignee", our_status: "NDR", our_code: 3 },
+    { status_code: "SUD", status_description: "OTP NOT RECEIVED BY CONSIGNEE", our_status: "NDR", our_code: 3 },
+    { status_code: "PKF", status_description: "Package Not Travel Worthy; Shipment Hold", our_status: "In Transit", our_code: 2 },
+    { status_code: "PKF", status_description: "Change In Product-On Shippers Request on Fresh AWB", our_status: "Cancelled", our_code: 6 },
+    { status_code: "PKF", status_description: "Shipment Not Connected-Space Constraint", our_status: "", our_code: 2 },
+    { status_code: "PKF", status_description: "Shipment Returned Back to Shipper", our_status: "Intransit Delay", our_code: 5 },
+    { status_code: "PKF", status_description: "Missed Pickup- Reached Late", our_status: "Rto Delivered", our_code: 1 },
+    { status_code: "PKF", status_description: "Pickup Declined-Prohibited Content", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Pickup Not Done - Destination Pin Code Not Serviceable", our_status: "", our_code: 1 },
+    { status_code: "PKF", status_description: "Pickup Wrongly Registered By Shipper", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Pickup Not Done - Contact Person Not Available", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Shipment Not Ready or No Shipment Today", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Pickup Cancelled By Shipper", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Holiday- Shipper Closed", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Shippers or Consignee Request to Hold at Location", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Shipment Manifested But Not Received By Destination", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Disturbance or Natural Disaster or Strike", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Shipment Lost", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Shipment Held-Regulartory Paperworks Required", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Security Cleared", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Shipment or Package Damaged", our_status: "Pickup Failed", our_code: 1 },
+    { status_code: "PKF", status_description: "Canvas Bag or shipment received short", our_status: "Pickup Failed", our_code: 1 },
+  ]
+  // const smarRPossibleResponse = smarRBuckets.find(statusD => statusD.status_code === status && statusD.status_description === desc);
+  const smarRPossibleResponse = smarRBuckets.find(statusD => statusD.status_code === status && new RegExp(statusD.status_description, "i").test(desc));
+
+  return smarRPossibleResponse ? { bucket: smarRPossibleResponse.our_code, description: smarRPossibleResponse.our_status } : { bucket: -1, description: "Status code not found" }
+}
+
+// console.log(getSmartRBucketing("**N", "Shipment manifested"));
 
 export function getSmartshipBucketing(status: number) {
   const smartshipStatusMapping = {
