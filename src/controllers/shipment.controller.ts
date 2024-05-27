@@ -690,21 +690,22 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
       if (!smartrToken) return res.status(200).send({ valid: false, message: "Invalid token" });
       const isEmailSend = await sendMailToScheduleShipment({ orders:[order] , pickupDate });
 
-      // try {
-      //   order.bucket = READY_TO_SHIP;
-      //   order.orderStages.push({
-      //     stage: SHIPROCKET_MANIFEST_ORDER_STATUS,   // Evantuallly change this to SMARTR_COURIER_ASSIGNED_ORDER_STATUS
-      //     action: PICKUP_SCHEDULED_DESCRIPTION,
-      //     stageDateTime: new Date(),
-      //   });
+      // Need to iz
+      try {
+        order.bucket = READY_TO_SHIP;
+        order.orderStages.push({
+          stage: SHIPROCKET_MANIFEST_ORDER_STATUS,   // Evantuallly change this to SMARTR_COURIER_ASSIGNED_ORDER_STATUS
+          action: PICKUP_SCHEDULED_DESCRIPTION,
+          stageDateTime: new Date(),
+        });
 
-      //   await order.save();
+        await order.save();
 
-      //   return res.status(200).send({ valid: true, message: "Order manifest request generated" });
+        return res.status(200).send({ valid: true, message: "Order manifest request generated" });
 
-      // } catch (error) {
-      //   return next(error);
-      // }
+      } catch (error) {
+        return next(error);
+      }
 
       return res.status(200).send({ valid: true, message: "Order manifest request generated", isEmailSend });
 

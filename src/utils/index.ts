@@ -485,7 +485,7 @@ export async function sendMailToScheduleShipment({orders, pickupDate}: {orders: 
 
   let mailOptions = {
     from: `"Lorrigo Logistic" <${process.env.SMTP_ID}>`,
-    to: "aloksharma10969@gmail.com",
+    to: "naveenp@smartr.in",
     subject: "Rescheduled orders | Lorrigo",
     text: "Please arrange the pickups for following orders.",
     html: Template,
