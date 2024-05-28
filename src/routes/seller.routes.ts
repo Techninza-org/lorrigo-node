@@ -53,7 +53,7 @@ sellerRouter.put("/channels/:id", updateChannelPartner);
 sellerRouter.get("/billing", getSellerBilling);
 
 //@ts-ignore
-sellerRouter.put("/recharge-wallet", rechargeWallet);
+sellerRouter.post("/recharge-wallet", rechargeWallet);
 
 
 export default sellerRouter;

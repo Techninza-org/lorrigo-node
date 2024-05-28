@@ -166,7 +166,6 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
   const body = req.body;
   const seller = req.seller;
   const users_vendors = seller?.vendors || [];
-  console.log(users_vendors);
   if (
     !isValidPayload(body, [
       "pickupPincode",
@@ -395,8 +394,6 @@ export const rateCalculation = async (
       isActive: true,
     });
 
-    console.log("vendors", vendors)
-
     let commonCouriers: any[] = [];
 
     try {
@@ -415,8 +412,8 @@ export const rateCalculation = async (
       const courierCompanies = response?.data?.data?.available_courier_companies;
 
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
-      console.log("shiprocketNiceName", shiprocketNiceName, vendors)
       vendors?.forEach((vendor: any) => {
+        console.log("vendor", vendor.carrierID)
         const courier = courierCompanies?.find((company: { courier_company_id: number; }) => company.courier_company_id === vendor.carrierID);
         if (courier && shiprocketNiceName) {
 

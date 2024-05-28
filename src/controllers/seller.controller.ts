@@ -7,6 +7,7 @@ import axios from "axios";
 import APIs from "../utils/constants/third_party_apis";
 import envConfig from "../utils/config";
 import ClientBillingModal from "../models/client.billing.modal";
+import sha256 from "sha256";
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -255,7 +256,7 @@ export const updateChannelPartner = async (req: ExtendedRequest, res: Response, 
 
 export const getSellerBilling = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const bills = await ClientBillingModal.find({sellerId: req.seller._id});
+    const bills = await ClientBillingModal.find({ sellerId: req.seller._id });
     if (!bills) return res.status(200).send({ valid: false, message: "No Seller found" });
 
     return res.status(200).send({
@@ -268,44 +269,53 @@ export const getSellerBilling = async (req: ExtendedRequest, res: Response, next
 }
 
 export const rechargeWallet = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  const sellerId = req.seller._id;
+  const { amount } = req.body;
   // Phonepe Integration
   // working on it
   try {
 
+    const merchantTransactionId = `MT${Math.floor(1000 + Math.random() * 9000)}`;
     const payload = {
-      "merchantId": "PGTESTPAYUAT",
-      "merchantTransactionId": "MT7850590068188104",
-      "merchantUserId": "MUID123",
-      "amount": 10000,
-      "redirectUrl": "https://webhook.site/redirect-url",
+      "merchantId": envConfig.PHONEPE_MERCHENT_ID,
+      "merchantTransactionId": merchantTransactionId,
+      "merchantUserId": sellerId._id.toString(),
+      "amount": amount * 100, // 100 paise = 1 rupee
+      "redirectUrl": `${envConfig.PHONEPE_SUCCESS_URL}/${merchantTransactionId}`,
       "redirectMode": "REDIRECT",
-      "callbackUrl": "https://webhook.site/callback-url",
+      "callbackUrl": `${envConfig.LORRIGO_DOMAIN}`,
       "mobileNumber": "9999999999",
       "paymentInstrument": {
         "type": "PAY_PAGE"
       }
     }
 
+    const bufferObj = Buffer.from(JSON.stringify(payload));
+    const base64Payload = bufferObj.toString('base64');
+    const xVerify = sha256(base64Payload + APIs.PHONEPE_PAY_API + envConfig.PHONEPE_SALT_KEY) + "###" + envConfig.PHONEPE_SALT_INDEX;
 
     const options = {
       method: 'post',
-      url: `${envConfig.PHONEPE_API_BASEURL}/pg/v1/pay`,
+      url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_PAY_API}`,
       headers: {
+        'accept': 'application/json',
         'Content-Type': 'application/json',
-        'X-VERIFY': "",
+        'X-VERIFY': xVerify,
       },
       data: {
+        request: base64Payload
       }
     };
-    axios
-      .request(options)
-      .then(function (response) {
-        console.log(response.data);
-      })
-      .catch(function (error) {
-        console.error(error);
-      });
-  } catch (error) {
 
+    const rechargeWalletViaPhoenpe = await axios.request(options);
+
+    return res.status(200).send({
+      valid: true,
+      message: "Wallet recharged successfully",
+      rechargeWalletViaPhoenpe,
+    });
+  } catch (error) {
+    console.log(error, "error [rechargeWallet]")
+    return next(error)
   }
 }

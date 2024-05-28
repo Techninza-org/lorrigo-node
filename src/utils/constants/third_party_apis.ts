@@ -36,6 +36,7 @@ const PIN_CODE = "https://uat.smartr.in/api/v1/pincode/";
 // export const CREATE_ORDER = "/v1/external/orders/create-order";
 const CREATE_PICKUP_LOCATION = "/v1/external/settings/company/addpickup";
 const CREATE_SHIPROCKET_ORDER = "/v1/external/orders/create/adhoc";
+const CREATE_SHIPROCKET_RETURN_ORDER = "/v1/external/orders/create/return";
 const GENRATE_AWB_SHIPROCKET = "/v1/external/courier/assign/awb";
 const LIST_SHIPROCKET_COURIER = "/v1/external/courier/courierListWithCounts";
 const SHIPROCKET_ORDER_COURIER = "/v1/external/courier/serviceability";
@@ -54,6 +55,8 @@ const SHOPIFY_FULFILLMENT_CANCEL = '/admin/api/2024-04/orders';
 
 const SMARTR_CREATE_SHIPMENT = "/api/v1/add-order";
 const SMARTR_PINCODE_SERVICEABILITY = "/api/v1/pincode/";
+
+const PHONEPE_PAY_API = "/pg/v1/pay";
 
 const APIs = {
   HUB_REGISTRATION,
@@ -87,6 +90,7 @@ const APIs = {
   GET_MANIFEST_SHIPROCKET,
   SHIPROCKET_ORDER_TRACKING,
   SHIPROCKET_ORDER_NDR,
+  CREATE_SHIPROCKET_RETURN_ORDER,
 
   SHOPIFY_ORDER,
   SHOPIFY_CUSTOMER,
@@ -95,6 +99,8 @@ const APIs = {
   SHOPIFY_FULFILLMENT_CANCEL,
 
   SMARTR_CREATE_SHIPMENT,
-  SMARTR_PINCODE_SERVICEABILITY
+  SMARTR_PINCODE_SERVICEABILITY,
+
+  PHONEPE_PAY_API
 };
 export default APIs;

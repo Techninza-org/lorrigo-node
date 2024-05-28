@@ -25,6 +25,7 @@ import {
 } from "../utils";
 import { format, parse, } from "date-fns";
 import { CANCELED, CANCELLED_ORDER_DESCRIPTION, SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS, COURRIER_ASSIGNED_ORDER_DESCRIPTION, IN_TRANSIT, MANIFEST_ORDER_DESCRIPTION, NDR, NEW, NEW_ORDER_DESCRIPTION, READY_TO_SHIP, SHIPMENT_CANCELLED_ORDER_DESCRIPTION, SHIPMENT_CANCELLED_ORDER_STATUS, SMARTSHIP_MANIFEST_ORDER_STATUS, SMARTSHIP_ORDER_REATTEMPT_DESCRIPTION, SMARTSHIP_ORDER_REATTEMPT_STATUS, SMARTSHIP_SHIPPED_ORDER_DESCRIPTION, SMARTSHIP_SHIPPED_ORDER_STATUS, SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, PICKUP_SCHEDULED_DESCRIPTION, SHIPROCKET_MANIFEST_ORDER_STATUS, DELIVERED } from "../utils/lorrigo-bucketing-info";
+import ClientBillingModal from "../models/client.billing.modal";
 
 // TODO: REMOVE THIS CODE: orderType = 0 ? "b2c" : "b2b"
 export async function createShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
@@ -96,12 +97,12 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       const shipmentAPIBody = {
         request_info: {
           run_type: "create",
-          shipment_type: 1, // 1 => forward, 2 => return order
+          shipment_type: order.isReverseOrder ? 2 : 1, // 1 => forward, 2 => return order
         },
         orders: [
           {
             "client_order_reference_id": client_order_reference_id,
-            "shipment_type": 1,
+            "shipment_type": order.isReverseOrder ? 2 : 1,
             "order_collectable_amount": order.payment_mode === 1 ? order.amount2Collect : 0, // need to take  from user in future,
             "total_order_value": totalOrderValue,
             "payment_type": order.payment_mode ? "cod" : "prepaid",
@@ -145,6 +146,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         ],
       };
+      console.log(shipmentAPIBody, order.isReverseOrder ? 2 : 1, "shipmentAPIBody")
+      
       let smartshipToken;
       try {
         smartshipToken = await getSmartShipToken();
@@ -249,6 +252,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         const genAWBPayload = {
           shipment_id: order.shiprocket_shipment_id,
           courier_id: body?.carrierId.toString(),
+          is_return: order.isReverseOrder ? 1 : 0,
         }
         try {
 
@@ -346,7 +350,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           toPin: order.customerDetails.get("pincode"),
           // @ts-ignore
           toMobile: order.customerDetails.get("phone").toString().slice(-10),
-          toEmail: order.customerDetails.get("email")  || "noreply@lorrigo.com",
+          toEmail: order.customerDetails.get("email") || "noreply@lorrigo.com",
           toAddType: "Home", // Mendatory 
           toLat: order.customerDetails.get("lat") || "",
           toLng: order.customerDetails.get("lng") || "",
@@ -608,7 +612,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
       const requestBody = {
         client_order_reference_ids: [order._id + "_" + order.order_reference_id],
         preferred_pickup_date: pickupDate.replaceAll(" ", "-"),
-        shipment_type: 1,
+        shipment_type: order.isReverseOrder ? 2 : 1,
       };
 
       order.bucket = READY_TO_SHIP;
@@ -685,10 +689,10 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
       } catch (error) {
         return next(error);
       }
-    }else if (vendorName?.name === "SMARTR") {
+    } else if (vendorName?.name === "SMARTR") {
       const smartrToken = await getSMARTRToken();
       if (!smartrToken) return res.status(200).send({ valid: false, message: "Invalid token" });
-      const isEmailSend = await sendMailToScheduleShipment({ orders:[order] , pickupDate });
+      const isEmailSend = await sendMailToScheduleShipment({ orders: [order], pickupDate });
 
       // Need to iz
       try {
@@ -1069,16 +1073,19 @@ export async function getShipemntDetails(req: ExtendedRequest, res: Response, ne
     const endOfYesterday = new Date(startOfYesterday);
     endOfYesterday.setDate(endOfYesterday.getDate() + 1);
 
-
     // Fetch today's and yesterday's orders
-    const [orders, todayOrders, yesterdayOrders] = await Promise.all([
+    const [orders, todayOrders, yesterdayOrders, remittanceCODOrders] = await Promise.all([
       B2COrderModel.find({
         sellerId: sellerID,
-        bucket: { $gt: DELIVERED },
         createdAt: { $gte: date30DaysAgo, $lt: currentDate }
       }),
       B2COrderModel.find({ sellerId: sellerID, createdAt: { $gte: startOfToday, $lt: endOfToday } }),
-      B2COrderModel.find({ sellerId: sellerID, createdAt: { $gte: startOfYesterday, $lt: endOfYesterday } })
+      B2COrderModel.find({ sellerId: sellerID, createdAt: { $gte: startOfYesterday, $lt: endOfYesterday } }),
+      ClientBillingModal.find({
+        sellerId: sellerID,
+        createdAt: { $gte: date30DaysAgo, $lt: currentDate }
+      }),
+
     ]);
     // Extract shipment details
     const shipmentDetails = calculateShipmentDetails(orders);
@@ -1087,7 +1094,7 @@ export async function getShipemntDetails(req: ExtendedRequest, res: Response, ne
     const NDRDetails = calculateNDRDetails(orders);
 
     // Calculate COD details
-    const CODDetails = calculateCODDetails(orders);
+    const CODDetails = calculateCODDetails(remittanceCODOrders);
 
     // Calculate today's and yesterday's revenue and average shipping cost
     const todayRevenue = calculateRevenue(todayOrders);

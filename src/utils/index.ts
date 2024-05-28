@@ -2,7 +2,8 @@ import { Types } from "mongoose";
 import { B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
 import { startOfWeek, addDays, getDay, format } from "date-fns";
-import { validateEmail } from "./helpers";
+import { MetroCitys, NorthEastStates, validateEmail } from "./helpers";
+import { DELIVERED, IN_TRANSIT, READY_TO_SHIP, RTO } from "./lorrigo-bucketing-info";
 
 
 export function calculateShipmentDetails(orders: any[]) {
@@ -15,19 +16,16 @@ export function calculateShipmentDetails(orders: any[]) {
   orders.forEach((order) => {
     totalShipments.push(order);
     switch (order.bucket) {
-      case 0:
+      case READY_TO_SHIP:
         pickupPending++;
         break;
-      case (2, 3, 4):
-        pickupPending++;
-        break;
-      case (27, 30):
+      case IN_TRANSIT:
         inTransit++;
         break;
-      case 11:
+      case DELIVERED:
         delivered++;
         break;
-      case (18, 19):
+      case RTO:
         rto++;
         break;
       default:
@@ -35,7 +33,7 @@ export function calculateShipmentDetails(orders: any[]) {
     }
   });
 
-  return { totalShipments, pickupPending, inTransit, delivered, ndrPending: 0, rto: 0 };
+  return { totalShipments, pickupPending, inTransit, delivered, ndrPending: 0, rto };
 }
 
 export function calculateNDRDetails(orders: any[]) {
@@ -60,7 +58,7 @@ export function calculateNDRDetails(orders: any[]) {
     }
   });
 
-  return { TotalNRD: orders.length, buyerReattempt, yourReattempt, NDRDelivered };
+  return { TotalNRD: 0, buyerReattempt: 0, yourReattempt: 0, NDRDelivered: 0 };
 }
 
 export function calculateCODDetails(orders: any[]) {
@@ -410,7 +408,7 @@ export const validateClientBillingFeilds = (value: any, fieldName: string, bill:
   return null;
 };
 
-export async function sendMailToScheduleShipment({orders, pickupDate}: {orders: any[], pickupDate: string}) {
+export async function sendMailToScheduleShipment({ orders, pickupDate }: { orders: any[], pickupDate: string }) {
   const Template = `
   <!DOCTYPE html
   PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -452,19 +450,18 @@ export async function sendMailToScheduleShipment({orders, pickupDate}: {orders: 
                   </tr>
               </thead>
               <tbody>
-                  ${
-                    orders.map((order) => {
-                      return `
+                  ${orders.map((order) => {
+    return `
                       <tr>
                           <td>${order.awb}</td>
-                          <td>${format(pickupDate.replaceAll(" ","-"), "dd/MM/yyyy")}</td>
+                          <td>${format(pickupDate.replaceAll(" ", "-"), "dd/MM/yyyy")}</td>
                           <td>${order.productId.quantity}</td>
                           <td>${order.orderWeight}</td>
                           <td>${order.pickupAddress.address1}</td>
                       </tr>
                       `;
-                    })
-                  }
+  })
+    }
               </tbody>
           </table>
   </table>
@@ -504,4 +501,71 @@ export async function sendMailToScheduleShipment({orders, pickupDate}: {orders: 
       message: "Failed to send email: " + error.message,
     };
   }
+}
+
+
+export async function calculateShippingCharges(
+  pickupDetails: { District: any; StateName: any; },
+  deliveryDetails: { District: any; StateName: any; },
+  body: { weight: any; paymentType: number; collectableAmount: number; },
+  volumetricWeight: number,
+  MetroCitys: string | any[],
+  NorthEastStates: string | any[],
+  vendor: any
+){
+  const data2send = [];
+
+  const cv = vendor;
+  const orderWeight = Math.max(volumetricWeight, Number(body.weight));
+
+  let order_zone = "";
+  let increment_price = null;
+
+  if (pickupDetails.District === deliveryDetails.District) {
+    increment_price = cv.withinCity;
+    order_zone = "Zone A";
+  } else if (pickupDetails.StateName === deliveryDetails.StateName) {
+    increment_price = cv.withinZone;
+    order_zone = "Zone B";
+  } else if (MetroCitys.includes(pickupDetails.District) && MetroCitys.includes(deliveryDetails.District)) {
+    increment_price = cv.withinMetro;
+    order_zone = "Zone C";
+  } else if (NorthEastStates.includes(pickupDetails.StateName) && NorthEastStates.includes(deliveryDetails.StateName)) {
+    increment_price = cv.northEast;
+    order_zone = "Zone E";
+  } else {
+    increment_price = cv.withinRoi;
+    order_zone = "Zone D";
+  }
+
+  if (!increment_price) {
+    return [{ message: "invalid incrementPrice" }];
+  }
+
+  const [partnerPickupHour, partnerPickupMinute, partnerPickupSecond] = cv.pickupTime.split(":").map(Number);
+  const pickupTime = new Date(new Date().setHours(partnerPickupHour, partnerPickupMinute, partnerPickupSecond, 0));
+
+  const currentTime = new Date();
+  const expectedPickup = pickupTime < currentTime ? "Tomorrow" : "Today";
+
+  let totalCharge = increment_price.basePrice;
+  let adjustedOrderWeight = orderWeight - cv.weightSlab;
+  const weightIncrementRatio = Math.ceil(adjustedOrderWeight / cv.incrementWeight);
+  totalCharge += increment_price.incrementPrice * weightIncrementRatio;
+
+  if (body.paymentType === 1) {
+    const codPrice = cv.codCharge?.hard || 0;
+    const codAfterPercent = (cv.codCharge?.percent / 100) * body.collectableAmount;
+    totalCharge += Math.max(codPrice, codAfterPercent);
+  }
+
+  return data2send.push({
+    name: cv.name,
+    minWeight: cv.weightSlab,
+    charge: totalCharge,
+    type: cv.type,
+    expectedPickup,
+    carrierID: cv.carrierID,
+    order_zone,
+  });
 }

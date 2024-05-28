@@ -349,7 +349,6 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     };
   })
 
-
   if (bills.length < 1) {
     return res.status(200).send({
       valid: false,
@@ -399,16 +398,41 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     // find sellerId from orderRefId from B2COrderModel
     const orderRefIds = bills.map(bill => bill.orderRefId);
     const orderRefIdToSellerIdMap = new Map();
-    const orders = await B2COrderModel.find({ order_reference_id: { $in: orderRefIds } }).select(["order_reference_id", "sellerId"]);
+    const orders = await B2COrderModel.find({ order_reference_id: { $in: orderRefIds } }).populate(["productId", '"pickupAddress"']);
     orders.forEach(order => {
       orderRefIdToSellerIdMap.set(order.order_reference_id, order.sellerId);
     });
+    
+
+
+    // const result = calculateShippingCharges(
+    //   vendors, 
+    //   seller._id, 
+    //   pickupDetails, 
+    //   deliveryDetails, 
+    //   {
+    //     weight: "10",
+    //     weightUnit: "kg",
+    //     boxLength: "30",
+    //     boxWidth: "30",
+    //     boxHeight: "30",
+    //     sizeUnit: "cm",
+    //     paymentType: 1,
+    //     collectableAmount: 500,
+    //   }, 
+    //   volumetricWeight, 
+    //   MetroCitys, 
+    //   NorthEastStates, 
+    //   CustomPricingModel
+    // );
+
+    
 
     bills.forEach(bill => {
       // @ts-ignore
       bill.sellerId = orderRefIdToSellerIdMap.get(bill.orderRefId);
+      // bill.billingAmount = 
     });
-
 
     const bulkInsertBills = await ClientBillingModal.insertMany(bills);
 

@@ -4,6 +4,8 @@ dotenv.config();
 
 const NODE_ENV = process.env.NODE_ENV;
 
+const LORRIGO_DOMAIN = process.env.LORRIGO_DOMAIN;
+
 const MONGODB_URI = NODE_ENV === "PRODUCTION" ? process.env.PRO_MONGODB_URI : process.env.MONGODB_URI;
 
 const SALT_ROUND = Number(process.env.SALT_ROUND) || 10;
@@ -54,6 +56,10 @@ const PHONEPE_SALT_INDEX = process.env.PHONEPE_SALT_INDEX;
 
 const PHONEPE_SALT_KEY = process.env.PHONEPE_SALT_KEY;
 
+const PHONEPE_SUCCESS_URL = process.env.PHONEPE_SUCCESS_URL;
+
+const PHONEPE_FAILURE_URL = process.env.PHONEPE_SUCCESS_URL;
+
 
 
 const envConfig = {
@@ -82,6 +88,10 @@ const envConfig = {
   PHONEPE_MERCHENT_ID,
   PHONEPE_SALT_INDEX,
   PHONEPE_SALT_KEY,
+  PHONEPE_SUCCESS_URL,
+  PHONEPE_FAILURE_URL,
+  LORRIGO_DOMAIN
+
 };
 
 export default envConfig;
