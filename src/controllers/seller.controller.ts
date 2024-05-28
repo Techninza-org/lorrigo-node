@@ -5,6 +5,8 @@ import RemittanceModel from "../models/remittance-modal";
 import ChannelModel from "../models/channel.model";
 import axios from "axios";
 import APIs from "../utils/constants/third_party_apis";
+import envConfig from "../utils/config";
+import ClientBillingModal from "../models/client.billing.modal";
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -62,8 +64,6 @@ export const updateSeller = async (req: ExtendedRequest, res: Response, next: Ne
     return next(err);
   }
 };
-
-
 
 export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -136,7 +136,6 @@ export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: N
     return next(err);
   }
 };
-
 
 export const deleteSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   const seller = req.seller;
@@ -232,6 +231,7 @@ export const manageChannelPartner = async (req: ExtendedRequest, res: Response, 
     return next(error)
   }
 }
+
 export const updateChannelPartner = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
@@ -250,5 +250,62 @@ export const updateChannelPartner = async (req: ExtendedRequest, res: Response, 
   } catch (error) {
     console.log(error, "error [manageChannelPartner]")
     return next(error)
+  }
+}
+
+export const getSellerBilling = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const bills = await ClientBillingModal.find({sellerId: req.seller._id});
+    if (!bills) return res.status(200).send({ valid: false, message: "No Seller found" });
+
+    return res.status(200).send({
+      valid: true,
+      billing: bills,
+    });
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export const rechargeWallet = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  // Phonepe Integration
+  // working on it
+  try {
+
+    const payload = {
+      "merchantId": "PGTESTPAYUAT",
+      "merchantTransactionId": "MT7850590068188104",
+      "merchantUserId": "MUID123",
+      "amount": 10000,
+      "redirectUrl": "https://webhook.site/redirect-url",
+      "redirectMode": "REDIRECT",
+      "callbackUrl": "https://webhook.site/callback-url",
+      "mobileNumber": "9999999999",
+      "paymentInstrument": {
+        "type": "PAY_PAGE"
+      }
+    }
+
+
+    const options = {
+      method: 'post',
+      url: `${envConfig.PHONEPE_API_BASEURL}/pg/v1/pay`,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-VERIFY': "",
+      },
+      data: {
+      }
+    };
+    axios
+      .request(options)
+      .then(function (response) {
+        console.log(response.data);
+      })
+      .catch(function (error) {
+        console.error(error);
+      });
+  } catch (error) {
+
   }
 }

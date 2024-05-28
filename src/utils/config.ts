@@ -44,6 +44,17 @@ const SHIPROCKET_API_BASEURL = process.env.SHIPROCKET_API_BASEURL;
 
 const SHIPROCKET_API_KEY = process.env.SHIPROCKET_API_KEY;
 
+/* PHONEPE */
+
+const PHONEPE_API_BASEURL = process.env.PHONEPE_API_BASEURL;
+
+const PHONEPE_MERCHENT_ID = process.env.PHONEPE_MERCHENT_ID;
+
+const PHONEPE_SALT_INDEX = process.env.PHONEPE_SALT_INDEX;
+
+const PHONEPE_SALT_KEY = process.env.PHONEPE_SALT_KEY;
+
+
 
 const envConfig = {
   NODE_ENV,
@@ -66,6 +77,11 @@ const envConfig = {
   SHIPROCKET_API_BASEURL,
 
   SMARTR_API_BASEURL,
+
+  PHONEPE_API_BASEURL,
+  PHONEPE_MERCHENT_ID,
+  PHONEPE_SALT_INDEX,
+  PHONEPE_SALT_KEY,
 };
 
 export default envConfig;

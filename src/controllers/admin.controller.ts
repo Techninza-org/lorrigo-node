@@ -331,8 +331,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
   const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
 
   const bills = json.map((bill: any) => {
-    const isForwardApplicable = Boolean(bill["Forward Applicable*"]?.toUpperCase() === "YES");
-    const isRTOApplicable = Boolean(bill["RTO Applicable*"]?.toUpperCase() === "YES");
+    const isForwardApplicable = Boolean(bill["Forward Applicable"]?.toUpperCase() === "YES");
+    const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "YES");
     return {
       billingDate: convertToISO(bill["Date"]),
       awb: bill["Awb"],
