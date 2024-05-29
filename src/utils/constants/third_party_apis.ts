@@ -55,8 +55,10 @@ const SHOPIFY_FULFILLMENT_CANCEL = '/admin/api/2024-04/orders';
 
 const SMARTR_CREATE_SHIPMENT = "/api/v1/add-order";
 const SMARTR_PINCODE_SERVICEABILITY = "/api/v1/pincode/";
+const CANCEL_ORDER_SMARTR = "/api/v1/updateCancel/";
 
 const PHONEPE_PAY_API = "/pg/v1/pay";
+const PHONEPE_CONFIRM_API = "/pg/v1/status";
 
 const APIs = {
   HUB_REGISTRATION,
@@ -100,7 +102,9 @@ const APIs = {
 
   SMARTR_CREATE_SHIPMENT,
   SMARTR_PINCODE_SERVICEABILITY,
+  CANCEL_ORDER_SMARTR,
 
-  PHONEPE_PAY_API
+  PHONEPE_PAY_API,
+  PHONEPE_CONFIRM_API
 };
 export default APIs;

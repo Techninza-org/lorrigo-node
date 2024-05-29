@@ -147,7 +147,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         ],
       };
       console.log(shipmentAPIBody, order.isReverseOrder ? 2 : 1, "shipmentAPIBody")
-      
+
       let smartshipToken;
       try {
         smartshipToken = await getSmartShipToken();
@@ -473,8 +473,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
       const vendorName = await EnvModel.findOne({ nickName: assignedVendorNickname });
 
-
-
       if (vendorName?.name === "SMARTSHIP") {
         const smartshipToken = await getSmartShipToken();
         if (!smartshipToken) {
@@ -568,6 +566,32 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
         } catch (error) {
           return next(error);
 
+        }
+      } else if (vendorName?.name === "SMARTR") {
+        const smartrToken = await getSMARTRToken();
+        if (!smartrToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+        if (type === "order") {
+          await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+        } else {
+
+          const cancelOrder = await axios.post(config.SMARTR_API_BASEURL + APIs.CANCEL_ORDER_SMARTR, {
+            awbs: [order.awb],
+          }, {
+            headers: {
+              Authorization: smartrToken,
+            },
+          }
+          )
+          const response = cancelOrder?.data
+          const isCancelled = response.data[0].success;
+          if (isCancelled) {
+            order.awb = null;
+            order.carrierName = null
+            await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
+            await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
+            order.save();
+          }
         }
       }
     }

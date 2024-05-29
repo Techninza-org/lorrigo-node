@@ -4,6 +4,7 @@ import nodemailer from "nodemailer";
 import { startOfWeek, addDays, getDay, format } from "date-fns";
 import { MetroCitys, NorthEastStates, validateEmail } from "./helpers";
 import { DELIVERED, IN_TRANSIT, READY_TO_SHIP, RTO } from "./lorrigo-bucketing-info";
+import { DeliveryDetails, IncrementPrice, PickupDetails, Vendor, Body } from "../types/rate-cal";
 
 
 export function calculateShipmentDetails(orders: any[]) {
@@ -505,67 +506,60 @@ export async function sendMailToScheduleShipment({ orders, pickupDate }: { order
 
 
 export async function calculateShippingCharges(
-  pickupDetails: { District: any; StateName: any; },
-  deliveryDetails: { District: any; StateName: any; },
-  body: { weight: any; paymentType: number; collectableAmount: number; },
-  volumetricWeight: number,
-  MetroCitys: string | any[],
-  NorthEastStates: string | any[],
+  pickupDetails: PickupDetails,
+  deliveryDetails: DeliveryDetails,
+  body: Body,
   vendor: any
-){
-  const data2send = [];
+): Promise<number> {
+  const orderWeight = body.weight
 
-  const cv = vendor;
-  const orderWeight = Math.max(volumetricWeight, Number(body.weight));
-
-  let order_zone = "";
-  let increment_price = null;
-
-  if (pickupDetails.District === deliveryDetails.District) {
-    increment_price = cv.withinCity;
-    order_zone = "Zone A";
-  } else if (pickupDetails.StateName === deliveryDetails.StateName) {
-    increment_price = cv.withinZone;
-    order_zone = "Zone B";
-  } else if (MetroCitys.includes(pickupDetails.District) && MetroCitys.includes(deliveryDetails.District)) {
-    increment_price = cv.withinMetro;
-    order_zone = "Zone C";
-  } else if (NorthEastStates.includes(pickupDetails.StateName) && NorthEastStates.includes(deliveryDetails.StateName)) {
-    increment_price = cv.northEast;
-    order_zone = "Zone E";
-  } else {
-    increment_price = cv.withinRoi;
-    order_zone = "Zone D";
-  }
-
+  const increment_price = getIncrementPrice(pickupDetails, deliveryDetails, MetroCitys, NorthEastStates, vendor);
+  console.log(increment_price, "increment_price", vendor)
   if (!increment_price) {
-    return [{ message: "invalid incrementPrice" }];
+    throw new Error("Invalid increment price");
   }
 
-  const [partnerPickupHour, partnerPickupMinute, partnerPickupSecond] = cv.pickupTime.split(":").map(Number);
-  const pickupTime = new Date(new Date().setHours(partnerPickupHour, partnerPickupMinute, partnerPickupSecond, 0));
+  const totalCharge = calculateTotalCharge(orderWeight, increment_price, body, vendor);
+  return totalCharge;
+}
 
-  const currentTime = new Date();
-  const expectedPickup = pickupTime < currentTime ? "Tomorrow" : "Today";
+function getIncrementPrice(
+  pickupDetails: PickupDetails,
+  deliveryDetails: DeliveryDetails,
+  MetroCitys: string[],
+  NorthEastStates: string[],
+  vendor: Vendor
+): IncrementPrice | null {
+  console.log(pickupDetails, deliveryDetails)
+  if (pickupDetails.District === deliveryDetails.District) {
+    return vendor.withinCity;
+  } else if (pickupDetails.StateName === deliveryDetails.StateName) {
+    return vendor.withinZone;
+  } else if (MetroCitys.includes(pickupDetails.District) && MetroCitys.includes(deliveryDetails.District)) {
+    return vendor.withinMetro;
+  } else if (NorthEastStates.includes(pickupDetails.StateName) && NorthEastStates.includes(deliveryDetails.StateName)) {
+    return vendor.northEast;
+  } else {
+    return vendor.withinRoi;
+  }
+}
 
-  let totalCharge = increment_price.basePrice;
-  let adjustedOrderWeight = orderWeight - cv.weightSlab;
-  const weightIncrementRatio = Math.ceil(adjustedOrderWeight / cv.incrementWeight);
-  totalCharge += increment_price.incrementPrice * weightIncrementRatio;
+function calculateTotalCharge(
+  orderWeight: number,
+  incrementPrice: IncrementPrice,
+  body: Body,
+  vendor: Vendor
+): number {
+  let totalCharge = incrementPrice.basePrice;
+  const adjustedOrderWeight = orderWeight - vendor.weightSlab;
+  const weightIncrementRatio = Math.ceil(adjustedOrderWeight / vendor.incrementWeight);
+  totalCharge += incrementPrice.incrementPrice * weightIncrementRatio;
 
   if (body.paymentType === 1) {
-    const codPrice = cv.codCharge?.hard || 0;
-    const codAfterPercent = (cv.codCharge?.percent / 100) * body.collectableAmount;
+    const codPrice = vendor.codCharge?.hard || 0;
+    const codAfterPercent = (vendor.codCharge?.percent ?? 0 / 100) * body.collectableAmount;
     totalCharge += Math.max(codPrice, codAfterPercent);
   }
 
-  return data2send.push({
-    name: cv.name,
-    minWeight: cv.weightSlab,
-    charge: totalCharge,
-    type: cv.type,
-    expectedPickup,
-    carrierID: cv.carrierID,
-    order_zone,
-  });
+  return totalCharge;
 }

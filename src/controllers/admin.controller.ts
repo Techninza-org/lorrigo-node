@@ -5,7 +5,7 @@ import { DELIVERED, IN_TRANSIT, NDR, NEW, READY_TO_SHIP, RTO } from "../utils/lo
 import { isValidObjectId } from "mongoose";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
-import { convertToISO, csvJSON, validateClientBillingFeilds } from "../utils";
+import { calculateShippingCharges, convertToISO, csvJSON, validateClientBillingFeilds } from "../utils";
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
 import CustomPricingModel from "../models/custom_pricing.model";
@@ -337,6 +337,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       billingDate: convertToISO(bill["Date"]),
       awb: bill["Awb"],
       rtoAwb: bill["RTO Awb"],
+      codValue: Number(bill["COD Value"] || 0),
       orderRefId: bill["Order id"],
       recipientName: bill["Recipient Name"],
       shipmentType: bill["Shipment Type"] === "COD" ? 1 : 0,
@@ -344,6 +345,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       toCity: bill["Destination City"],
       chargedWeight: Number(bill["Charged Weight"]),
       zone: bill["Zone"],
+      carrierID: Number(bill["Carrier ID"]),
       isForwardApplicable,
       isRTOApplicable,
     };
@@ -395,51 +397,74 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       return res.end();
     }
 
-    // find sellerId from orderRefId from B2COrderModel
-    const orderRefIds = bills.map(bill => bill.orderRefId);
-    const orderRefIdToSellerIdMap = new Map();
-    const orders = await B2COrderModel.find({ order_reference_id: { $in: orderRefIds } }).populate(["productId", '"pickupAddress"']);
-    orders.forEach(order => {
-      orderRefIdToSellerIdMap.set(order.order_reference_id, order.sellerId);
-    });
-    
+    // // find sellerId from orderRefId from B2COrderModel
+    let orders: any[] = [];
+    try {
+      const orderRefIds = bills.map(bill => bill.orderRefId);
+      orders = await B2COrderModel.find({ order_reference_id: { $in: orderRefIds } }).populate(["productId", "pickupAddress"]);
+      const orderRefIdToSellerIdMap = new Map();
+      orders.forEach(order => {
+        orderRefIdToSellerIdMap.set(order.order_reference_id, order.sellerId);
+      });
+
+    } catch (error) {
+      console.log(error, 'error');
+    }
 
 
-    // const result = calculateShippingCharges(
-    //   vendors, 
-    //   seller._id, 
-    //   pickupDetails, 
-    //   deliveryDetails, 
-    //   {
-    //     weight: "10",
-    //     weightUnit: "kg",
-    //     boxLength: "30",
-    //     boxWidth: "30",
-    //     boxHeight: "30",
-    //     sizeUnit: "cm",
-    //     paymentType: 1,
-    //     collectableAmount: 500,
-    //   }, 
-    //   volumetricWeight, 
-    //   MetroCitys, 
-    //   NorthEastStates, 
-    //   CustomPricingModel
-    // );
 
-    
 
-    bills.forEach(bill => {
-      // @ts-ignore
-      bill.sellerId = orderRefIdToSellerIdMap.get(bill.orderRefId);
-      // bill.billingAmount = 
-    });
+    try {
+      const billsWithCharges = await Promise.all(bills.map(async (bill) => {
+        const order: any = orders.find(o => o.order_reference_id === bill.orderRefId);
+        const vendor = await CourierModel.findOne({ carrierID: bill.carrierID });
+        if (order) {
+          const pickupDetails = {
+            // @ts-ignore
+            District: bill.fromCity,
+            // @ts-ignore
+            StateName: order.pickupAddress.state,
+          };
+          const deliveryDetails = {
+            // @ts-ignore
+            District: bill.toCity,
+            // @ts-ignore
+            StateName: order.customerDetails.get("state"),
+          };
+          const body = {
+            weight: bill.chargedWeight,
+            paymentType: bill.shipmentType,
+            collectableAmount: bill.codValue,
+          };
+          const totalCharge = await calculateShippingCharges(
+            pickupDetails,
+            deliveryDetails,
+            body,
+            vendor
+          );
 
-    const bulkInsertBills = await ClientBillingModal.insertMany(bills);
+          return {
+            ...bill,
+            sellerId: order.sellerId,
+            billingAmount: totalCharge,
+          };
+        } else {
+          return bill; // Or handle the case when the order is not found
+        }
+      }));
+      const bulkInsertBills = await ClientBillingModal.insertMany(billsWithCharges);
 
-    return res.status(200).send({
-      valid: true,
-      message: "Billing uploaded successfully",
-    });
+      return res.status(200).send({
+        valid: true,
+        message: "Billing uploaded successfully",
+        billsWithCharges
+      });
+    } catch (error) {
+      console.log("Error in calculating shipping charges", error);
+    }
+
+
+
 
   } catch (error) {
     return next(error);

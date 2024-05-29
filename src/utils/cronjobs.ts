@@ -296,7 +296,6 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
           .map(order => order._id.toString())
       );
 
-
       // Filter out already remitted orders
       const unremittedOrders = orders.filter(order => !remittedOrderIds.has(order._id.toString()));
 
@@ -313,7 +312,6 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
       }, {});
 
       for (const [deliveryDateStr, ordersOnSameDate] of Object.entries(ordersGroupedByDate)) {
-
         const deliveryDate = parseISO(deliveryDateStr);
         const daysSinceDelivery = Math.floor((currentDate.getTime() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24));
         console.log("daysSinceDelivery", daysSinceDelivery, ordersOnSameDate.map(order => order._id));
@@ -350,7 +348,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
         } else {
           const futureRemittanceDate = nextFriday(currentDate);
           if (futureRemittanceDate < deliveryDate) {
-            continue; 
+            continue;
           }
           const existingFutureRemittance = await RemittanceModel.findOne({
             sellerId: seller._id,
@@ -386,6 +384,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
     console.error(error, "{error} in calculateRemittanceEveryDay");
   }
 };
+
 export default async function runCron() {
   console.log("to run cron")
   const expression4every2Minutes = "*/2 * * * *";
@@ -398,7 +397,7 @@ export default async function runCron() {
     const expression4every9_59Hr = "59 9 * * * ";
     const expression4everyFriday = "0 0 * * 5";
 
-    // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
+    cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
     cron.schedule(expression4every59Minute, CONNECT_SHIPROCKET);
     cron.schedule(expression4every59Minute, CONNECT_SMARTSHIP);
     cron.schedule(expression4every5Minute, CANCEL_REQUESTED_ORDER_SMARTSHIP);

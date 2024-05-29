@@ -7,7 +7,8 @@ import axios from "axios";
 import APIs from "../utils/constants/third_party_apis";
 import envConfig from "../utils/config";
 import ClientBillingModal from "../models/client.billing.modal";
-import sha256 from "sha256";
+import crypto from "crypto";
+import PaymentTransactionModal from "../models/payment.transaction.modal";
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -268,14 +269,13 @@ export const getSellerBilling = async (req: ExtendedRequest, res: Response, next
   }
 }
 
-export const rechargeWallet = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   const sellerId = req.seller._id;
   const { amount } = req.body;
   // Phonepe Integration
   // working on it
   try {
-
-    const merchantTransactionId = `MT${Math.floor(1000 + Math.random() * 9000)}`;
+    const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
     const payload = {
       "merchantId": envConfig.PHONEPE_MERCHENT_ID,
       "merchantTransactionId": merchantTransactionId,
@@ -283,7 +283,7 @@ export const rechargeWallet = async (req: ExtendedRequest, res: Response, next: 
       "amount": amount * 100, // 100 paise = 1 rupee
       "redirectUrl": `${envConfig.PHONEPE_SUCCESS_URL}/${merchantTransactionId}`,
       "redirectMode": "REDIRECT",
-      "callbackUrl": `${envConfig.LORRIGO_DOMAIN}`,
+      "callbackUrl": `http://localhost:3000/recharge-wallet/success/${merchantTransactionId}`,
       "mobileNumber": "9999999999",
       "paymentInstrument": {
         "type": "PAY_PAGE"
@@ -292,7 +292,7 @@ export const rechargeWallet = async (req: ExtendedRequest, res: Response, next: 
 
     const bufferObj = Buffer.from(JSON.stringify(payload));
     const base64Payload = bufferObj.toString('base64');
-    const xVerify = sha256(base64Payload + APIs.PHONEPE_PAY_API + envConfig.PHONEPE_SALT_KEY) + "###" + envConfig.PHONEPE_SALT_INDEX;
+    const xVerify = crypto.createHash('sha256').update(base64Payload + APIs.PHONEPE_PAY_API + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
 
     const options = {
       method: 'post',
@@ -308,14 +308,89 @@ export const rechargeWallet = async (req: ExtendedRequest, res: Response, next: 
     };
 
     const rechargeWalletViaPhoenpe = await axios.request(options);
+    const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
+
+    const txn = {
+      sellerId: sellerId,
+      merchantTransactionId: merchantTransactionId,
+      amount: amount,
+      code: rechargeWalletViaPhoenpeData.code,
+      data: rechargeWalletViaPhoenpeData,
+      stage: [{
+        action: "Initiated",
+        dateTime: new Date().toISOString()
+      }]
+    }
+
+    const rechargeTxn = await PaymentTransactionModal.create(txn);
 
     return res.status(200).send({
       valid: true,
       message: "Wallet recharged successfully",
-      rechargeWalletViaPhoenpe,
+      rechargeWalletViaPhoenpeData,
+      url: rechargeWalletViaPhoenpeData.data.instrumentResponse.redirectInfo.url
     });
   } catch (error) {
     console.log(error, "error [rechargeWallet]")
+    return next(error)
+  }
+}
+
+export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = req.seller._id;
+    const { merchantTransactionId } = req.query;
+    const txn = await PaymentTransactionModal.findOne({ merchantTransactionId });
+    if (!txn) return res.status(200).send({ valid: false, message: "No transaction found" });
+
+    const xVerify = crypto.createHash('sha256').update(`${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}` + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
+
+    const options = {
+      method: 'get',
+      url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}`,
+      headers: {
+        'accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-VERIFY': xVerify,
+        'X-MERCHANT-ID': envConfig.PHONEPE_MERCHENT_ID,
+      },
+    };
+
+    console.log(options, "options")
+
+    const rechargeWalletViaPhoenpe = await axios.request(options);
+    const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
+
+    console.log(rechargeWalletViaPhoenpeData, "rechargeWalletViaPhoenpeData")
+
+    const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId }, {
+      $set: {
+        code: rechargeWalletViaPhoenpeData.code,
+        data: rechargeWalletViaPhoenpeData,
+      },
+      $push: {
+        stage: {
+          action: "Completed",
+          dateTime: new Date().toISOString()
+        }
+      }
+    });
+
+    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
+      $set: {
+        walletBalance: Number(req.seller.walletBalance) + (Number(rechargeWalletViaPhoenpeData.data.amount) / 100)
+      }
+    })
+
+    return res.status(200).send({
+      valid: true,
+      message: "Wallet recharged successfully",
+      rechargeWalletViaPhoenpeData,
+      updatedSeller
+    });
+
+  } catch (error) {
+    console.log(error, "error [confirmRechargeWallet]")
     return next(error)
   }
 }

@@ -73,7 +73,6 @@ mongoose
     CONNECT_SHIPROCKET();
     CONNECT_SMARTSHIP();
     CONNECT_SMARTR();
-    calculateRemittanceEveryDay()
   })
   .catch((err) => {
     Logger.log(err.message);

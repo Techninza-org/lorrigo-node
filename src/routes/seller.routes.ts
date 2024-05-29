@@ -8,8 +8,9 @@ import {
     uploadKycDocs,
     manageChannelPartner,
     updateChannelPartner,
-    rechargeWallet,
-    getSellerBilling
+    rechargeWalletIntent,
+    getSellerBilling,
+    confirmRechargeWallet
 } from "../controllers/seller.controller";
 
 import multer from 'multer';
@@ -53,7 +54,10 @@ sellerRouter.put("/channels/:id", updateChannelPartner);
 sellerRouter.get("/billing", getSellerBilling);
 
 //@ts-ignore
-sellerRouter.post("/recharge-wallet", rechargeWallet);
+sellerRouter.post("/recharge-wallet", rechargeWalletIntent);
+
+//@ts-ignore
+sellerRouter.post("/confirm-recharge-wallet", confirmRechargeWallet);
 
 
 export default sellerRouter;
