@@ -413,7 +413,6 @@ export const rateCalculation = async (
 
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
       vendors?.forEach((vendor: any) => {
-        console.log("vendor", vendor.carrierID)
         const courier = courierCompanies?.find((company: { courier_company_id: number; }) => company.courier_company_id === vendor.carrierID);
         if (courier && shiprocketNiceName) {
 
@@ -602,7 +601,6 @@ export const rateCalculation = async (
 
     return data2send;
   } catch (error) {
-    console.log("error [Rate Calculation]: ", error);
     return [{ message: "error: " + (error as Error).message }];
   }
 };
@@ -837,6 +835,101 @@ export function getSmartshipBucketing(status: number) {
       description: "Status code not found",
     }
   );
+}
+
+export function getSmartRBucketing(status: string, desc: string) {
+  type SSTYPE = {
+    description: string;
+    bucket: number;
+  }
+
+  const smarRBuckets: Record<string, SSTYPE[]> = {
+    "MAN": [{ description: "Shipment manifested", bucket: 0 }],
+    "CAN": [{ description: "Shipment Cancelled", bucket: 6 }],
+    "PKA": [{ description: "Pickup assigned", bucket: 1 }],
+    "PKU": [{ description: "Pickup un-assigned", bucket: 6 }],
+    "OFP": [{ description: "Out for Pickup", bucket: 1 }],
+    "PKF": [
+      { description: "Pickup Failed", bucket: 1 },
+      { description: "Package Not Travel Worthy; Shipment Hold", bucket: 2 },
+      { description: "Change In Product-On Shippers Request on Fresh AWB", bucket: 6 },
+      { description: "Shipment Not Connected-Space Constraint", bucket: 2 },
+      { description: "Shipment Returned Back to Shipper", bucket: 5 },
+      { description: "Missed Pickup- Reached Late", bucket: 1 },
+      { description: "Pickup Declined-Prohibited Content", bucket: 1 },
+      { description: "Pickup Not Done - Destination Pin Code Not Serviceable", bucket: 1 },
+      { description: "Pickup Wrongly Registered By Shipper", bucket: 1 },
+      { description: "Pickup Not Done - Contact Person Not Available", bucket: 1 },
+      { description: "Shipment Not Ready or No Shipment Today", bucket: 1 },
+      { description: "Pickup Cancelled By Shipper", bucket: 1 },
+      { description: "Holiday- Shipper Closed", bucket: 1 },
+      { description: "Shippers or Consignee Request to Hold at Location", bucket: 1 },
+      { description: "Shipment Manifested But Not Received By Destination", bucket: 1 },
+      { description: "Disturbance or Natural Disaster or Strike", bucket: 1 },
+      { description: "Shipment Lost", bucket: 1 },
+      { description: "Shipment Held-Regulartory Paperworks Required", bucket: 1 },
+      { description: "Security Cleared", bucket: 1 },
+      { description: "Shipment or Package Damaged", bucket: 1 },
+      { description: "Canvas Bag or shipment received short", bucket: 1 }
+    ],
+    "PKD": [{ description: "Shipment Picked up", bucket: 2 }],
+    "IND": [{ description: "Shipment Inscan at facility", bucket: 2 }],
+    "BGD": [{ description: "Shipment Bagged", bucket: 2 }],
+    "BGU": [{ description: "Shipment de-Bagged", bucket: 2 }],
+    "DPD": [{ description: "Shipment Departed", bucket: 2 }],
+    "ARD": [{ description: "Shipment Arrived", bucket: 2 }],
+    "RDC": [{ description: "Shipment Reached at DC", bucket: 2 }],
+    "OFD": [{ description: "Out for Delivery", bucket: 2 }],
+    "SUD": [
+      { description: "Undelivered", bucket: 2 },
+      { description: "Shippers or Consignee Request to Hold at Location", bucket: 3 },
+      { description: "Non Serviceable Area or Pin code", bucket: 3 },
+      { description: "Residence or Office Closed", bucket: 3 },
+      { description: "Holiday:Scheduled for Delivery on Next Working Day", bucket: 2 },
+      { description: "Address Incomplete or Incorrect Can not Deliver", bucket: 3 },
+      { description: "Consignee Refused To Accept", bucket: 3 },
+      { description: "No Such Consignee At Given Address", bucket: 3 },
+      { description: "Consignee Not Available At Given Address", bucket: 3 },
+      { description: "Consignee Shifted", bucket: 3 },
+      { description: "Tender Schedule Expired", bucket: 3 },
+      { description: "Disturbance or Natural Disaster or Strike", bucket: 3 },
+      { description: "Consignee Not Yet Checked In", bucket: 3 },
+      { description: "Consignee Out Of Station", bucket: 3 },
+      { description: "Shipment Lost", bucket: 7 },
+      { description: "Shipment Destroyed or Abandoned", bucket: 7 },
+      { description: "Shipment Redirected to Alternate Address", bucket: 2 },
+      { description: "Package Interchanged At Org or Dest", bucket: 3 },
+      { description: "Late Arrival or Scheduled For Next Working Day Delivery", bucket: 2 },
+      { description: "Shipment Held-Regulartory Paperworks Required", bucket: 2 },
+      { description: "Shipment Misrouted In Network", bucket: 2 },
+      { description: "Schedule for Next Business Day Delivery", bucket: 2 },
+      { description: "Security Cleared", bucket: 2 },
+      { description: "Shipment or Package Damaged", bucket: 7 },
+      { description: "Shipment Partially Delivered", bucket: 4 },
+      { description: "Attempt in Secondary Address", bucket: 2 },
+      { description: "SHIPMENT RECEIVED;PAPERWORK NOT RECEIVED", bucket: 2 },
+      { description: "DOD or FOD or COD not ready", bucket: 3 },
+      { description: "Entry restricted, no response on call", bucket: 3 },
+      { description: "No response from consignee", bucket: 3 },
+      { description: "OTP NOT RECEIVED BY CONSIGNEE", bucket: 3 }
+    ],
+    "DDL": [{ description: "Delivered", bucket: 4 }],
+    "SDL": [{ description: "Delivered-Self Pickup", bucket: 4 }],
+    "PDL": [{ description: "Delivered-partially", bucket: 4 }],
+    "RTL": [{ description: "RTO Locked", bucket: 5 }],
+    "RTR": [{ description: "RTO Lock Revoked", bucket: 2 }],
+    "RTS": [{ description: "Return to Shipper", bucket: 5 }],
+    "RTD": [{ description: "RTO Delivered", bucket: 5 }],
+    "LST": [{ description: "Shipment Lost", bucket: 7 }],
+    "DMG": [{ description: "Damaged", bucket: 7 }],
+    "DSD": [{ description: "Destroyed", bucket: 7 }],
+    "DLD": [{ description: "Delayed", bucket: 2 }],
+    "HLD": [{ description: "Hold", bucket: 2 }]
+  }
+
+  const smarRPossibleResponse = smarRBuckets[status]?.find(statusD => new RegExp(statusD.description, "i").test(desc));
+
+  return smarRPossibleResponse ? { bucket: smarRPossibleResponse.bucket, description: smarRPossibleResponse.description } : { bucket: -1, description: "Status code not found" }
 }
 
 export async function isSmartr_surface_servicable(pincode: number): Promise<boolean> {

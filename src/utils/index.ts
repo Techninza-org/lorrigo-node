@@ -514,7 +514,6 @@ export async function calculateShippingCharges(
   const orderWeight = body.weight
 
   const increment_price = getIncrementPrice(pickupDetails, deliveryDetails, MetroCitys, NorthEastStates, vendor);
-  console.log(increment_price, "increment_price", vendor)
   if (!increment_price) {
     throw new Error("Invalid increment price");
   }
@@ -530,7 +529,6 @@ function getIncrementPrice(
   NorthEastStates: string[],
   vendor: Vendor
 ): IncrementPrice | null {
-  console.log(pickupDetails, deliveryDetails)
   if (pickupDetails.District === deliveryDetails.District) {
     return vendor.withinCity;
   } else if (pickupDetails.StateName === deliveryDetails.StateName) {

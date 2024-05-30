@@ -307,7 +307,6 @@ export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: N
           smartshipAPIconfig
         );
       } catch (err) {
-        console.log(err);
         return next(err);
       }
 
@@ -374,7 +373,6 @@ export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: N
       hubs: savedHubs,
     });
   } catch (error) {
-    console.log("error[bulk]", error);
     return next(error);
   }
 }

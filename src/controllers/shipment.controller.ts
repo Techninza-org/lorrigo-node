@@ -144,7 +144,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         ],
       };
-      console.log(shipmentAPIBody, order.isReverseOrder ? 2 : 1, "shipmentAPIBody")
 
       let smartshipToken;
       try {
@@ -235,8 +234,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           return res.status(200).send({ valid: true, order: updatedOrder, shipment: savedShipmentResponse });
         } catch (err) {
-          console.log(err, "erro")
-
           return next(err);
         }
       }
@@ -313,13 +310,11 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           }
           return res.status(200).send({ valid: true, order });
         } catch (error) {
-          console.log(error, 'erro')
           return next(error);
         }
 
 
       } catch (error) {
-        console.log(error)
         return next(error);
       }
 
@@ -810,7 +805,6 @@ export async function orderReattempt(req: ExtendedRequest, res: Response, next: 
         return res.status(200).send({ valid: true, message: "Order reattempt request generated" });
 
       } catch (error) {
-        console.log(error, "error")
         return next(error);
       }
     }
@@ -836,7 +830,6 @@ export async function orderReattempt(req: ExtendedRequest, res: Response, next: 
         await updateOrderStatus(order._id, NDR, SMARTSHIP_ORDER_REATTEMPT_DESCRIPTION);
         return res.status(200).send({ valid: true, message: "Order reattempt request generated" });
       } catch (error) {
-        console.log(error, "error")
         return next(error);
       }
     }
@@ -1007,12 +1000,6 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
       }),
     };
 
-    try {
-      const response = await axios.post(APIs.CREATE_SMARTR_ORDER, data, apiConfig);
-    } catch (error) {
-      return next(error);
-    }
-
     return res.status(500).send({ valid: false, message: "Incomplete route" });
   } catch (error) {
     return next(error);
@@ -1033,12 +1020,7 @@ export async function trackB2BShipment(req: ExtendedRequest, res: Response, next
     }),
   };
   try {
-    const api = APIs.TRACK_SMARTR_ORDER + `=${awb}`;
-    const response = await axios.get(api, apiConfig);
-    const responseJSON: { success: boolean; data: any[]; message?: boolean } = response.data;
-    if (responseJSON.success)
-      return res.status(500).send({ valid: true, message: "Incomplete route", responseJSON: responseJSON.data });
-    else return res.status(500).send({ valid: false, message: "Incomplete route", resposneJSON: responseJSON.message });
+    
   } catch (err: unknown) {
     return next(err);
   }
@@ -1066,16 +1048,11 @@ export async function cancelB2BShipment(req: ExtendedRequest, res: Response, nex
     };
     let responseJSON: { awb: string; message: string; success: boolean }[];
     try {
-      const response = await axios.post(APIs.CANCEL_SMARTR_ORDER, apiPayload, apiConfig);
-      responseJSON = response.data;
+ 
     } catch (err) {
       return next(err);
     }
-    if (!responseJSON[0].success) {
-      return res.status(200).send({ valid: false, message: "Incomplete route", responseJSON: responseJSON[0].message });
-    } else {
-      return res.status(500).send({ valid: true, message: "Incomplete route", responseJSON });
-    }
+    
   } catch (error) {
     return next(error);
   }

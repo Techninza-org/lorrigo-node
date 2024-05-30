@@ -134,7 +134,6 @@ export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: N
       seller: updatedSeller,
     });
   } catch (err) {
-    console.log(err, "error")
     return next(err);
   }
 };
@@ -229,7 +228,6 @@ export const manageChannelPartner = async (req: ExtendedRequest, res: Response, 
       channel,
     });
   } catch (error) {
-    console.log(error, "error [manageChannelPartner]")
     return next(error)
   }
 }

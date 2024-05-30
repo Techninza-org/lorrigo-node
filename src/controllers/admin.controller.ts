@@ -121,7 +121,6 @@ export const getFutureRemittances = async (req: ExtendedRequest, res: Response, 
 export const getSellerRemittance = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { sellerId, remittanceId } = req.query;
-    console.log(sellerId, remittanceId, 'sellerId, remittanceId')
 
     if (!sellerId || !isValidObjectId(sellerId)) {
       return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
@@ -197,7 +196,6 @@ export const uploadPincodes = async (req: ExtendedRequest, res: Response, next: 
     const fileData = req.file.buffer.toString();
     var data = fileData.replace(/,\s+/g, ",");
     const pincodes = csvJSON(data);
-    console.log(pincodes, 'pincodes');
 
     const bulkOperations = pincodes.map(object => ({
       updateOne: {
