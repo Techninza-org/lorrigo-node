@@ -13,7 +13,7 @@ import { isValidObjectId } from "mongoose";
 import CustomPricingModel from "../models/custom_pricing.model";
 import envConfig from "./config";
 import { Types } from "mongoose";
-import { CANCELED, DELIVERED, IN_TRANSIT, LOST_DAMAGED, NDR, READY_TO_SHIP, RTO } from "./lorrigo-bucketing-info";
+import { CANCELED, DELIVERED, IN_TRANSIT, LOST_DAMAGED, NDR, READY_TO_SHIP, RTO, RETURN_CANCELLATION, RETURN_CANCELLED_BY_CLIENT, RETURN_CANCELLED_BY_SMARTSHIP, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_ORDER_MANIFESTED, RETURN_OUT_FOR_PICKUP, RETURN_PICKED, RETURN_SHIPMENT_LOST } from "./lorrigo-bucketing-info";
 import ChannelModel from "../models/channel.model";
 
 export const validateEmail = (email: string): boolean => {
@@ -818,6 +818,18 @@ export function getSmartshipBucketing(status: number) {
     199: { bucket: RTO, description: "RTO-Delivered to FC" },
     212: { bucket: RTO, description: "RTO - In Transit - Damaged" },
     189: { bucket: LOST_DAMAGED, description: "Forward Shipment Lost" },
+
+    // Return order Bucketing
+    163: { bucket: RETURN_CONFIRMED, description: "Return Confirmed by Customer" },
+    168: { bucket: RETURN_ORDER_MANIFESTED, description: "Return Order Manifested" },
+    169: { bucket: RETURN_PICKED, description: "Return Order Picked" },
+    170: { bucket: RETURN_CANCELLATION, description: "Return Order Cancelled" },
+    171: { bucket: RETURN_DELIVERED, description: "Return Order Delivered" },
+    172: { bucket: RETURN_OUT_FOR_PICKUP, description: "Return Order Out for Pickup" },
+    173: { bucket: RETURN_IN_TRANSIT, description: "Return Order In Transit" },
+    187: { bucket: RETURN_CANCELLED_BY_SMARTSHIP, description: "Return Cancelled by Smartship" },
+    188: { bucket: RETURN_CANCELLED_BY_CLIENT, description: "Return Cancelled by Client" },
+    190: { bucket: RETURN_SHIPMENT_LOST, description: "Return Shipment Lost" },
   };
   return (
     smartshipStatusMapping[status as keyof typeof smartshipStatusMapping] || {

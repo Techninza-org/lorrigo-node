@@ -19,7 +19,7 @@ import APIs from "../utils/constants/third_party_apis";
 import csvtojson from "csvtojson";
 import exceljs from "exceljs";
 
-import { DELIVERED, IN_TRANSIT, NDR, NEW, NEW_ORDER_DESCRIPTION, NEW_ORDER_STATUS, READY_TO_SHIP, RTO } from "../utils/lorrigo-bucketing-info";
+import { DELIVERED, IN_TRANSIT, NDR, NEW, NEW_ORDER_DESCRIPTION, NEW_ORDER_STATUS, READY_TO_SHIP, RETURN_CANCELLATION, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_PICKED, RTO } from "../utils/lorrigo-bucketing-info";
 import { convertToISO, validateBulkOrderField } from "../utils";
 
 // TODO create api to delete orders
@@ -604,11 +604,11 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
     let { limit, page, status }: { limit?: number; page?: number; status?: string } = req.query;
 
     const obj = {
-      new: [NEW],
-      "ready-to-ship": [READY_TO_SHIP],
-      "in-transit": [IN_TRANSIT],
-      delivered: [DELIVERED],
-      ndr: [NDR],
+      new: [NEW, RETURN_CONFIRMED],
+      "ready-to-ship": [READY_TO_SHIP, RETURN_PICKED],
+      "in-transit": [IN_TRANSIT, RETURN_IN_TRANSIT],
+      delivered: [DELIVERED, RETURN_DELIVERED],
+      ndr: [NDR, RETURN_CANCELLATION],
       rto: [RTO],
     };
 
@@ -956,6 +956,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
     return next(error);
   }
 };
+
 export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const orderId = req.params?.id;
