@@ -356,12 +356,8 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
       },
     };
 
-    console.log(options, "options")
-
     const rechargeWalletViaPhoenpe = await axios.request(options);
     const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
-
-    console.log(rechargeWalletViaPhoenpeData, "rechargeWalletViaPhoenpeData")
 
     const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId }, {
       $set: {

@@ -65,8 +65,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       return next(err);
     }
 
-
-
     const vendorName = await EnvModel.findOne({ nickName: body.carrierNickName });
 
     const courier = await CourierModel.findOne({ vendor_channel_id: vendorName?._id.toString() })
@@ -407,18 +405,23 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         const axisoRes = await axios.request(config)
         const smartRShipmentResponse = axisoRes.data;
 
-        order.awb = smartRShipmentResponse.total_success[0]?.awbNumber;
+        console.log(smartRShipmentResponse, "smartRShipmentResponse")
+
+        const orderAWB = smartRShipmentResponse.total_success[0]?.awbNumber;
+        order.awb = orderAWB;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
 
-        order.bucket = IN_TRANSIT;
-        order.orderStages.push({
-          stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,  // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
-          action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
-          stageDateTime: new Date(),
-        });
-        await order.save();
+        if (orderAWB) {
+          order.bucket = IN_TRANSIT;
+          order.orderStages.push({
+            stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,  // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
+            action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
+            stageDateTime: new Date(),
+          });
+          await order.save();
+          return res.status(200).send({ valid: true, order });
+        }
 
-        return res.status(200).send({ valid: true, order });
       } catch (error) {
         console.error("Error creating SMARTR shipment:", error);
         return next(error);
