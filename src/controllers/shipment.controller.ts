@@ -270,7 +270,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           order.awb = awbResponse?.data?.response?.data?.awb_code;
           order.carrierName = awbResponse?.data?.response?.data.courier_name + " " + (vendorName?.nickName);
           order.shipmentCharges = body.charge;
-          order.bucket = READY_TO_SHIP;
+          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED :  READY_TO_SHIP;
           order.orderStages.push({
             stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
             action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
@@ -418,7 +418,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         console.log(orderAWB, "orderAWB")
 
         if (orderAWB) {
-          order.bucket = IN_TRANSIT;
+          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED :  IN_TRANSIT;
           order.orderStages.push({
             stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,  // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
             action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
@@ -526,7 +526,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     return next(error)
   }
 }
-
 
 export async function cancelShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {
@@ -749,7 +748,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
     return next(error);
   }
 }
-
 
 export async function orderManifest(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {
