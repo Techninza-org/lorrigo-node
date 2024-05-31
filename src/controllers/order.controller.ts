@@ -865,7 +865,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
         {
           name: orderDetails.productId.name,
           sku: orderDetails.productId.category.slice(0, 40),
-          units: orderDetails.productId.quantity,
+          units: 1,
           selling_price: Number(orderDetails.productId.taxable_value),
         }
       ],

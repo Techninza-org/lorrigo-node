@@ -15,6 +15,7 @@ import envConfig from "./config";
 import { Types } from "mongoose";
 import { CANCELED, DELIVERED, IN_TRANSIT, LOST_DAMAGED, NDR, READY_TO_SHIP, RTO, RETURN_CANCELLATION, RETURN_CANCELLED_BY_CLIENT, RETURN_CANCELLED_BY_SMARTSHIP, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_ORDER_MANIFESTED, RETURN_OUT_FOR_PICKUP, RETURN_PICKED, RETURN_SHIPMENT_LOST } from "./lorrigo-bucketing-info";
 import ChannelModel from "../models/channel.model";
+import HubModel from "../models/hub.model";
 
 export const validateEmail = (email: string): boolean => {
   return /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)*[a-zA-Z]{2,}))$/.test(
@@ -498,6 +499,43 @@ export const rateCalculation = async (
       console.log("error", error);
     }
 
+    try {
+      const delhiveryToken = getDelhiveryToken();
+      if (!delhiveryToken) {
+        throw new Error("Failed to retrieve Delhivery token");
+      }
+
+      const isDelhiveryServicable = await axios.get(
+        `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_PINCODE_SERVICEABILITY}${deliveryPincode}`,
+        {
+          headers: {
+            Authorization: `${delhiveryToken}`,
+          },
+        }
+      );
+
+      console.log("isDelhiveryServicable", )
+
+      if (!!isDelhiveryServicable.data.delivery_codes[0]) {
+        const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY" }).select("_id nickName");
+        if (delhiveryNiceName) {
+          const delhiveryVendors = vendors.filter((vendor) =>
+            vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString()
+          );
+          if (delhiveryVendors.length > 0) {
+            delhiveryVendors.forEach((vendor) => {
+              commonCouriers.push({
+                ...vendor.toObject(),
+                nickName: delhiveryNiceName.nickName
+              });
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.log("error", error);
+    }
+
     const data2send: {
       name: string;
       minWeight: number;
@@ -699,6 +737,11 @@ export async function getSMARTRToken(): Promise<string | false> {
   const token = "Bearer" + " " + env?.token;
   return token;
   // }
+}
+
+export function getDelhiveryToken() {
+  const token = `Token ${envConfig.DELHIVERY_API_TOKEN}`
+  return token;
 }
 
 export async function getSellerChannelConfig(sellerId: string) {

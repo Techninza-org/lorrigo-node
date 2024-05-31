@@ -7,6 +7,7 @@ import config from "../utils/config";
 import APIs from "../utils/constants/third_party_apis";
 import EnvModel from "../models/env.model";
 import {
+  getDelhiveryToken,
   getPincodeDetails,
   getShiprocketToken,
   getSmartShipToken,
@@ -116,6 +117,21 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       pin_code: pincode,
     };
 
+    const delhiveryHubPayload = {
+      name: name,
+      email: "noreply@lorrigo.com",
+      phone: phone.toString().slice(2, 12),
+      address: address1,
+      city: city,
+      country: "India",
+      pin: pincode.toString(),
+      return_address: rtoAddress.toString() || "NA",
+      return_pin: rtoPincode.toString() || "NA",
+      return_city: rtoCity,
+      return_state: rtoState,
+      return_country: "India"
+    }
+
     let smartShipResponse;
     let shiprocketResponse;
     try {
@@ -138,6 +154,17 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       // @ts-ignore
       const isExistingHub = err?.response?.data.errors.pickup_location[0].includes("Address nick name already in use")
       if (!isExistingHub) return next(err);
+    }
+
+    try {
+      const delhiveryToken =  getDelhiveryToken();
+      const delhiveryResponse = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
+        headers: { Authorization: delhiveryToken }
+      });
+      console.log(delhiveryResponse.data, "delhivery response")
+    } catch (error: any) {
+      console.log(error.response?.data, "error in delhivery")
+      return res.status(500).send({ valid: false, error });
     }
 
     const smartShipData: SMARTSHIP_DATA = smartShipResponse.data;

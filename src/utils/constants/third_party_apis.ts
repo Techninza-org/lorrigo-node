@@ -41,6 +41,13 @@ const CANCEL_ORDER_SMARTR = "/api/v1/updateCancel/";
 const PHONEPE_PAY_API = "/pg/v1/pay";
 const PHONEPE_CONFIRM_API = "/pg/v1/status";
 
+const DELHIVERY_PINCODE_SERVICEABILITY = "/c/api/pin-codes/json/?filter_codes="
+const DELHIVERY_PICKUP_LOCATION = "/api/backend/clientwarehouse/create/"
+const DELHIVERY_CREATE_ORDER = "/api/cmu/create.json"
+const DELHIVERY_CANCEL_ORDER = "/api/p/edit"
+const DELHIVERY_MANIFEST_ORDER = "/fm/request/new"
+
+
 const APIs = {
   HUB_REGISTRATION,
   HUB_UPDATE,
@@ -76,6 +83,13 @@ const APIs = {
   CANCEL_ORDER_SMARTR,
 
   PHONEPE_PAY_API,
-  PHONEPE_CONFIRM_API
+  PHONEPE_CONFIRM_API,
+
+
+  DELHIVERY_PINCODE_SERVICEABILITY,
+  DELHIVERY_PICKUP_LOCATION,
+  DELHIVERY_CREATE_ORDER,
+  DELHIVERY_CANCEL_ORDER,
+  DELHIVERY_MANIFEST_ORDER
 };
 export default APIs;

@@ -1,5 +1,5 @@
 import { type Response, type NextFunction } from "express";
-import { getSMARTRToken, getSellerChannelConfig, getShiprocketToken, getSmartShipToken, isValidPayload } from "../utils/helpers";
+import { getDelhiveryToken, getSMARTRToken, getSellerChannelConfig, getShiprocketToken, getSmartShipToken, isValidPayload } from "../utils/helpers";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import { Types, isValidObjectId } from "mongoose";
 import axios from "axios";
@@ -23,9 +23,10 @@ import {
   sendMailToScheduleShipment,
   updateOrderStatus,
 } from "../utils";
-import { format, parse, } from "date-fns";
+import { format, parse, parseISO, } from "date-fns";
 import { CANCELED, CANCELLED_ORDER_DESCRIPTION, SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS, COURRIER_ASSIGNED_ORDER_DESCRIPTION, IN_TRANSIT, MANIFEST_ORDER_DESCRIPTION, NDR, NEW, NEW_ORDER_DESCRIPTION, READY_TO_SHIP, SHIPMENT_CANCELLED_ORDER_DESCRIPTION, SHIPMENT_CANCELLED_ORDER_STATUS, SMARTSHIP_MANIFEST_ORDER_STATUS, SMARTSHIP_ORDER_REATTEMPT_DESCRIPTION, SMARTSHIP_ORDER_REATTEMPT_STATUS, SMARTSHIP_SHIPPED_ORDER_DESCRIPTION, SMARTSHIP_SHIPPED_ORDER_STATUS, SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, PICKUP_SCHEDULED_DESCRIPTION, SHIPROCKET_MANIFEST_ORDER_STATUS, DELIVERED, RETURN_CONFIRMED } from "../utils/lorrigo-bucketing-info";
 import ClientBillingModal from "../models/client.billing.modal";
+import envConfig from "../utils/config";
 
 // TODO: REMOVE THIS CODE: orderType = 0 ? "b2c" : "b2b"
 export async function createShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
@@ -421,6 +422,93 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         console.error("Error creating SMARTR shipment:", error);
         return next(error);
       }
+    } else if (vendorName?.name === "DELHIVERY") {
+      const delhiveryToken = getDelhiveryToken();
+      if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+      const delhiveryShipmentPayload = {
+        format: "json",
+        data: {
+          shipments: [
+            {
+              name: order.customerDetails.get("name"),
+              add: order.customerDetails.get("address"),
+              pin: order.customerDetails.get("pincode"),
+              city: order.customerDetails.get("city"),
+              state: order.customerDetails.get("state"),
+              country: "India",
+              phone: order.customerDetails.get("phone"),
+              order: order.order_reference_id,
+              payment_mode: order.payment_mode ? "COD" : "Prepaid",
+              return_pin: hubDetails.rtoPincode,
+              return_city: hubDetails.rtoCity,
+              return_phone: hubDetails.phone,
+              return_add: hubDetails.rtoAddress || hubDetails.address1,
+              return_state: hubDetails.rtoState || hubDetails.state,
+              return_country: "India",
+              products_desc: productDetails.name,
+              hsn_code: productDetails.hsn_code,
+              cod_amount: order.payment_mode ? order.amount2Collect : 0,
+              order_date: order.order_invoice_date,
+              total_amount: productDetails.taxable_value,
+              seller_add: hubDetails.address1,
+              seller_name: hubDetails.name,
+              seller_inv: order.order_invoice_number,
+              quantity: productDetails.quantity,
+              waybill: "",
+              shipment_width: order.orderBoxWidth,
+              shipment_height: order.orderBoxHeight,
+              weight: order.orderWeight,
+              seller_gst_tin: req.seller.gstno,
+              shipping_mode: "Surface",
+              address_type: "home",
+            },
+          ],
+          pickup_location: {
+            name: hubDetails.name,
+            add: hubDetails.address1,
+            city: hubDetails.city,
+            pin_code: hubDetails.pincode,
+            country: "India",
+            phone: hubDetails.phone,
+          },
+        },
+      };
+
+      const urlEncodedPayload = `format=json&data=${encodeURIComponent(JSON.stringify(delhiveryShipmentPayload.data))}`;
+
+      try {
+        const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_CREATE_ORDER}`, urlEncodedPayload, {
+          headers: {
+            Authorization: delhiveryToken,
+          },
+        });
+
+        const delhiveryShipmentResponse = response.data;
+        const delhiveryRes = delhiveryShipmentResponse?.packages[0]
+
+        if (!delhiveryRes?.status) {
+          return res.status(200).send({ valid: false, message: "Must Select the Delhivery Registered Hub" });
+        }
+
+        order.awb = delhiveryRes?.waybill;
+        order.carrierName = courier?.name + " " + (vendorName?.nickName);
+
+        order.bucket = READY_TO_SHIP;
+        order.orderStages.push({
+          stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
+          action: COURRIER_ASSIGNED_ORDER_DESCRIPTION, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_DESCRIPTION
+          stageDateTime: new Date(),
+        });
+
+        await order.save();
+
+        return res.status(200).send({ valid: true, order });
+      } catch (error) {
+        console.error("Error creating Delhivery shipment:", error);
+        return next(error);
+      }
+
     }
   } catch (error) {
     return next(error)
@@ -591,6 +679,42 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             order.save();
           }
         }
+      } else if (vendorName?.name === "DELHIVERY") {
+        const delhiveryToken = getDelhiveryToken();
+        if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+        const cancelShipmentPayload = {
+          waybill: order.awb,
+          cancellation: true
+        };
+
+        try {
+          const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_CANCEL_ORDER}`, cancelShipmentPayload, {
+            headers: {
+              Authorization: delhiveryToken,
+            },
+          });
+
+          const delhiveryShipmentResponse = response.data;
+
+          if (delhiveryShipmentResponse.status) {
+            if (type === "order") {
+              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+            } else {
+              order.awb = null;
+              order.carrierName = null
+              order.save();
+
+              await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
+              await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
+            }
+          }
+          return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
+
+        } catch (error) {
+          console.error("Error creating Delhivery shipment:", error);
+          return next(error);
+        }
       }
     }
 
@@ -735,7 +859,52 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
 
       return res.status(200).send({ valid: true, message: "Order manifest request generated", isEmailSend });
 
+    } else if (vendorName?.name === "DELHIVERY") {
+
+      // Delhiery Manifest is not working
+      const hubDetail = await HubModel.findById(order?.pickupAddress);
+      if (!hubDetail) return res.status(200).send({ valid: false, message: "Hub not found" });
+      const delhiveryToken = getDelhiveryToken();
+      if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+      const delhiveryManifestPayload = {
+        pickup_location: hubDetail?.name,
+        expected_package_count: 1,
+        pickup_date: pickupDate.replaceAll(" ", "-"),
+        pickup_time: "12:23:00",
+      };
+
+      console.log(delhiveryManifestPayload, "delhiveryManifestPayload")
+
+      try {
+        const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL + APIs.DELHIVERY_MANIFEST_ORDER}`, delhiveryManifestPayload, {
+          headers: {
+            Authorization: delhiveryToken,
+          },
+        });
+
+        const delhiveryManifestResponse = response.data;
+        console.log(delhiveryManifestResponse, "delhiveryManifestResponse")
+
+        if (delhiveryManifestResponse.status) {
+          order.bucket = READY_TO_SHIP;
+          order.orderStages.push({
+            stage: SHIPROCKET_MANIFEST_ORDER_STATUS,  // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
+            action: MANIFEST_ORDER_DESCRIPTION,
+            stageDateTime: new Date(),
+          });
+
+          await order.save();
+
+          return res.status(200).send({ valid: true, message: "Order manifest request generated" });
+        }
+      }
+      catch (error) {
+        console.error("Error creating Delhivery shipment:", error);
+        return next(error);
+      }
     }
+
   } catch (error) {
     return next(error);
   }
@@ -1020,7 +1189,7 @@ export async function trackB2BShipment(req: ExtendedRequest, res: Response, next
     }),
   };
   try {
-    
+
   } catch (err: unknown) {
     return next(err);
   }
@@ -1048,11 +1217,11 @@ export async function cancelB2BShipment(req: ExtendedRequest, res: Response, nex
     };
     let responseJSON: { awb: string; message: string; success: boolean }[];
     try {
- 
+
     } catch (err) {
       return next(err);
     }
-    
+
   } catch (error) {
     return next(error);
   }
