@@ -388,3 +388,17 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
     return next(error)
   }
 }
+
+export const getSellerWalletBalance = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const seller = await SellerModel.findById(req.seller._id);
+    if (!seller) return res.status(200).send({ valid: false, message: "No Seller found" });
+
+    return res.status(200).send({
+      valid: true,
+      walletBalance: seller.walletBalance,
+    });
+  } catch (error) {
+    return next(error)
+  }
+}

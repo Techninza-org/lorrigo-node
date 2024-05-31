@@ -5,7 +5,7 @@ const sellerSchema = new mongoose.Schema({
   role: { type: String, default: "seller" },
   email: { type: String, required: true },
   password: { type: String, required: true },
-  walletBalance: { type: String, default: 0, min: 0 },
+  walletBalance: { type: Number, default: 0, min: 0 },
   entityType: { type: String, required: false },
   // below feild need to remove
   gst: { type: String, required: false },

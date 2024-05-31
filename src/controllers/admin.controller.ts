@@ -481,3 +481,24 @@ export const getClientBillingData = async (req: ExtendedRequest, res: Response, 
     return next(error);
   }
 }
+
+export const manageSellerRemittance = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { remittanceId, bankTransactionId, status } = req.body;
+    const remittance = await RemittanceModel.findById(remittanceId);
+    if (!remittance) {
+      return res.status(404).send({ valid: false, message: "Remittance not found" });
+    }
+
+    remittance.BankTransactionId = bankTransactionId;
+    remittance.remittanceStatus = status;
+    await remittance.save();
+
+    return res.status(200).send({
+      valid: true,
+      message: "Remittance updated successfully",
+    });
+  } catch (err) {
+    return next(err);
+  }
+}

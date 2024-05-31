@@ -1,10 +1,11 @@
-import { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
 import { startOfWeek, addDays, getDay, format } from "date-fns";
 import { MetroCitys, NorthEastStates, validateEmail } from "./helpers";
 import { DELIVERED, IN_TRANSIT, READY_TO_SHIP, RTO } from "./lorrigo-bucketing-info";
 import { DeliveryDetails, IncrementPrice, PickupDetails, Vendor, Body } from "../types/rate-cal";
+import SellerModel from "../models/seller.model";
 
 
 export function calculateShipmentDetails(orders: any[]) {
@@ -256,6 +257,7 @@ export const validateField = (value: any, fieldName: string, hub: any, alreadyEx
   }
   return null;
 };
+
 export const validateBulkOrderField = (value: any, fieldName: string, order: any, alreadyExistingOrders: any): string | null => {
   switch (fieldName) {
     case 'order_reference_id':
@@ -322,8 +324,6 @@ export function convertToISO(invoice_date: string) {
   const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:00`);
   return date.toISOString();
 }
-
-
 
 export function getNextToNextFriday() {
   let currentDate = new Date(); // Get the current date
@@ -504,7 +504,6 @@ export async function sendMailToScheduleShipment({ orders, pickupDate }: { order
   }
 }
 
-
 export async function calculateShippingCharges(
   pickupDetails: PickupDetails,
   deliveryDetails: DeliveryDetails,
@@ -560,4 +559,44 @@ function calculateTotalCharge(
   }
 
   return totalCharge;
+}
+
+export async function updateSellerWalletBalance(sellerId: string, amount: number, isCredit: boolean) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    console.log(amount, isCredit, sellerId, "amount, isCredit, sellerId");
+
+    // Ensure amount is a valid number
+    if (typeof amount !== 'number' || isNaN(amount)) {
+      throw new Error('Invalid amount');
+    }
+
+    const update = {
+      $inc: {
+        walletBalance: isCredit ? amount : -amount,
+      },
+    };
+
+    const updatedSeller = await SellerModel.findByIdAndUpdate(
+      sellerId.toString(),
+      update,
+      { new: true, session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    if (!updatedSeller) {
+      throw new Error('Seller not found');
+    }
+
+    console.log(updatedSeller, "updatedSeller");
+    return updatedSeller;
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Error updating seller wallet balance:', err);
+    throw new Error('Failed to update seller wallet balance');
+  }
 }

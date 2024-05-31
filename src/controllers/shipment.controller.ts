@@ -22,6 +22,7 @@ import {
   calculateShipmentDetails,
   sendMailToScheduleShipment,
   updateOrderStatus,
+  updateSellerWalletBalance,
 } from "../utils";
 import { format, parse, parseISO, } from "date-fns";
 import { CANCELED, CANCELLED_ORDER_DESCRIPTION, SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS, COURRIER_ASSIGNED_ORDER_DESCRIPTION, IN_TRANSIT, MANIFEST_ORDER_DESCRIPTION, NDR, NEW, NEW_ORDER_DESCRIPTION, READY_TO_SHIP, SHIPMENT_CANCELLED_ORDER_DESCRIPTION, SHIPMENT_CANCELLED_ORDER_STATUS, SMARTSHIP_MANIFEST_ORDER_STATUS, SMARTSHIP_ORDER_REATTEMPT_DESCRIPTION, SMARTSHIP_ORDER_REATTEMPT_STATUS, SMARTSHIP_SHIPPED_ORDER_DESCRIPTION, SMARTSHIP_SHIPPED_ORDER_STATUS, SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, PICKUP_SCHEDULED_DESCRIPTION, SHIPROCKET_MANIFEST_ORDER_STATUS, DELIVERED, RETURN_CONFIRMED } from "../utils/lorrigo-bucketing-info";
@@ -34,7 +35,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     const body = req.body;
     const sellerId = req.seller._id;
 
-    if (!isValidPayload(body, ["orderId", "orderType", "carrierId", "carrierNickName"])) {
+    if (!isValidPayload(body, ["orderId", "orderType", "carrierId", "carrierNickName", "charge"])) {
       return res.status(200).send({ valid: false, message: "Invalid payload" });
     }
     if (!isValidObjectId(body?.orderId)) return res.status(200).send({ valid: false, message: "Invalid orderId" });
@@ -71,7 +72,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     const courier = await CourierModel.findOne({ vendor_channel_id: vendorName?._id.toString() })
 
     if (vendorName?.name === "SMARTSHIP") {
-
       const productValueWithTax =
         Number(productDetails.taxable_value) +
         (Number(productDetails.tax_rate) / 100) * Number(productDetails.taxable_value);
@@ -84,7 +84,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
       let incrementedNumber = lastNumber ? (parseInt(lastNumber) + 1).toString() : "1";
 
-      let newString = `${order?.client_order_reference_id?.replace(/\d+$/, "")}_reshipedOrder_${incrementedNumber}`;
+      let newString = `${order?.client_order_reference_id?.replace(/\d+$/, "")}_rs${incrementedNumber}`;
 
       const client_order_reference_id = isReshipedOrder ? newString : `${order?._id}_${order?.order_reference_id}`;
 
@@ -182,6 +182,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           const awbNumber = externalAPIResponse?.data?.success_order_details?.orders[0]?.awb_number
           const carrierName = externalAPIResponse?.data?.success_order_details?.orders[0]?.carrier_name + " " + (vendorName?.nickName);
           order.client_order_reference_id = client_order_reference_id;
+          order.shipmentCharges = body.charge;
           order.bucket = order.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
           order.orderStages.push({
             stage: SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS,
@@ -233,6 +234,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           }
 
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+
           return res.status(200).send({ valid: true, order: updatedOrder, shipment: savedShipmentResponse });
         } catch (err) {
           return next(err);
@@ -266,7 +269,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           order.awb = awbResponse?.data?.response?.data?.awb_code;
           order.carrierName = awbResponse?.data?.response?.data.courier_name + " " + (vendorName?.nickName);
-
+          order.shipmentCharges = body.charge;
           order.bucket = READY_TO_SHIP;
           order.orderStages.push({
             stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
@@ -309,6 +312,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             order.channelFulfillmentId = fulfillmentOrderId;
             await order.save();
           }
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
           return res.status(200).send({ valid: true, order });
         } catch (error) {
           return next(error);
@@ -403,9 +407,15 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         console.log(smartRShipmentResponse, "smartRShipmentResponse")
 
-        const orderAWB = smartRShipmentResponse.total_success[0]?.awbNumber;
+        let orderAWB = smartRShipmentResponse.total_success[0]?.awbNumber;
+        if (orderAWB === undefined) {
+          orderAWB = smartRShipmentResponse.total_failure[0]?.awbNumber
+        }
         order.awb = orderAWB;
+        order.shipmentCharges = body.charge;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
+
+        console.log(orderAWB, "orderAWB")
 
         if (orderAWB) {
           order.bucket = IN_TRANSIT;
@@ -415,8 +425,10 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             stageDateTime: new Date(),
           });
           await order.save();
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
           return res.status(200).send({ valid: true, order });
         }
+        return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });
 
       } catch (error) {
         console.error("Error creating SMARTR shipment:", error);
@@ -493,7 +505,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         order.awb = delhiveryRes?.waybill;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
-
+        order.shipmentCharges = body.charge;
         order.bucket = READY_TO_SHIP;
         order.orderStages.push({
           stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
@@ -502,7 +514,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         });
 
         await order.save();
-
+        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
         return res.status(200).send({ valid: true, order });
       } catch (error) {
         console.error("Error creating Delhivery shipment:", error);
@@ -551,6 +563,8 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
       }
 
       if (!order.awb && type === "order") {
+        // @ts-ignore
+        await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
         await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
         continue;
       }
@@ -606,6 +620,8 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           } else {
 
             if (type === "order") {
+              // @ts-ignore
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
               await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
             } else {
               order.awb = null;
@@ -614,6 +630,8 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
               await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
               await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
+              // @ts-ignore
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
             }
 
             return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
@@ -647,6 +665,8 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
             await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
           }
+          // @ts-ignore
+          await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
 
         } catch (error) {
@@ -658,9 +678,10 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
         if (!smartrToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
         if (type === "order") {
+          // @ts-ignore
+          await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
           await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
         } else {
-
           const cancelOrder = await axios.post(config.SMARTR_API_BASEURL + APIs.CANCEL_ORDER_SMARTR, {
             awbs: [order.awb],
           }, {
@@ -676,6 +697,8 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             order.carrierName = null
             await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
             await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
+            // @ts-ignore
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
             order.save();
           }
         }
@@ -707,7 +730,10 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
               await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
               await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
+
             }
+            // @ts-ignore
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
           }
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
 
