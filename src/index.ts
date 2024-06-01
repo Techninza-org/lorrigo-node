@@ -83,7 +83,7 @@ app.post("/api/vendor", addVendors);
 app.get("/api/getsellers", getSellers);    //admin
 
 // @ts-ignore
-app.get("/api/order/:id", getSpecificOrder);
+app.get("/api/order/:awb", getSpecificOrder);
 
 app.post("/api/shopify", (req, res) => {
   console.log(req.body);

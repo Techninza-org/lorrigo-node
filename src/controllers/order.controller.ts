@@ -959,18 +959,23 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
 
 export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const orderId = req.params?.id;
-    if (!isValidObjectId(orderId)) {
-      return res.status(200).send({ valid: false, message: "Invalid orderId" });
+    const awb = req.params?.awb;
+    let order;
+
+    if (awb) {
+      order = await B2COrderModel.findOne({ awb }).populate(["pickupAddress", "productId"]).lean();
     }
-    //@ts-ignore
-    const order = await B2COrderModel.findById(orderId).populate(["pickupAddress", "productId"]).lean();
+
+    if (!order) {
+      const orderId = req.params?.orderId;
+      order = await B2COrderModel.findById(awb).populate(["pickupAddress", "productId"]).lean();
+    }
 
     return !order
       ? res.status(200).send({ valid: false, message: "No such order found." })
       : res.status(200).send({ valid: true, order: order });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
 };
 
