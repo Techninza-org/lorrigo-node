@@ -14,7 +14,7 @@ import customerRouter from "./routes/customer.routes";
 import morgan from "morgan";
 import shipmentRouter from "./routes/shipment.routes";
 import sellerRouter from "./routes/seller.routes";
-import runCron, { CONNECT_SHIPROCKET, CONNECT_SMARTR, CONNECT_SMARTSHIP, calculateRemittanceEveryDay } from "./utils/cronjobs";
+import runCron, { CONNECT_SHIPROCKET, CONNECT_SMARTR, CONNECT_SMARTSHIP, calculateRemittanceEveryDay, trackOrder_Smartr } from "./utils/cronjobs";
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
 import PincodeModel from "./models/pincode.model";
@@ -73,7 +73,6 @@ mongoose
     CONNECT_SHIPROCKET();
     CONNECT_SMARTSHIP();
     CONNECT_SMARTR();
-    calculateRemittanceEveryDay()
   })
   .catch((err) => {
     Logger.log(err.message);
@@ -84,7 +83,7 @@ app.post("/api/vendor", addVendors);
 app.get("/api/getsellers", getSellers);    //admin
 
 // @ts-ignore
-app.get("/api/order/:id", getSpecificOrder);
+app.get("/api/order/:awb", getSpecificOrder);
 
 app.post("/api/shopify", (req, res) => {
   console.log(req.body);

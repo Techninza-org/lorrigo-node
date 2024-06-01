@@ -251,7 +251,6 @@ export const trackOrder_Shiprocket = async () => {
       if (response.data.tracking_data.shipment_status) {
         const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
 
-
         if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
@@ -273,6 +272,73 @@ export const trackOrder_Shiprocket = async () => {
     }
   }
 };
+
+// API need to fix and bucketing need to be updated
+export const trackOrder_Smartr = async () => {
+  const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: "SMR" } });
+
+  // console.log(orders.length);
+  // console.log(orders);
+  for (let ordersReferenceIdOrders of orders) {
+    try {
+      const orderCarrierName = ordersReferenceIdOrders?.carrierName?.split(" ").pop();
+      const vendorNickname = await EnvModel.findOne({ name: "SMARTR" }).select("nickName")
+
+      const isSmartR = vendorNickname && (orderCarrierName === vendorNickname.nickName);
+      console.log(isSmartR, " is smartR")
+
+      if (!isSmartR) {
+        continue;
+      }
+
+      const smartRToken = await getSMARTRToken();
+      if (!smartRToken) {
+        console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
+        return;
+      }
+      const apiUrl = `${config.SMARTR_API_BASEURL}${APIs.TRACK_SMARTR_ORDER}${ordersReferenceIdOrders.awb}`;
+      console.log(apiUrl);
+      try {
+        const res = await axios.get(apiUrl, { headers: { authorization: smartRToken } });
+        if (!res.data?.success) return;
+        console.log(res.data);
+        if (res.data.data[0]) {
+          const shipment_status = res.data.data[0].shipmentStatus[0]
+
+          const bucketInfo = getSmartRBucketing(shipment_status.statusCode, shipment_status.statusDescription);
+          console.log(bucketInfo);
+          if ((bucketInfo.bucket !== -1) && (ordersReferenceIdOrders.bucket !== bucketInfo.bucket)) {
+            ordersReferenceIdOrders.bucket = bucketInfo.bucket;
+            ordersReferenceIdOrders.orderStages.push({ stage: bucketInfo.bucket, action: bucketInfo.description, stageDateTime: new Date(), });
+            try {
+              await ordersReferenceIdOrders.save();
+            } catch (error) {
+              console.log("Error occurred while saving order status:", error);
+            }
+          }
+        }
+      } catch (err) {
+        console.log(err);
+      }
+
+
+      //   // status_code: "NOI"	, status_description: "No info	MSC	inDevelopment		
+      //   // status_code: "RDN"	, status_description: "Redirection	MSC	inDevelopment		
+
+      //   // status_code: "NIF"	, status_description: "No info"	MSC	Upcoming		
+      //   // status_code: "RMK"	, status_description: "Remarks	MSC	Upcoming		
+      //   // status_code: "SUD"	, status_description: "APEX or SFC AWB RECD,SHIPMENT NOT RECEIVED"				
+      //   // status_code: "SUD"	, status_description: "Shipment Impounded By Regulatory Authority",
+      //   // status_code: "SUD"	, status_description: "Correction Of Status Code",
+      //   // status_code: "PKF"	, status_description: "Correction Of Status Code				
+
+
+
+    } catch (err) {
+      console.log("err");
+    }
+  }
+}
 
 export const calculateRemittanceEveryDay = async (): Promise<void> => {
   try {
@@ -296,7 +362,6 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
           .map(order => order._id.toString())
       );
 
-
       // Filter out already remitted orders
       const unremittedOrders = orders.filter(order => !remittedOrderIds.has(order._id.toString()));
 
@@ -313,7 +378,6 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
       }, {});
 
       for (const [deliveryDateStr, ordersOnSameDate] of Object.entries(ordersGroupedByDate)) {
-
         const deliveryDate = parseISO(deliveryDateStr);
         const daysSinceDelivery = Math.floor((currentDate.getTime() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24));
         console.log("daysSinceDelivery", daysSinceDelivery, ordersOnSameDate.map(order => order._id));
@@ -350,7 +414,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
         } else {
           const futureRemittanceDate = nextFriday(currentDate);
           if (futureRemittanceDate < deliveryDate) {
-            continue; 
+            continue;
           }
           const existingFutureRemittance = await RemittanceModel.findOne({
             sellerId: seller._id,
@@ -386,6 +450,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
     console.error(error, "{error} in calculateRemittanceEveryDay");
   }
 };
+
 export default async function runCron() {
   console.log("to run cron")
   const expression4every2Minutes = "*/2 * * * *";
@@ -398,7 +463,7 @@ export default async function runCron() {
     const expression4every9_59Hr = "59 9 * * * ";
     const expression4everyFriday = "0 0 * * 5";
 
-    // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
+    cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
     cron.schedule(expression4every59Minute, CONNECT_SHIPROCKET);
     cron.schedule(expression4every59Minute, CONNECT_SMARTSHIP);
     cron.schedule(expression4every5Minute, CANCEL_REQUESTED_ORDER_SMARTSHIP);

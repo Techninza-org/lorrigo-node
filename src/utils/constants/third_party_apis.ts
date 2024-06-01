@@ -1,41 +1,23 @@
 
 /* Smartship */
-
 export const HUB_REGISTRATION = "/v2/app/Fulfillmentservice/hubRegistration";
 export const HUB_UPDATE = "/v2/app/Fulfillmentservice/updateHubDetails";
 export const HUB_DELETE = "/v2/app/Fulfillmentservice/deleteHub";
-
 export const HUB_SERVICEABILITY = "/v2/app/Fulfillmentservice/ServiceabilityHubWise";
-
 export const CREATE_SHIPMENT = "/v2/app/Fulfillmentservice/orderRegistrationOneStep";
 export const CANCEL_SHIPMENT = "/v2/app/Fulfillmentservice/orderCancellation";
-/**
- * append order_reference_id
- * eg: TRACK_SHIPMENT + order_reference_id
- */
 export const ORDER_REATTEMPT = "/v2/app/Fulfillmentservice/orderReattempt";
 export const TRACK_SHIPMENT = "/v1/Trackorder?order_reference_ids"; // url => TRACK_SHIPMENT+"=order_reference_id"
-
 export const ORDER_MANIFEST = "/v2/app/Fulfillmentservice/createManifest";
 
-export const CREATE_SMARTR_ORDER = "https://uat.smartr.in/api/v1/add-order";
-/**
- * append awbnumber
- * eg:TRACK_SMARTR_ORDER + ""=awbNumber"
- */
-const TRACK_SMARTR_ORDER = "https://uat.smartr.in/api/v1/tracking/surface/?awbs";
-const CANCEL_SMARTR_ORDER = "https://uat.smartr.in/api/v1/cancellation/";
-/**
- * for signle apply query with key pincode=pincodeNumber
- */
 const PIN_CODE = "https://uat.smartr.in/api/v1/pincode/";
-
 
 /* Shiprocket API */
 
 // export const CREATE_ORDER = "/v1/external/orders/create-order";
 const CREATE_PICKUP_LOCATION = "/v1/external/settings/company/addpickup";
 const CREATE_SHIPROCKET_ORDER = "/v1/external/orders/create/adhoc";
+const CREATE_SHIPROCKET_RETURN_ORDER = "/v1/external/orders/create/return";
 const GENRATE_AWB_SHIPROCKET = "/v1/external/courier/assign/awb";
 const LIST_SHIPROCKET_COURIER = "/v1/external/courier/courierListWithCounts";
 const SHIPROCKET_ORDER_COURIER = "/v1/external/courier/serviceability";
@@ -54,6 +36,17 @@ const SHOPIFY_FULFILLMENT_CANCEL = '/admin/api/2024-04/orders';
 
 const SMARTR_CREATE_SHIPMENT = "/api/v1/add-order";
 const SMARTR_PINCODE_SERVICEABILITY = "/api/v1/pincode/";
+const CANCEL_ORDER_SMARTR = "/api/v1/updateCancel/";
+
+const PHONEPE_PAY_API = "/pg/v1/pay";
+const PHONEPE_CONFIRM_API = "/pg/v1/status";
+
+const DELHIVERY_PINCODE_SERVICEABILITY = "/c/api/pin-codes/json/?filter_codes="
+const DELHIVERY_PICKUP_LOCATION = "/api/backend/clientwarehouse/create/"
+const DELHIVERY_CREATE_ORDER = "/api/cmu/create.json"
+const DELHIVERY_CANCEL_ORDER = "/api/p/edit"
+const DELHIVERY_MANIFEST_ORDER = "/fm/request/new"
+
 
 const APIs = {
   HUB_REGISTRATION,
@@ -64,19 +57,9 @@ const APIs = {
   CANCEL_SHIPMENT,
   ORDER_REATTEMPT,
   TRACK_SHIPMENT,
-  CREATE_SMARTR_ORDER,
-  TRACK_SMARTR_ORDER,
   ORDER_MANIFEST,
-  /**
-   * append awbnumber
-   * eg:TRACK_SMARTR_ORDER + ""=awbNumber"
-   */
-  CANCEL_SMARTR_ORDER,
-  /**
-   * for signle apply query with key pincode=pincodeNumber
-   */
-  PIN_CODE,
 
+  PIN_CODE,
 
   CREATE_PICKUP_LOCATION,
   CREATE_SHIPROCKET_ORDER,
@@ -87,6 +70,7 @@ const APIs = {
   GET_MANIFEST_SHIPROCKET,
   SHIPROCKET_ORDER_TRACKING,
   SHIPROCKET_ORDER_NDR,
+  CREATE_SHIPROCKET_RETURN_ORDER,
 
   SHOPIFY_ORDER,
   SHOPIFY_CUSTOMER,
@@ -95,6 +79,17 @@ const APIs = {
   SHOPIFY_FULFILLMENT_CANCEL,
 
   SMARTR_CREATE_SHIPMENT,
-  SMARTR_PINCODE_SERVICEABILITY
+  SMARTR_PINCODE_SERVICEABILITY,
+  CANCEL_ORDER_SMARTR,
+
+  PHONEPE_PAY_API,
+  PHONEPE_CONFIRM_API,
+
+
+  DELHIVERY_PINCODE_SERVICEABILITY,
+  DELHIVERY_PICKUP_LOCATION,
+  DELHIVERY_CREATE_ORDER,
+  DELHIVERY_CANCEL_ORDER,
+  DELHIVERY_MANIFEST_ORDER
 };
 export default APIs;

@@ -5,6 +5,10 @@ import RemittanceModel from "../models/remittance-modal";
 import ChannelModel from "../models/channel.model";
 import axios from "axios";
 import APIs from "../utils/constants/third_party_apis";
+import envConfig from "../utils/config";
+import ClientBillingModal from "../models/client.billing.modal";
+import crypto from "crypto";
+import PaymentTransactionModal from "../models/payment.transaction.modal";
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -62,8 +66,6 @@ export const updateSeller = async (req: ExtendedRequest, res: Response, next: Ne
     return next(err);
   }
 };
-
-
 
 export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -132,11 +134,9 @@ export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: N
       seller: updatedSeller,
     });
   } catch (err) {
-    console.log(err, "error")
     return next(err);
   }
 };
-
 
 export const deleteSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   const seller = req.seller;
@@ -228,10 +228,10 @@ export const manageChannelPartner = async (req: ExtendedRequest, res: Response, 
       channel,
     });
   } catch (error) {
-    console.log(error, "error [manageChannelPartner]")
     return next(error)
   }
 }
+
 export const updateChannelPartner = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
@@ -249,6 +249,156 @@ export const updateChannelPartner = async (req: ExtendedRequest, res: Response, 
 
   } catch (error) {
     console.log(error, "error [manageChannelPartner]")
+    return next(error)
+  }
+}
+
+export const getSellerBilling = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const bills = await ClientBillingModal.find({ sellerId: req.seller._id });
+    if (!bills) return res.status(200).send({ valid: false, message: "No Seller found" });
+
+    return res.status(200).send({
+      valid: true,
+      billing: bills,
+    });
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  const sellerId = req.seller._id;
+  const { amount } = req.body;
+  // Phonepe Integration
+  // working on it
+  try {
+    const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
+    const payload = {
+      "merchantId": envConfig.PHONEPE_MERCHENT_ID,
+      "merchantTransactionId": merchantTransactionId,
+      "merchantUserId": sellerId._id.toString(),
+      "amount": amount * 100, // 100 paise = 1 rupee
+      "redirectUrl": `${envConfig.PHONEPE_SUCCESS_URL}/${merchantTransactionId}`,
+      "redirectMode": "REDIRECT",
+      "callbackUrl": `http://localhost:3000/recharge-wallet/success/${merchantTransactionId}`,
+      "mobileNumber": "9999999999",
+      "paymentInstrument": {
+        "type": "PAY_PAGE"
+      }
+    }
+
+    const bufferObj = Buffer.from(JSON.stringify(payload));
+    const base64Payload = bufferObj.toString('base64');
+    const xVerify = crypto.createHash('sha256').update(base64Payload + APIs.PHONEPE_PAY_API + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
+
+    const options = {
+      method: 'post',
+      url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_PAY_API}`,
+      headers: {
+        'accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-VERIFY': xVerify,
+      },
+      data: {
+        request: base64Payload
+      }
+    };
+
+    const rechargeWalletViaPhoenpe = await axios.request(options);
+    const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
+
+    const txn = {
+      sellerId: sellerId,
+      merchantTransactionId: merchantTransactionId,
+      amount: amount,
+      code: rechargeWalletViaPhoenpeData.code,
+      data: rechargeWalletViaPhoenpeData,
+      stage: [{
+        action: "Initiated",
+        dateTime: new Date().toISOString()
+      }]
+    }
+
+    const rechargeTxn = await PaymentTransactionModal.create(txn);
+
+    return res.status(200).send({
+      valid: true,
+      message: "Wallet recharged successfully",
+      rechargeWalletViaPhoenpeData,
+      url: rechargeWalletViaPhoenpeData.data.instrumentResponse.redirectInfo.url
+    });
+  } catch (error) {
+    console.log(error, "error [rechargeWallet]")
+    return next(error)
+  }
+}
+
+export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = req.seller._id;
+    const { merchantTransactionId } = req.query;
+    const txn = await PaymentTransactionModal.findOne({ merchantTransactionId });
+    if (!txn) return res.status(200).send({ valid: false, message: "No transaction found" });
+
+    const xVerify = crypto.createHash('sha256').update(`${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}` + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
+
+    const options = {
+      method: 'get',
+      url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}`,
+      headers: {
+        'accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-VERIFY': xVerify,
+        'X-MERCHANT-ID': envConfig.PHONEPE_MERCHENT_ID,
+      },
+    };
+
+    const rechargeWalletViaPhoenpe = await axios.request(options);
+    const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
+
+    const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId }, {
+      $set: {
+        code: rechargeWalletViaPhoenpeData.code,
+        data: rechargeWalletViaPhoenpeData,
+      },
+      $push: {
+        stage: {
+          action: "Completed",
+          dateTime: new Date().toISOString()
+        }
+      }
+    });
+
+    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
+      $set: {
+        walletBalance: Number(req.seller.walletBalance) + (Number(rechargeWalletViaPhoenpeData.data.amount) / 100)
+      }
+    })
+
+    return res.status(200).send({
+      valid: true,
+      message: "Wallet recharged successfully",
+      rechargeWalletViaPhoenpeData,
+      updatedSeller
+    });
+
+  } catch (error) {
+    console.log(error, "error [confirmRechargeWallet]")
+    return next(error)
+  }
+}
+
+export const getSellerWalletBalance = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const seller = await SellerModel.findById(req.seller._id);
+    if (!seller) return res.status(200).send({ valid: false, message: "No Seller found" });
+
+    return res.status(200).send({
+      valid: true,
+      walletBalance: seller.walletBalance,
+    });
+  } catch (error) {
     return next(error)
   }
 }

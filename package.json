@@ -16,6 +16,7 @@
     "bcrypt": "^5.1.1",
     "convert-csv-to-json": "^2.46.0",
     "cors": "^2.8.5",
+    "crypto": "^1.0.1",
     "csvtojson": "^2.0.10",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.4",
@@ -39,6 +40,7 @@
     "@types/multer": "^1.4.11",
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^6.4.15",
+    "@types/sha256": "^0.2.2",
     "ts-node-dev": "^2.0.0"
   }
 }

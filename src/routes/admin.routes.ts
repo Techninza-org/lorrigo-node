@@ -11,7 +11,10 @@ import {
     getSellerCouriers,
     manageSellerCourier,
     getSellerRemittance,
-    getFutureRemittances
+    getFutureRemittances,
+    uploadClientBillingCSV,
+    getClientBillingData,
+    manageSellerRemittance
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -59,6 +62,16 @@ adminRouter.post("/manage-seller-couriers", AdminAuthMiddleware, manageSellerCou
 
 //@ts-ignore
 adminRouter.put("/pincodes", upload.single('file'), uploadPincodes);
+
+//@ts-ignore
+adminRouter.put("/billing/client-billing/upload-csv", AdminAuthMiddleware, upload.single('file'), uploadClientBillingCSV);
+
+//@ts-ignore
+adminRouter.get("/billing/client", AdminAuthMiddleware, getClientBillingData);
+
+//@ts-ignore
+adminRouter.post("/manage-remittance", AdminAuthMiddleware, manageSellerRemittance);
+
 
 
 export default adminRouter;

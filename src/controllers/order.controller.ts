@@ -19,7 +19,7 @@ import APIs from "../utils/constants/third_party_apis";
 import csvtojson from "csvtojson";
 import exceljs from "exceljs";
 
-import { DELIVERED, IN_TRANSIT, NDR, NEW, NEW_ORDER_DESCRIPTION, NEW_ORDER_STATUS, READY_TO_SHIP, RTO } from "../utils/lorrigo-bucketing-info";
+import { DELIVERED, IN_TRANSIT, NDR, NEW, NEW_ORDER_DESCRIPTION, NEW_ORDER_STATUS, READY_TO_SHIP, RETURN_CANCELLATION, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_PICKED, RTO } from "../utils/lorrigo-bucketing-info";
 import { convertToISO, validateBulkOrderField } from "../utils";
 import CourierModel from "../models/courier.model";
 
@@ -109,6 +109,7 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
     let savedOrder;
     const data = {
       sellerId: req.seller?._id,
+      isReverseOrder: body?.isReverseOrder,
       bucket: NEW,
       client_order_reference_id: body?.order_reference_id,
       orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
@@ -604,11 +605,11 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
     let { limit, page, status }: { limit?: number; page?: number; status?: string } = req.query;
 
     const obj = {
-      new: [NEW],
-      "ready-to-ship": [READY_TO_SHIP],
-      "in-transit": [IN_TRANSIT],
-      delivered: [DELIVERED],
-      ndr: [NDR],
+      new: [NEW, RETURN_CONFIRMED],
+      "ready-to-ship": [READY_TO_SHIP, RETURN_PICKED],
+      "in-transit": [IN_TRANSIT, RETURN_IN_TRANSIT],
+      delivered: [DELIVERED, RETURN_DELIVERED],
+      ndr: [NDR, RETURN_CANCELLATION],
       rto: [RTO],
     };
 
@@ -907,50 +908,72 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
     if (!shiprocketToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
     const orderPayload = {
-      "order_id": orderDetails?.client_order_reference_id,
-      "order_date": format(orderDetails?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
-      "pickup_location": orderDetails?.pickupAddress?.name,
-      // "channel_id": "shopify",
-      // "comment": "Reseller: M/s Goku",
-      "billing_customer_name": orderDetails?.customerDetails.get("name"),
-      "billing_last_name": orderDetails?.customerDetails.get("name") || "",
-      "billing_address": orderDetails?.customerDetails.get("address"),
-      "billing_city": orderDetails?.customerDetails.get("city"),
-      "billing_pincode": orderDetails?.customerDetails.get("pincode"),
-      "billing_state": orderDetails?.customerDetails.get("state"),
-      "billing_country": "India",
-      "billing_email": orderDetails?.customerDetails.get("email") || "noreply@lorrigo.com",
-      "billing_phone": orderDetails?.customerDetails.get("phone").replace("+91", ""),
-      "shipping_is_billing": true,
-      "shipping_customer_name": orderDetails?.sellerDetails.get("sellerName") || "",
-      "shipping_last_name": orderDetails?.sellerDetails.get("sellerName") || "",
-      "shipping_address": orderDetails?.sellerDetails.get("sellerAddress"),
-      "shipping_address_2": "",
-      "shipping_city": orderDetails?.sellerDetails.get("sellerCity"),
-      "shipping_pincode": orderDetails?.sellerDetails.get("sellerPincode"),
-      "shipping_country": "India",
-      "shipping_state": orderDetails?.sellerDetails.get("sellerState"),
-      "shipping_email": "",
-      "shipping_phone": orderDetails?.sellerDetails.get("sellerPhone"),
-      "order_items": [
+      order_id: orderDetails?.client_order_reference_id,
+      order_date: format(orderDetails?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
+      pickup_location: orderDetails?.pickupAddress?.name,
+      billing_customer_name: orderDetails?.customerDetails.get("name"),
+      billing_last_name: orderDetails?.customerDetails.get("name") || "",
+      billing_address: orderDetails?.customerDetails.get("address"),
+      billing_city: orderDetails?.customerDetails.get("city"),
+      billing_pincode: orderDetails?.customerDetails.get("pincode"),
+      billing_state: orderDetails?.customerDetails.get("state"),
+      billing_country: "India",
+      billing_email: orderDetails?.customerDetails.get("email") || "noreply@lorrigo.com",
+      billing_phone: orderDetails?.customerDetails.get("phone").replace("+91", ""),
+      order_items: [
         {
-          "name": orderDetails.productId.name,
-          "sku": orderDetails.productId.category.slice(0, 40),
-          "units": orderDetails.productId.quantity,
-          "selling_price": Number(orderDetails.productId.taxable_value),
+          name: orderDetails.productId.name,
+          sku: orderDetails.productId.category.slice(0, 40),
+          units: 1,
+          selling_price: Number(orderDetails.productId.taxable_value),
         }
       ],
-      "payment_method": orderDetails?.payment_mode === 0 ? "Prepaid" : "COD",
-      "sub_total": Number(orderDetails.productId?.taxable_value),
-      "length": 20,
-      "breadth": 10,
-      "height": 10,
-      "weight": 0.5,
+      payment_method: orderDetails?.payment_mode === 0 ? "Prepaid" : "COD",
+      sub_total: Number(orderDetails.productId?.taxable_value),
+      length: 20,
+      breadth: 10,
+      height: 10,
+      weight: 0.5,
+
     };
+
+    if (orderDetails?.isReverseOrder) {
+      Object.assign(orderPayload, {
+        pickup_customer_name: orderDetails?.customerDetails?.get("name"),
+        pickup_phone: orderDetails?.customerDetails?.get("phone").toString().slice(2, 12),
+        pickup_address: orderDetails?.customerDetails?.get("address"),
+        pickup_pincode: orderDetails?.customerDetails?.get("pincode"),
+        pickup_city: orderDetails?.customerDetails?.get("city"),
+        pickup_state: orderDetails?.customerDetails?.get("state"),
+        pickup_country: "India",
+        shipping_customer_name: orderDetails?.pickupAddress?.name,
+        shipping_country: "India",
+        shipping_address: orderDetails?.pickupAddress?.address1,
+        shipping_pincode: orderDetails?.pickupAddress?.pincode,
+        shipping_city: orderDetails?.pickupAddress?.city,
+        shipping_state: orderDetails?.pickupAddress?.state,
+        shipping_phone: orderDetails?.pickupAddress?.phone.toString().slice(2, 12)
+      });
+    } else {
+      Object.assign(orderPayload, {
+        shipping_is_billing: true,
+        shipping_customer_name: orderDetails?.sellerDetails.get("sellerName") || "",
+        shipping_last_name: orderDetails?.sellerDetails.get("sellerName") || "",
+        shipping_address: orderDetails?.sellerDetails.get("sellerAddress"),
+        shipping_address_2: "",
+        shipping_city: orderDetails?.sellerDetails.get("sellerCity"),
+        shipping_pincode: orderDetails?.sellerDetails.get("sellerPincode"),
+        shipping_country: "India",
+        shipping_state: orderDetails?.sellerDetails.get("sellerState"),
+        shipping_phone: orderDetails?.sellerDetails.get("sellerPhone")
+      });
+    }
+
+    const shiprocketAPI = orderDetails.isReverseOrder ? APIs.CREATE_SHIPROCKET_RETURN_ORDER : APIs.CREATE_SHIPROCKET_ORDER;
 
     try {
       if (!orderDetails.shiprocket_order_id) {
-        shiprocketOrder = await axios.post(envConfig.SHIPROCKET_API_BASEURL + APIs.CREATE_SHIPROCKET_ORDER, orderPayload, {
+        shiprocketOrder = await axios.post(envConfig.SHIPROCKET_API_BASEURL + shiprocketAPI, orderPayload, {
           headers: {
             Authorization: shiprocketToken,
           },
@@ -992,20 +1015,26 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
     return next(error);
   }
 };
+
 export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const orderId = req.params?.id;
-    if (!isValidObjectId(orderId)) {
-      return res.status(200).send({ valid: false, message: "Invalid orderId" });
+    const awb = req.params?.awb;
+    let order;
+
+    if (awb) {
+      order = await B2COrderModel.findOne({ awb }).populate(["pickupAddress", "productId"]).lean();
     }
-    //@ts-ignore
-    const order = await B2COrderModel.findById(orderId).populate(["pickupAddress", "productId"]).lean();
+
+    if (!order) {
+      const orderId = req.params?.orderId;
+      order = await B2COrderModel.findById(awb).populate(["pickupAddress", "productId"]).lean();
+    }
 
     return !order
       ? res.status(200).send({ valid: false, message: "No such order found." })
       : res.status(200).send({ valid: true, order: order });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
 };
 

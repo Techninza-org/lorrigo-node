@@ -5,11 +5,15 @@ import { DELIVERED, IN_TRANSIT, NDR, NEW, READY_TO_SHIP, RTO } from "../utils/lo
 import { isValidObjectId } from "mongoose";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
-import { csvJSON } from "../utils";
+import { calculateShippingCharges, convertToISO, csvJSON, validateClientBillingFeilds } from "../utils";
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
 import CustomPricingModel from "../models/custom_pricing.model";
 import { nextFriday } from "date-fns";
+import ClientBillingModal from "../models/client.billing.modal";
+import csvtojson from "csvtojson";
+import exceljs from "exceljs";
+
 
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -117,7 +121,6 @@ export const getFutureRemittances = async (req: ExtendedRequest, res: Response, 
 export const getSellerRemittance = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { sellerId, remittanceId } = req.query;
-    console.log(sellerId, remittanceId, 'sellerId, remittanceId')
 
     if (!sellerId || !isValidObjectId(sellerId)) {
       return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
@@ -132,7 +135,7 @@ export const getSellerRemittance = async (req: ExtendedRequest, res: Response, n
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
 
-    const remittance = await RemittanceModel.findOne({remittanceId, sellerId});
+    const remittance = await RemittanceModel.findOne({ remittanceId, sellerId });
     if (!remittance) {
       return res.status(404).send({ valid: false, message: "Remittance not found" });
     }
@@ -193,7 +196,6 @@ export const uploadPincodes = async (req: ExtendedRequest, res: Response, next: 
     const fileData = req.file.buffer.toString();
     var data = fileData.replace(/,\s+/g, ",");
     const pincodes = csvJSON(data);
-    console.log(pincodes, 'pincodes');
 
     const bulkOperations = pincodes.map(object => ({
       updateOne: {
@@ -313,6 +315,188 @@ export const manageSellerCourier = async (req: ExtendedRequest, res: Response, n
     return res.status(200).send({
       valid: true,
       message: "Courier managed successfully",
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).send({ valid: false, message: "No file uploaded" });
+  }
+  const alreadyExistingBills = await ClientBillingModal.find({}).select(["orderRefId", "awb", "rtoAwb"]);
+  const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
+
+  const bills = json.map((bill: any) => {
+    const isForwardApplicable = Boolean(bill["Forward Applicable"]?.toUpperCase() === "YES");
+    const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "YES");
+    return {
+      billingDate: convertToISO(bill["Date"]),
+      awb: bill["Awb"],
+      rtoAwb: bill["RTO Awb"],
+      codValue: Number(bill["COD Value"] || 0),
+      orderRefId: bill["Order id"],
+      recipientName: bill["Recipient Name"],
+      shipmentType: bill["Shipment Type"] === "COD" ? 1 : 0,
+      fromCity: bill["Origin City"],
+      toCity: bill["Destination City"],
+      chargedWeight: Number(bill["Charged Weight"]),
+      zone: bill["Zone"],
+      carrierID: Number(bill["Carrier ID"]),
+      isForwardApplicable,
+      isRTOApplicable,
+    };
+  })
+
+  if (bills.length < 1) {
+    return res.status(200).send({
+      valid: false,
+      message: "empty payload",
+    });
+  }
+
+  try {
+    const errorWorkbook = new exceljs.Workbook();
+    const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
+
+    errorWorksheet.columns = [
+      { header: 'Awb', key: 'awb', width: 20 },
+      { header: 'Error Message', key: 'errors', width: 40 },
+    ];
+
+    const errorRows: any = [];
+
+    bills.forEach((bill) => {
+      const errors: string[] = [];
+      Object.entries(bill).forEach(([fieldName, value]) => {
+        const error = validateClientBillingFeilds(value, fieldName, bill, alreadyExistingBills);
+        if (error) {
+          errors.push(error);
+        }
+      });
+
+      if (errors.length > 0) {
+        errorRows.push({
+          awb: bill.awb,
+          errors: errors.join(", ")
+        });
+      }
+    });
+
+
+    if (errorRows.length > 0) {
+      errorWorksheet.addRows(errorRows);
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+
+      await errorWorkbook.csv.write(res);
+      return res.end();
+    }
+
+    // // find sellerId from orderRefId from B2COrderModel
+    let orders: any[] = [];
+    try {
+      const orderRefIds = bills.map(bill => bill.orderRefId);
+      orders = await B2COrderModel.find({ order_reference_id: { $in: orderRefIds } }).populate(["productId", "pickupAddress"]);
+      const orderRefIdToSellerIdMap = new Map();
+      orders.forEach(order => {
+        orderRefIdToSellerIdMap.set(order.order_reference_id, order.sellerId);
+      });
+
+    } catch (error) {
+      console.log(error, 'error');
+    }
+
+
+
+
+    try {
+      const billsWithCharges = await Promise.all(bills.map(async (bill) => {
+        const order: any = orders.find(o => o.order_reference_id === bill.orderRefId);
+        const vendor = await CourierModel.findOne({ carrierID: bill.carrierID });
+        if (order) {
+          const pickupDetails = {
+            // @ts-ignore
+            District: bill.fromCity,
+            // @ts-ignore
+            StateName: order.pickupAddress.state,
+          };
+          const deliveryDetails = {
+            // @ts-ignore
+            District: bill.toCity,
+            // @ts-ignore
+            StateName: order.customerDetails.get("state"),
+          };
+          const body = {
+            weight: bill.chargedWeight,
+            paymentType: bill.shipmentType,
+            collectableAmount: bill.codValue,
+          };
+          const totalCharge = await calculateShippingCharges(
+            pickupDetails,
+            deliveryDetails,
+            body,
+            vendor
+          );
+
+          return {
+            ...bill,
+            sellerId: order.sellerId,
+            billingAmount: totalCharge,
+          };
+        } else {
+          return bill; // Or handle the case when the order is not found
+        }
+      }));
+      const bulkInsertBills = await ClientBillingModal.insertMany(billsWithCharges);
+
+      return res.status(200).send({
+        valid: true,
+        message: "Billing uploaded successfully",
+        billsWithCharges
+      });
+    } catch (error) {
+      console.log("Error in calculating shipping charges", error);
+    }
+
+
+
+
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export const getClientBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const data = await ClientBillingModal.find({}).populate("sellerId").lean();
+    if (!data) return res.status(200).send({ valid: false, message: "No Client Billing found" });
+    return res.status(200).send({
+      valid: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export const manageSellerRemittance = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { remittanceId, bankTransactionId, status } = req.body;
+    const remittance = await RemittanceModel.findById(remittanceId);
+    if (!remittance) {
+      return res.status(404).send({ valid: false, message: "Remittance not found" });
+    }
+
+    remittance.BankTransactionId = bankTransactionId;
+    remittance.remittanceStatus = status;
+    await remittance.save();
+
+    return res.status(200).send({
+      valid: true,
+      message: "Remittance updated successfully",
     });
   } catch (err) {
     return next(err);

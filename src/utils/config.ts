@@ -4,6 +4,8 @@ dotenv.config();
 
 const NODE_ENV = process.env.NODE_ENV;
 
+const LORRIGO_DOMAIN = process.env.LORRIGO_DOMAIN;
+
 const MONGODB_URI = NODE_ENV === "PRODUCTION" ? process.env.PRO_MONGODB_URI : process.env.MONGODB_URI;
 
 const SALT_ROUND = Number(process.env.SALT_ROUND) || 10;
@@ -44,6 +46,27 @@ const SHIPROCKET_API_BASEURL = process.env.SHIPROCKET_API_BASEURL;
 
 const SHIPROCKET_API_KEY = process.env.SHIPROCKET_API_KEY;
 
+/* PHONEPE */
+
+const PHONEPE_API_BASEURL = process.env.PHONEPE_API_BASEURL;
+
+const PHONEPE_MERCHENT_ID = process.env.PHONEPE_MERCHENT_ID;
+
+const PHONEPE_SALT_INDEX = process.env.PHONEPE_SALT_INDEX;
+
+const PHONEPE_SALT_KEY = process.env.PHONEPE_SALT_KEY;
+
+const PHONEPE_SUCCESS_URL = process.env.PHONEPE_SUCCESS_URL;
+
+const PHONEPE_FAILURE_URL = process.env.PHONEPE_SUCCESS_URL;
+
+/* DELHIVERY */
+
+const DELHIVERY_API_BASEURL = process.env.DELHIVERY_API_BASEURL;
+const DELHIVERY_API_TOKEN = process.env.DELHIVERY_API_TOKEN;
+
+
+
 
 const envConfig = {
   NODE_ENV,
@@ -66,6 +89,19 @@ const envConfig = {
   SHIPROCKET_API_BASEURL,
 
   SMARTR_API_BASEURL,
+
+  PHONEPE_API_BASEURL,
+  PHONEPE_MERCHENT_ID,
+  PHONEPE_SALT_INDEX,
+  PHONEPE_SALT_KEY,
+  PHONEPE_SUCCESS_URL,
+  PHONEPE_FAILURE_URL,
+  LORRIGO_DOMAIN,
+
+
+  DELHIVERY_API_BASEURL,
+  DELHIVERY_API_TOKEN,
+
 };
 
 export default envConfig;

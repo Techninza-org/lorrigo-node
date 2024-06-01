@@ -26,33 +26,14 @@ import {
   calculateNDRDetails,
   calculateRevenue,
   calculateShipmentDetails,
+  sendMailToScheduleShipment,
   updateOrderStatus,
+  updateSellerWalletBalance,
 } from "../utils";
-import { format, parse } from "date-fns";
-import {
-  CANCELED,
-  CANCELLED_ORDER_DESCRIPTION,
-  SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS,
-  COURRIER_ASSIGNED_ORDER_DESCRIPTION,
-  IN_TRANSIT,
-  MANIFEST_ORDER_DESCRIPTION,
-  NDR,
-  NEW,
-  NEW_ORDER_DESCRIPTION,
-  READY_TO_SHIP,
-  SHIPMENT_CANCELLED_ORDER_DESCRIPTION,
-  SHIPMENT_CANCELLED_ORDER_STATUS,
-  SMARTSHIP_MANIFEST_ORDER_STATUS,
-  SMARTSHIP_ORDER_REATTEMPT_DESCRIPTION,
-  SMARTSHIP_ORDER_REATTEMPT_STATUS,
-  SMARTSHIP_SHIPPED_ORDER_DESCRIPTION,
-  SMARTSHIP_SHIPPED_ORDER_STATUS,
-  SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
-  PICKUP_SCHEDULED_DESCRIPTION,
-  SHIPROCKET_MANIFEST_ORDER_STATUS,
-  DELIVERED,
-} from "../utils/lorrigo-bucketing-info";
-import SellerModel from "../models/seller.model";
+import { format, parse, parseISO, } from "date-fns";
+import { CANCELED, CANCELLED_ORDER_DESCRIPTION, SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS, COURRIER_ASSIGNED_ORDER_DESCRIPTION, IN_TRANSIT, MANIFEST_ORDER_DESCRIPTION, NDR, NEW, NEW_ORDER_DESCRIPTION, READY_TO_SHIP, SHIPMENT_CANCELLED_ORDER_DESCRIPTION, SHIPMENT_CANCELLED_ORDER_STATUS, SMARTSHIP_MANIFEST_ORDER_STATUS, SMARTSHIP_ORDER_REATTEMPT_DESCRIPTION, SMARTSHIP_ORDER_REATTEMPT_STATUS, SMARTSHIP_SHIPPED_ORDER_DESCRIPTION, SMARTSHIP_SHIPPED_ORDER_STATUS, SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, PICKUP_SCHEDULED_DESCRIPTION, SHIPROCKET_MANIFEST_ORDER_STATUS, DELIVERED, RETURN_CONFIRMED } from "../utils/lorrigo-bucketing-info";
+import ClientBillingModal from "../models/client.billing.modal";
+import envConfig from "../utils/config";
 
 // TODO: REMOVE THIS CODE: orderType = 0 ? "b2c" : "b2b"
 export async function createShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
@@ -60,7 +41,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     const body = req.body;
     const sellerId = req.seller._id;
 
-    if (!isValidPayload(body, ["orderId", "orderType", "carrierId", "carrierNickName"])) {
+    if (!isValidPayload(body, ["orderId", "orderType", "carrierId", "carrierNickName", "charge"])) {
       return res.status(200).send({ valid: false, message: "Invalid payload" });
     }
     if (!isValidObjectId(body?.orderId)) return res.status(200).send({ valid: false, message: "Invalid orderId" });
@@ -111,7 +92,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
       let incrementedNumber = lastNumber ? (parseInt(lastNumber) + 1).toString() : "1";
 
-      let newString = `${order?.client_order_reference_id?.replace(/\d+$/, "")}_reshipedOrder_${incrementedNumber}`;
+      let newString = `${order?.client_order_reference_id?.replace(/\d+$/, "")}_rs${incrementedNumber}`;
 
       const client_order_reference_id = isReshipedOrder ? newString : `${order?._id}_${order?.order_reference_id}`;
 
@@ -123,23 +104,23 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       const shipmentAPIBody = {
         request_info: {
           run_type: "create",
-          shipment_type: 1, // 1 => forward, 2 => return order
+          shipment_type: order.isReverseOrder ? 2 : 1, // 1 => forward, 2 => return order
         },
         orders: [
           {
-            client_order_reference_id: client_order_reference_id,
-            shipment_type: 1,
-            order_collectable_amount: order.payment_mode === 1 ? order.amount2Collect : 0, // need to take  from user in future,
-            total_order_value: totalOrderValue,
-            payment_type: order.payment_mode ? "cod" : "prepaid",
-            package_order_weight: orderWeight,
-            package_order_length: order.orderBoxLength,
-            package_order_height: order.orderBoxWidth,
-            package_order_width: order.orderBoxHeight,
-            shipper_hub_id: hubDetails.hub_id,
-            shipper_gst_no: req.seller.gstno,
-            order_invoice_date: order?.order_invoice_date,
-            order_invoice_number: order?.order_invoice_number || "Non-commercial",
+            "client_order_reference_id": client_order_reference_id,
+            "shipment_type": order.isReverseOrder ? 2 : 1,
+            "order_collectable_amount": order.payment_mode === 1 ? order.amount2Collect : 0, // need to take  from user in future,
+            "total_order_value": totalOrderValue,
+            "payment_type": order.payment_mode ? "cod" : "prepaid",
+            "package_order_weight": orderWeight,
+            "package_order_length": order.orderBoxLength,
+            "package_order_height": order.orderBoxWidth,
+            "package_order_width": order.orderBoxHeight,
+            "shipper_hub_id": hubDetails.hub_id,
+            "shipper_gst_no": req.seller.gstno,
+            "order_invoice_date": order?.order_invoice_date,
+            "order_invoice_number": order?.order_invoice_number || "Non-commercial",
             // "is_return_qc": "1",
             // "return_reason_id": "0",
             order_meta: {
@@ -171,6 +152,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           },
         ],
       };
+
       let smartshipToken;
       try {
         smartshipToken = await getSmartShipToken();
@@ -208,7 +190,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           const carrierName =
             externalAPIResponse?.data?.success_order_details?.orders[0]?.carrier_name + " " + vendorName?.nickName;
           order.client_order_reference_id = client_order_reference_id;
-          order.bucket = READY_TO_SHIP;
+          order.shipmentCharges = body.charge;
+          order.bucket = order.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
           order.orderStages.push({
             stage: SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS,
             action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
@@ -264,10 +247,10 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             }
           }
 
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+
           return res.status(200).send({ valid: true, order: updatedOrder, shipment: savedShipmentResponse });
         } catch (err) {
-          console.log(err, "erro");
-
           return next(err);
         }
       }
@@ -279,7 +262,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         const genAWBPayload = {
           shipment_id: order.shiprocket_shipment_id,
           courier_id: body?.carrierId.toString(),
-        };
+          is_return: order.isReverseOrder ? 1 : 0,
+        }
         try {
           const awbResponse = await axios.post(
             config.SHIPROCKET_API_BASEURL + APIs.GENRATE_AWB_SHIPROCKET,
@@ -300,9 +284,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           }
 
           order.awb = awbResponse?.data?.response?.data?.awb_code;
-          order.carrierName = awbResponse?.data?.response?.data.courier_name + " " + vendorName?.nickName;
-
-          order.bucket = READY_TO_SHIP;
+          order.carrierName = awbResponse?.data?.response?.data.courier_name + " " + (vendorName?.nickName);
+          order.shipmentCharges = body.charge;
+          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED :  READY_TO_SHIP;
           order.orderStages.push({
             stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
             action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
@@ -351,82 +335,79 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             order.channelFulfillmentId = fulfillmentOrderId;
             await order.save();
           }
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
           return res.status(200).send({ valid: true, order });
         } catch (error) {
-          console.log(error, "erro");
           return next(error);
         }
       } catch (error) {
-        console.log(error);
         return next(error);
       }
     } else if (vendorName?.name === "SMARTR") {
       const smartrToken = await getSMARTRToken();
       if (!smartrToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
-      const smartrShipmentPayload = [
-        {
-          packageDetails: {
-            awbNumber: "",
-            orderNumber: order.order_reference_id,
-            productType: order.payment_mode ? "ACC" : "ACP",
-            collectableValue: order.payment_mode ? order.amount2Collect : 0,
-            declaredValue: productDetails.taxable_value,
-            itemDesc: productDetails.name,
-            dimensions: `${order.orderBoxLength}~${order.orderBoxWidth}~${order.orderBoxHeight}~${productDetails.quantity}~${order.orderWeight}~0 /`, // LBH-No. of pieces~Weight~0/
-            pieces: productDetails.quantity,
-            weight: order.orderWeight,
-            invoiceNumber: order.order_invoice_number,
-          },
-          deliveryDetails: {
-            toName: order.customerDetails.get("name"),
-            toAdd: order.customerDetails.get("address"),
-            toCity: order.customerDetails.get("city"),
-            toState: order.customerDetails.get("state"),
-            toPin: order.customerDetails.get("pincode"),
-            // @ts-ignore
-            toMobile: order.customerDetails.get("phone").toString().slice(-10),
-            toEmail: order.customerDetails.get("email"),
-            toAddType: "Home", // Mendatory
-            toLat: order.customerDetails.get("lat") || "",
-            toLng: order.customerDetails.get("lng") || "",
-          },
-          pickupDetails: {
-            fromName: hubDetails.name,
-            fromAdd: hubDetails.address1,
-            fromCity: hubDetails.city,
-            fromState: hubDetails.state,
-            fromPin: hubDetails.pincode,
-            fromMobile: hubDetails.phone.toString().slice(-10),
-            fromEmail: "",
-            fromLat: "",
-            fromLng: "",
-            fromAddType: "Seller", // Mendatory
-          },
-          returnDetails: {
-            rtoName: hubDetails.name,
-            rtoAdd: hubDetails.rtoAddress || hubDetails.address1, // Mendatory
-            rtoCity: hubDetails.rtoCity || hubDetails.city, // Mendatory
-            rtoState: hubDetails.rtoState || hubDetails.state, // Mendatory
-            rtoPin: hubDetails.rtoPincode || hubDetails.pincode, // Mendatory
-            rtoMobile: hubDetails.phone.toString().slice(-10),
-            rtoEmail: "",
-            rtoAddType: "Seller", // Mendatory
-            rtoLat: "",
-            rtoLng: "",
-          },
-          additionalInformation: {
-            customerCode: "DELLORRIGO001",
-            essentialFlag: "",
-            otpFlag: "",
-            dgFlag: "",
-            isSurface: true,
-            isReverse: false,
-            sellerGSTIN: req.seller.gstno || "", // Mendatory
-            sellerERN: "",
-          },
+      const smartrShipmentPayload = [{
+        packageDetails: {
+          awbNumber: "",
+          orderNumber: order.order_reference_id,
+          productType: order.payment_mode ? "ACC" : "ACP",
+          collectableValue: order.payment_mode ? order.amount2Collect : 0,
+          declaredValue: productDetails.taxable_value,
+          itemDesc: productDetails.name,
+          dimensions: `${order.orderBoxLength}~${order.orderBoxWidth}~${order.orderBoxHeight}~${productDetails.quantity}~${order.orderWeight}~0 /`, // LBH-No. of pieces~Weight~0/
+          pieces: productDetails.quantity,
+          weight: order.orderWeight,
+          invoiceNumber: order.order_invoice_number,
         },
-      ];
+        deliveryDetails: {
+          toName: order.customerDetails.get("name"),
+          toAdd: order.customerDetails.get("address"),
+          toCity: order.customerDetails.get("city"),
+          toState: order.customerDetails.get("state"),
+          toPin: order.customerDetails.get("pincode"),
+          // @ts-ignore
+          toMobile: order.customerDetails.get("phone").toString().slice(-10),
+          toEmail: order.customerDetails.get("email") || "noreply@lorrigo.com",
+          toAddType: "Home", // Mendatory 
+          toLat: order.customerDetails.get("lat") || "",
+          toLng: order.customerDetails.get("lng") || "",
+        },
+        pickupDetails: {
+          fromName: hubDetails.name,
+          fromAdd: hubDetails.address1,
+          fromCity: hubDetails.city,
+          fromState: hubDetails.state,
+          fromPin: hubDetails.pincode,
+          fromMobile: hubDetails.phone.toString().slice(-10),
+          fromEmail: "",
+          fromLat: "",
+          fromLng: "",
+          fromAddType: "Seller", // Mendatory
+        },
+        returnDetails: {
+          rtoName: hubDetails.name,
+          rtoAdd: hubDetails.rtoAddress || hubDetails.address1, // Mendatory
+          rtoCity: hubDetails.rtoCity || hubDetails.city, // Mendatory
+          rtoState: hubDetails.rtoState || hubDetails.state, // Mendatory
+          rtoPin: hubDetails.rtoPincode || hubDetails.pincode, // Mendatory
+          rtoMobile: hubDetails.phone.toString().slice(-10),
+          rtoEmail: "",
+          rtoAddType: "Seller", // Mendatory
+          rtoLat: "",
+          rtoLng: "",
+        },
+        additionalInformation: {
+          customerCode: "DELLORRIGO001",
+          essentialFlag: "",
+          otpFlag: "",
+          dgFlag: "",
+          isSurface: true,
+          isReverse: false,
+          sellerGSTIN: req.seller.gstno || "", // Mendatory
+          sellerERN: "",
+        },
+      }];
 
       try {
         let config = {
@@ -434,8 +415,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           maxBodyLength: Infinity,
           url: "https://api.smartr.in/api/v1/add-order/",
           headers: {
-            Authorization: "Bearer bbQ5itWPMTWK6TKWkD6DV9PfMAy0DY",
-            "Content-Type": "application/json",
+            'Authorization': smartrToken,
+            'Content-Type': 'application/json',
           },
           data: JSON.stringify(smartrShipmentPayload),
         };
@@ -443,34 +424,122 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         const axisoRes = await axios.request(config);
         const smartRShipmentResponse = axisoRes.data;
 
-        order.awb = smartRShipmentResponse.total_success[0].awbNumber;
-        order.carrierName = courier?.name + " " + vendorName?.nickName;
+        console.log(smartRShipmentResponse, "smartRShipmentResponse")
 
-        order.bucket = IN_TRANSIT;
-        order.orderStages.push(
-          {
-            stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
+        let orderAWB = smartRShipmentResponse.total_success[0]?.awbNumber;
+        if (orderAWB === undefined) {
+          orderAWB = smartRShipmentResponse.total_failure[0]?.awbNumber
+        }
+        order.awb = orderAWB;
+        order.shipmentCharges = body.charge;
+        order.carrierName = courier?.name + " " + (vendorName?.nickName);
+
+        console.log(orderAWB, "orderAWB")
+
+        if (orderAWB) {
+          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED :  IN_TRANSIT;
+          order.orderStages.push({
+            stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,  // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
             action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
             stageDateTime: new Date(),
-          },
-          {
-            stage: SMARTSHIP_MANIFEST_ORDER_STATUS,
-            action: MANIFEST_ORDER_DESCRIPTION,
-            stageDateTime: new Date(),
-          },
-          {
-            stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
-            action: PICKUP_SCHEDULED_DESCRIPTION,
-            stageDateTime: new Date(),
-          }
-        );
-        await order.save();
+          });
+          await order.save();
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+          return res.status(200).send({ valid: true, order });
+        }
+        return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });
 
-        return res.status(200).send({ valid: true, order });
       } catch (error) {
         console.error("Error creating SMARTR shipment:", error);
         return next(error);
       }
+    } else if (vendorName?.name === "DELHIVERY") {
+      const delhiveryToken = getDelhiveryToken();
+      if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+      const delhiveryShipmentPayload = {
+        format: "json",
+        data: {
+          shipments: [
+            {
+              name: order.customerDetails.get("name"),
+              add: order.customerDetails.get("address"),
+              pin: order.customerDetails.get("pincode"),
+              city: order.customerDetails.get("city"),
+              state: order.customerDetails.get("state"),
+              country: "India",
+              phone: order.customerDetails.get("phone"),
+              order: order.order_reference_id,
+              payment_mode: order.payment_mode ? "COD" : "Prepaid",
+              return_pin: hubDetails.rtoPincode,
+              return_city: hubDetails.rtoCity,
+              return_phone: hubDetails.phone,
+              return_add: hubDetails.rtoAddress || hubDetails.address1,
+              return_state: hubDetails.rtoState || hubDetails.state,
+              return_country: "India",
+              products_desc: productDetails.name,
+              hsn_code: productDetails.hsn_code,
+              cod_amount: order.payment_mode ? order.amount2Collect : 0,
+              order_date: order.order_invoice_date,
+              total_amount: productDetails.taxable_value,
+              seller_add: hubDetails.address1,
+              seller_name: hubDetails.name,
+              seller_inv: order.order_invoice_number,
+              quantity: productDetails.quantity,
+              waybill: "",
+              shipment_width: order.orderBoxWidth,
+              shipment_height: order.orderBoxHeight,
+              weight: order.orderWeight,
+              seller_gst_tin: req.seller.gstno,
+              shipping_mode: "Surface",
+              address_type: "home",
+            },
+          ],
+          pickup_location: {
+            name: hubDetails.name,
+            add: hubDetails.address1,
+            city: hubDetails.city,
+            pin_code: hubDetails.pincode,
+            country: "India",
+            phone: hubDetails.phone,
+          },
+        },
+      };
+
+      const urlEncodedPayload = `format=json&data=${encodeURIComponent(JSON.stringify(delhiveryShipmentPayload.data))}`;
+
+      try {
+        const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_CREATE_ORDER}`, urlEncodedPayload, {
+          headers: {
+            Authorization: delhiveryToken,
+          },
+        });
+
+        const delhiveryShipmentResponse = response.data;
+        const delhiveryRes = delhiveryShipmentResponse?.packages[0]
+
+        if (!delhiveryRes?.status) {
+          return res.status(200).send({ valid: false, message: "Must Select the Delhivery Registered Hub" });
+        }
+
+        order.awb = delhiveryRes?.waybill;
+        order.carrierName = courier?.name + " " + (vendorName?.nickName);
+        order.shipmentCharges = body.charge;
+        order.bucket = READY_TO_SHIP;
+        order.orderStages.push({
+          stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
+          action: COURRIER_ASSIGNED_ORDER_DESCRIPTION, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_DESCRIPTION
+          stageDateTime: new Date(),
+        });
+
+        await order.save();
+        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+        return res.status(200).send({ valid: true, order });
+      } catch (error) {
+        console.error("Error creating Delhivery shipment:", error);
+        return next(error);
+      }
+
     }
   } catch (error) {
     return next(error);
@@ -516,6 +585,8 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
       }
 
       if (!order.awb && type === "order") {
+        // @ts-ignore
+        await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
         await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
         continue;
       }
@@ -572,6 +643,8 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             }
           } else {
             if (type === "order") {
+              // @ts-ignore
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
               await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
             } else {
               order.awb = null;
@@ -580,6 +653,8 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
               await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
               await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
+              // @ts-ignore
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
             }
 
             return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
@@ -612,8 +687,78 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
             await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
           }
+          // @ts-ignore
+          await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
         } catch (error) {
+          return next(error);
+        }
+      } else if (vendorName?.name === "SMARTR") {
+        const smartrToken = await getSMARTRToken();
+        if (!smartrToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+        if (type === "order") {
+          // @ts-ignore
+          await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+          await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+        } else {
+          const cancelOrder = await axios.post(config.SMARTR_API_BASEURL + APIs.CANCEL_ORDER_SMARTR, {
+            awbs: [order.awb],
+          }, {
+            headers: {
+              Authorization: smartrToken,
+            },
+          }
+          )
+          const response = cancelOrder?.data
+          const isCancelled = response.data[0].success;
+          if (isCancelled) {
+            order.awb = null;
+            order.carrierName = null
+            await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
+            await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
+            // @ts-ignore
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+            order.save();
+          }
+        }
+      } else if (vendorName?.name === "DELHIVERY") {
+        const delhiveryToken = getDelhiveryToken();
+        if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+        const cancelShipmentPayload = {
+          waybill: order.awb,
+          cancellation: true
+        };
+
+        try {
+          const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_CANCEL_ORDER}`, cancelShipmentPayload, {
+            headers: {
+              Authorization: delhiveryToken,
+            },
+          });
+
+          const delhiveryShipmentResponse = response.data;
+
+          if (delhiveryShipmentResponse.status) {
+            if (type === "order") {
+              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+            } else {
+              order.awb = null;
+              order.carrierName = null
+              order.save();
+
+              await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
+              await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
+
+            }
+            // @ts-ignore
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+          }
+          return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
+
+        } catch (error) {
+          console.error("Error creating Delhivery shipment:", error);
           return next(error);
         }
       }
@@ -636,7 +781,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
 
     let order;
     try {
-      order = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id });
+      order = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate(["productId", "pickupAddress"]);
     } catch (err) {
       return next(err);
     }
@@ -656,7 +801,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
       const requestBody = {
         client_order_reference_ids: [order._id + "_" + order.order_reference_id],
         preferred_pickup_date: pickupDate.replaceAll(" ", "-"),
-        shipment_type: 1,
+        shipment_type: order.isReverseOrder ? 2 : 1,
       };
 
       order.bucket = READY_TO_SHIP;
@@ -737,7 +882,76 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
       } catch (error) {
         return next(error);
       }
+    } else if (vendorName?.name === "SMARTR") {
+      const smartrToken = await getSMARTRToken();
+      if (!smartrToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+      const isEmailSend = await sendMailToScheduleShipment({ orders: [order], pickupDate });
+
+      // Need to iz
+      try {
+        order.bucket = READY_TO_SHIP;
+        order.orderStages.push({
+          stage: SHIPROCKET_MANIFEST_ORDER_STATUS,   // Evantuallly change this to SMARTR_COURIER_ASSIGNED_ORDER_STATUS
+          action: PICKUP_SCHEDULED_DESCRIPTION,
+          stageDateTime: new Date(),
+        });
+
+        await order.save();
+
+        return res.status(200).send({ valid: true, message: "Order manifest request generated" });
+
+      } catch (error) {
+        return next(error);
+      }
+
+      return res.status(200).send({ valid: true, message: "Order manifest request generated", isEmailSend });
+
+    } else if (vendorName?.name === "DELHIVERY") {
+
+      // Delhiery Manifest is not working
+      const hubDetail = await HubModel.findById(order?.pickupAddress);
+      if (!hubDetail) return res.status(200).send({ valid: false, message: "Hub not found" });
+      const delhiveryToken = getDelhiveryToken();
+      if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+      const delhiveryManifestPayload = {
+        pickup_location: hubDetail?.name,
+        expected_package_count: 1,
+        pickup_date: pickupDate.replaceAll(" ", "-"),
+        pickup_time: "12:23:00",
+      };
+
+      console.log(delhiveryManifestPayload, "delhiveryManifestPayload")
+
+      try {
+        const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL + APIs.DELHIVERY_MANIFEST_ORDER}`, delhiveryManifestPayload, {
+          headers: {
+            Authorization: delhiveryToken,
+          },
+        });
+
+        const delhiveryManifestResponse = response.data;
+        console.log(delhiveryManifestResponse, "delhiveryManifestResponse")
+
+        if (delhiveryManifestResponse.status) {
+          order.bucket = READY_TO_SHIP;
+          order.orderStages.push({
+            stage: SHIPROCKET_MANIFEST_ORDER_STATUS,  // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
+            action: MANIFEST_ORDER_DESCRIPTION,
+            stageDateTime: new Date(),
+          });
+
+          await order.save();
+
+          return res.status(200).send({ valid: true, message: "Order manifest request generated" });
+        }
+      }
+      catch (error) {
+        console.error("Error creating Delhivery shipment:", error);
+        return next(error);
+      }
     }
+
   } catch (error) {
     return next(error);
   }
@@ -811,7 +1025,6 @@ export async function orderReattempt(req: ExtendedRequest, res: Response, next: 
         await updateOrderStatus(order._id, NDR, SMARTSHIP_ORDER_REATTEMPT_DESCRIPTION);
         return res.status(200).send({ valid: true, message: "Order reattempt request generated" });
       } catch (error) {
-        console.log(error, "error");
         return next(error);
       }
     } else if (vendorName?.name === "SHIPROCKET") {
@@ -840,7 +1053,6 @@ export async function orderReattempt(req: ExtendedRequest, res: Response, next: 
         await updateOrderStatus(order._id, NDR, SMARTSHIP_ORDER_REATTEMPT_DESCRIPTION);
         return res.status(200).send({ valid: true, message: "Order reattempt request generated" });
       } catch (error) {
-        console.log(error, "error");
         return next(error);
       }
     }
@@ -996,12 +1208,7 @@ export async function trackB2BShipment(req: ExtendedRequest, res: Response, next
     }),
   };
   try {
-    const api = APIs.TRACK_SMARTR_ORDER + `=${awb}`;
-    const response = await axios.get(api, apiConfig);
-    const responseJSON: { success: boolean; data: any[]; message?: boolean } = response.data;
-    if (responseJSON.success)
-      return res.status(500).send({ valid: true, message: "Incomplete route", responseJSON: responseJSON.data });
-    else return res.status(500).send({ valid: false, message: "Incomplete route", resposneJSON: responseJSON.message });
+
   } catch (err: unknown) {
     return next(err);
   }
@@ -1029,16 +1236,11 @@ export async function cancelB2BShipment(req: ExtendedRequest, res: Response, nex
     };
     let responseJSON: { awb: string; message: string; success: boolean }[];
     try {
-      const response = await axios.post(APIs.CANCEL_SMARTR_ORDER, apiPayload, apiConfig);
-      responseJSON = response.data;
+
     } catch (err) {
       return next(err);
     }
-    if (!responseJSON[0].success) {
-      return res.status(200).send({ valid: false, message: "Incomplete route", responseJSON: responseJSON[0].message });
-    } else {
-      return res.status(500).send({ valid: true, message: "Incomplete route", responseJSON });
-    }
+
   } catch (error) {
     return next(error);
   }
@@ -1064,14 +1266,18 @@ export async function getShipemntDetails(req: ExtendedRequest, res: Response, ne
     endOfYesterday.setDate(endOfYesterday.getDate() + 1);
 
     // Fetch today's and yesterday's orders
-    const [orders, todayOrders, yesterdayOrders] = await Promise.all([
+    const [orders, todayOrders, yesterdayOrders, remittanceCODOrders] = await Promise.all([
       B2COrderModel.find({
         sellerId: sellerID,
-        bucket: { $gt: DELIVERED },
-        createdAt: { $gte: date30DaysAgo, $lt: currentDate },
+        createdAt: { $gte: date30DaysAgo, $lt: currentDate }
       }),
       B2COrderModel.find({ sellerId: sellerID, createdAt: { $gte: startOfToday, $lt: endOfToday } }),
       B2COrderModel.find({ sellerId: sellerID, createdAt: { $gte: startOfYesterday, $lt: endOfYesterday } }),
+      ClientBillingModal.find({
+        sellerId: sellerID,
+        createdAt: { $gte: date30DaysAgo, $lt: currentDate }
+      }),
+
     ]);
     // Extract shipment details
     const shipmentDetails = calculateShipmentDetails(orders);
@@ -1080,7 +1286,7 @@ export async function getShipemntDetails(req: ExtendedRequest, res: Response, ne
     const NDRDetails = calculateNDRDetails(orders);
 
     // Calculate COD details
-    const CODDetails = calculateCODDetails(orders);
+    const CODDetails = calculateCODDetails(remittanceCODOrders);
 
     // Calculate today's and yesterday's revenue and average shipping cost
     const todayRevenue = calculateRevenue(todayOrders);
