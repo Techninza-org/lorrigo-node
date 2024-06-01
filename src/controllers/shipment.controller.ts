@@ -288,7 +288,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           order.awb = awbResponse?.data?.response?.data?.awb_code;
           order.carrierName = awbResponse?.data?.response?.data.courier_name + " " + (vendorName?.nickName);
           order.shipmentCharges = body.charge;
-          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED :  READY_TO_SHIP;
+          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
           order.orderStages.push({
             stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
             action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
@@ -439,7 +439,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         console.log(orderAWB, "orderAWB")
 
         if (orderAWB) {
-          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED :  IN_TRANSIT;
+          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : IN_TRANSIT;
           order.orderStages.push({
             stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,  // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
             action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
@@ -1096,11 +1096,6 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
       })
       .join("");
 
-    // TODO: adjust totalOrderWeight according to their unit.
-    // // @ts-ignore
-    // const totalOrderWeight = order?.packageDetails?.reduce((acc, cv) => acc + cv?.boxWeight, 0);
-    // console.log(totalOrderWeight);
-
     let data = [
       {
         packageDetails: {
@@ -1111,7 +1106,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
           declaredValue: order?.amount + "",
           itemDesc: order?.product_description,
           dimensions: dimensions,
-          pieces: order?.quantity + "", 
+          pieces: order?.quantity + "",
           weight: order?.total_weight + "",
           invoiceNumber: order.invoiceNumber + "",
         },
@@ -1152,7 +1147,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
           rtoEmail: order.pickupAddress?.email ?? "",
         },
         additionalInformation: {
-          customerCode: "DELLORRIGO001",
+          customerCode: envConfig.SMARTR_USERNAME,
           essentialFlag: "",
           otpFlag: "",
           dgFlag: "",
@@ -1176,6 +1171,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
     };
 
     try {
+      // TODO: UPDATE ORDER STATUS, AWB NUMBER, CARRIER NAME, SHIPMENT CHARGES, BUCKET, ORDER STAGES, SELLER WALLET BALANCE, 
       const resp = await axios
         .request(config)
         .then((response) => {
@@ -1197,8 +1193,6 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
 }
 
 export async function trackB2BShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
-  const awb = "SLAWB00269";
-  // const awb = "s2345aaaa"; // wrong awb
   const smartr_token = await getSMARTRToken();
   if (!smartr_token) {
     return res.status(500).send({ valid: false, message: "SMARTr token not found" });
