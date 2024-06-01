@@ -4,12 +4,12 @@ import B2BCustomerModel from "../models/customer.model";
 
 export const createCustomer = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   const sellerId = req.seller._id;
-  const body = req.body;
+  const body = req.body.customerDetails;
 
-  if (!(body?.name && body?.email && body?.phone && body?.address && body?.city && body?.state && body?.pincode)) {
+  if (!(body?.name && body?.phone && body?.address && body?.city && body?.state && body?.pincode)) {
     return res.status(200).send({
       valid: false,
-      message: "name, email, phone, address, city, state, pincode are required",
+      message: "name, phone, address, city, state, pincode are required",
     });
   }
   try {

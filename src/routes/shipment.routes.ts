@@ -16,6 +16,9 @@ const shipmentRouter = Router();
 shipmentRouter.post("/", createShipment);
 
 //@ts-ignore
+shipmentRouter.post("/b2b", createB2BShipment);
+
+//@ts-ignore
 shipmentRouter.post("/cancel", cancelShipment);
 
 //@ts-ignore

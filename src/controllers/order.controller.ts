@@ -21,6 +21,7 @@ import exceljs from "exceljs";
 
 import { DELIVERED, IN_TRANSIT, NDR, NEW, NEW_ORDER_DESCRIPTION, NEW_ORDER_STATUS, READY_TO_SHIP, RTO } from "../utils/lorrigo-bucketing-info";
 import { convertToISO, validateBulkOrderField } from "../utils";
+import CourierModel from "../models/courier.model";
 
 // TODO create api to delete orders
 
@@ -732,26 +733,22 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
   }
 }
 
-
 export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const body: B2BOrderPayload = req.body;
     if (
       !isValidPayload(body, [
+        "order_reference_id",
         "client_name",
-        "freightType",
-        "pickupType",
-        "InsuranceType",
         "pickupAddress",
+        "product_description",
+        "total_weight",
+        "quantity",
+        "ewaybill",
+        "amount",
         "invoiceNumber",
-        "description",
-        "totalOrderValue",
-        "amount2Collect",
-        "shipperGSTIN",
-        "consigneeGSTIN",
-        "packageDetails",
-        "eways",
         "customerDetails",
+        "boxes",
       ])
     ) {
       return res.status(200).send({ valid: false, message: "Invalid Payload" });
@@ -762,42 +759,41 @@ export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: 
     if (!isValidObjectId(body?.customerDetails)) {
       return res.status(200).send({ valid: "Invalid customerDetails." });
     }
-    if (!Array.isArray(body?.packageDetails)) {
-      return res.status(200).send({ valid: false, message: "packageDetails should be array" });
-    }
-    if (!Array.isArray(body?.eways)) {
-      return res.status(200).send({ valid: false, message: "eways should be an array" });
+    if (!Array.isArray(body?.boxes)) {
+      return res.status(200).send({ valid: false, message: "boxes should be array" });
     }
 
-    const isAlreadyExists = (await B2BOrderModel.findOne({ client_name: body.client_name }).lean()) !== null;
-    if (isAlreadyExists) return res.status(200).send({ valid: false, message: "Client name already exists" });
+    const isAlreadyExists = (await B2BOrderModel.findOne({ order_reference_id: body.order_reference_id }).lean()) !== null;
+    if (isAlreadyExists) return res.status(200).send({ valid: false, message: "Order reference id already exists" });
 
     const data2save = {
+      order_reference_id: body?.order_reference_id,
+      bucket: NEW,
       client_name: body?.client_name,
       sellerId: req.seller._id,
-      freightType: body?.freightType, // 0 -> paid, 1 -> toPay
-      pickupType: body?.pickupType, // 0 -> FM-Pickup, 1 -> SelfDrop
-      InsuranceType: body?.InsuranceType, // 0-> OwnerRisk, 1-> Carrier Risk
+      freightType: 0, //body?.freightType, // 0 -> paid, 1 -> toPay
+      pickupType: 0, //body?.pickupType, // 0 -> FM-Pickup, 1 -> SelfDrop
+      InsuranceType: 0, //body?.InsuranceType, // 0-> OwnerRisk, 1-> Carrier Risk
       pickupAddress: body?.pickupAddress,
+      total_weight: Number(body?.total_weight),
+      quantity: Number(body?.quantity),
+      ewaybill: body?.ewaybill,
+      amount: Number(body?.amount),
       invoiceNumber: body?.invoiceNumber,
-      description: body?.description,
-      totalOrderValue: body?.totalOrderValue,
-      amount2Collect: body?.amount2Collect,
-      gstDetails: {
-        shipperGSTIN: body?.shipperGSTIN,
-        consigneeGSTIN: body?.consigneeGSTIN,
-      },
+      orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
+      product_description: body?.product_description,
       packageDetails: [
-        ...body.packageDetails,
+        ...body.boxes,
       ],
-      eways: [
-        ...body?.eways,
-      ],
-      customers: [body?.customerDetails],
+      customer: body?.customerDetails,
     };
+    console.log(data2save, 'data2save');
+    
     try {
       const B2BOrder2Save = new B2BOrderModel(data2save);
       const savedOrder = await B2BOrder2Save.save();
+      console.log(savedOrder, 'savedOrder');
+      
       return res.status(200).send({ valid: true, order: savedOrder });
     } catch (err) {
       return next(err);
@@ -807,6 +803,69 @@ export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: 
     return next(error);
   }
 };
+
+export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = req.seller._id;
+    let { limit, page, status }: { limit?: number; page?: number; status?: string } = req.query;
+
+    const obj = {
+      new: [NEW],
+      "ready-to-ship": [READY_TO_SHIP],
+      "in-transit": [IN_TRANSIT],
+      delivered: [DELIVERED],
+      ndr: [NDR],
+      rto: [RTO],
+    };
+
+    limit = Number(limit);
+    page = Number(page);
+    page = page < 1 ? 1 : page;
+    limit = limit < 1 ? 1 : limit;
+
+    const skip = (page - 1) * limit;
+
+    let orders, orderCount;
+    try {
+      let query: any = { sellerId };
+
+      if (status && obj.hasOwnProperty(status)) {
+        query.bucket = { $in: obj[status as keyof typeof obj] };
+      }
+
+      orders = await B2BOrderModel
+        .find(query)
+        .sort({ createdAt: -1 })
+        .populate("customer")
+        .populate("pickupAddress")
+        .lean();
+
+      orderCount =
+        status && obj.hasOwnProperty(status)
+          ? await B2BOrderModel.countDocuments(query)
+          : await B2BOrderModel.countDocuments({ sellerId });
+    } catch (err) {
+      return next(err);
+    }
+    return res.status(200).send({
+      valid: true,
+      response: { orders, orderCount },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try{
+    const orderId = req.params.id;
+    const orderDetails = await B2BOrderModel.findById(orderId).populate(["pickupAddress", "customer"]).lean();
+    const courier = await CourierModel.find({vendor_channel_id: '6628abf779087bcaf24ef7b2'}).lean();
+    return res.status(200).send({ valid: true, couriers: courier, orderDetails });
+  }catch(error){
+    return next(error); 
+  }
+}
 
 export const getCourier = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -967,13 +1026,18 @@ type PickupAddress = {
 
 type B2BOrderPayload = {
   // here client_name would be work as client_reference_id
+  order_reference_id: string;
   client_name: string;
   freightType: number;
   pickupType: number;
   InsuranceType: number;
   pickupAddress: ObjectId;
+  total_weight: number;
+  quantity: number;
+  ewaybill: string;
+  amount: number;
   invoiceNumber: string;
-  description: string;
+  product_description: string;
   totalOrderValue: number;
   amount2Collect: number;
   shipperGSTIN: string;
@@ -981,4 +1045,5 @@ type B2BOrderPayload = {
   packageDetails: any;
   eways: any;
   customerDetails: ObjectId;
+  boxes: any;
 };

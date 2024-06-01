@@ -8,7 +8,9 @@ import {
   getChannelOrders,
   createBulkB2COrder,
   updateBulkPickupOrder,
-  updateB2CBulkShopifyOrders
+  updateB2CBulkShopifyOrders,
+  getB2BOrders,
+  getB2BCourier
 } from "../controllers/order.controller";
 import multer from "multer";
 
@@ -41,6 +43,12 @@ orderRouter.patch("/update/b2c/shopify", updateB2CBulkShopifyOrders);
 
 // @ts-ignore
 orderRouter.post("/b2b", createB2BOrder);
+
+//@ts-ignore
+orderRouter.get("/all/b2b", getB2BOrders);
+
+// @ts-ignore
+orderRouter.get("/courier/b2b/:id", getB2BCourier);
 
 // @ts-ignore
 orderRouter.get("/courier/:type/:vendorType/:id", getCourier);
