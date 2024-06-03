@@ -74,19 +74,19 @@ const B2COrderSchema = new mongoose.Schema({
 });
 
 export const packageDetailsSchema = new mongoose.Schema({
-  qty: { type: Number, required: true },
-  orderBoxLength: { type: Number, required: true },
-  orderBoxHeight: { type: Number, required: true },
-  orderBoxWidth: { type: Number, required: true },
+  qty: { type: String, required: true },
+  orderBoxLength: { type: String, required: true },
+  orderBoxHeight: { type: String, required: true },
+  orderBoxWidth: { type: String, required: true },
   boxSizeUnit: { type: String, required: true }, // should be either cm or m
-  orderBoxWeight: { type: Number, required: true },
+  orderBoxWeight: { type: String, required: true },
   boxWeightUnit: { type: String, required: true }, // should be either g or kg
 });
 
 const B2BOrderSchema = new mongoose.Schema({
   order_reference_id: { type: String, required: true },
   client_name: { type: String, required: true },
-  sellerId: { type: String, required: true },
+  sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true },
   freightType: { type: Number, required: true, default: 0 }, // 0 -> paid, 1 -> toPay
   pickupType: { type: Number, required: true, default: 0 }, // 0 -> FM-Pickup, 1 -> SelfDrop
   InsuranceType: { type: Number, required: true, default: 0 }, // 0-> OwnerRisk, 1-> Carrier Risk

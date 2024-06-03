@@ -10,7 +10,8 @@ import {
   updateBulkPickupOrder,
   updateB2CBulkShopifyOrders,
   getB2BOrders,
-  getB2BCourier
+  getB2BCourier,
+  updateB2BOrder,
 } from "../controllers/order.controller";
 import multer from "multer";
 
@@ -43,6 +44,9 @@ orderRouter.patch("/update/b2c/shopify", updateB2CBulkShopifyOrders);
 
 // @ts-ignore
 orderRouter.post("/b2b", createB2BOrder);
+
+// @ts-ignore
+orderRouter.patch("/update/b2b", updateB2BOrder);
 
 //@ts-ignore
 orderRouter.get("/all/b2b", getB2BOrders);

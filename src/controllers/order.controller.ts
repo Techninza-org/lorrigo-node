@@ -598,7 +598,6 @@ export const updateB2CBulkShopifyOrders = async (req: ExtendedRequest, res: Resp
   }
 }
 
-
 export const getOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const sellerId = req.seller._id;
@@ -789,12 +788,11 @@ export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: 
       customer: body?.customerDetails,
     };
     console.log(data2save, 'data2save');
-    
+
     try {
       const B2BOrder2Save = new B2BOrderModel(data2save);
       const savedOrder = await B2BOrder2Save.save();
-      console.log(savedOrder, 'savedOrder');
-      
+
       return res.status(200).send({ valid: true, order: savedOrder });
     } catch (err) {
       return next(err);
@@ -804,6 +802,48 @@ export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: 
     return next(error);
   }
 };
+
+export const updateB2BOrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body;
+    if (!body) return res.status(200).send({ valid: false, message: "Invalid payload" });
+
+    const { orderId } = body;
+    if (!orderId)
+      return res.status(200).send({ valid: false, message: "Invalid orderId" });
+
+    const orderDetails = await B2BOrderModel.findById(orderId);
+    console.log(orderId, 'orderId')
+    console.log(orderDetails, 'orderDetails')
+    if (!orderDetails) return res.status(200).send({ valid: false, message: "Order not found" });
+
+    const data = {
+      order_reference_id: body?.order_reference_id,
+      bucket: NEW,
+      client_name: body?.client_name,
+      sellerId: req.seller._id,
+      freightType: body?.freightType, // 0 -> paid, 1 -> toPay
+      pickupType: body?.pickupType, // 0 -> FM-Pickup, 1 -> SelfDrop
+      InsuranceType: body?.InsuranceType, // 0-> OwnerRisk, 1-> Carrier Risk
+      pickupAddress: body?.pickupAddress,
+      total_weight: body?.total_weight,
+      quantity: body?.quantity,
+      ewaybill: body?.ewaybill,
+      amount: body?.amount,
+      invoiceNumber: body?.invoiceNumber,
+      orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
+      product_description: body?.product_description,
+      packageDetails: body.boxes,
+      customer: body?.customerDetails,
+    };
+
+    const savedOrder = await B2BOrderModel.findByIdAndUpdate(orderId, data);
+    
+    return res.status(200).send({ valid: true, order: savedOrder });
+  } catch (error) {
+    return next(error);
+  }
+}
 
 export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -858,13 +898,13 @@ export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: Ne
 }
 
 export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  try{
+  try {
     const orderId = req.params.id;
     const orderDetails = await B2BOrderModel.findById(orderId).populate(["pickupAddress", "customer"]).lean();
-    const courier = await CourierModel.find({vendor_channel_id: '6628abf779087bcaf24ef7b2'}).lean();
+    const courier = await CourierModel.find({ vendor_channel_id: '6628abf779087bcaf24ef7b2' }).lean();
     return res.status(200).send({ valid: true, couriers: courier, orderDetails });
-  }catch(error){
-    return next(error); 
+  } catch (error) {
+    return next(error);
   }
 }
 
