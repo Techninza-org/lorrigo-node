@@ -813,32 +813,30 @@ export const updateB2BOrder = async (req: ExtendedRequest, res: Response, next: 
       return res.status(200).send({ valid: false, message: "Invalid orderId" });
 
     const orderDetails = await B2BOrderModel.findById(orderId);
-    console.log(orderId, 'orderId')
-    console.log(orderDetails, 'orderDetails')
     if (!orderDetails) return res.status(200).send({ valid: false, message: "Order not found" });
 
     const data = {
-      order_reference_id: body?.order_reference_id,
+      order_reference_id: body?.order.order_reference_id,
       bucket: NEW,
-      client_name: body?.client_name,
+      client_name: body?.order.client_name,
       sellerId: req.seller._id,
-      freightType: body?.freightType, // 0 -> paid, 1 -> toPay
-      pickupType: body?.pickupType, // 0 -> FM-Pickup, 1 -> SelfDrop
-      InsuranceType: body?.InsuranceType, // 0-> OwnerRisk, 1-> Carrier Risk
-      pickupAddress: body?.pickupAddress,
-      total_weight: body?.total_weight,
-      quantity: body?.quantity,
-      ewaybill: body?.ewaybill,
-      amount: body?.amount,
-      invoiceNumber: body?.invoiceNumber,
+      freightType: body?.order.freightType, // 0 -> paid, 1 -> toPay
+      pickupType: body?.order.pickupType, // 0 -> FM-Pickup, 1 -> SelfDrop
+      InsuranceType: body?.order.InsuranceType, // 0-> OwnerRisk, 1-> Carrier Risk
+      pickupAddress: body?.order.pickupAddress,
+      total_weight: body?.order.total_weight,
+      quantity: body?.order.quantity,
+      ewaybill: body?.order.ewaybill,
+      amount: body?.order.amount,
+      invoiceNumber: body?.order.invoiceNumber,
       orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
-      product_description: body?.product_description,
+      product_description: body?.order.product_description,
       packageDetails: body.boxes,
-      customer: body?.customerDetails,
+      customer: body?.order.customerDetails,
     };
 
     const savedOrder = await B2BOrderModel.findByIdAndUpdate(orderId, data);
-    
+
     return res.status(200).send({ valid: true, order: savedOrder });
   } catch (error) {
     return next(error);
