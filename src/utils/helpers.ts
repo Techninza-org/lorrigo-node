@@ -97,30 +97,48 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
     }
     try {
       const vendor = await CourierModel.findById(vendorId);
-      if (!vendor) return res.status(200).send({ valid: false, message: "Vendor not found" });
-      delete body?.vendorId;
-      delete body?.sellerId;
-      const previouslySavedPricing = await CustomPricingModel.findOne({ sellerId, vendorId }).lean();
-      let savedPricing;
-      if (previouslySavedPricing) {
-        //update it
-        savedPricing = await CustomPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
-        return res.status(200).send({ valid: true, message: "vendor priced updated for user", savedPricing });
+      if (!vendor) {
+        const previouslySavedPricing = await CustomPricingModel.findById(vendorId).lean();
+        console.log(previouslySavedPricing, "previouslySavedPricing")
+        if (previouslySavedPricing) {
+          delete body.vendorId;
+          const savedPricing = await CustomPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
+          return res.status(200).send({ valid: true, message: "Vendor not found. Custom pricing updated for user", savedPricing });
+        } else {
+          const toAdd = {
+            vendorId: vendorId,
+            sellerId: sellerId,
+            ...body,
+          };
+          const savedPricing = new CustomPricingModel(toAdd);
+          await savedPricing.save();
+          return res.status(200).send({ valid: true, message: "Vendor not found. Custom pricing created for user", savedPricing });
+        }
       } else {
-        // create it
-        const toAdd = {
-          vendorId: vendorId,
-          sellerId: sellerId,
-          withinCity: vendor.withinCity,
-          withinZone: vendor.withinZone,
-          withinMetro: vendor.withinMetro,
-          withinRoi: vendor.withinRoi,
-          northEast: vendor.northEast,
-          ...body,
-        };
-        savedPricing = new CustomPricingModel(toAdd);
-        savedPricing = await savedPricing.save();
-        return res.status(200).send({ valid: true, message: "vendor priced updated for user", savedPricing });
+        // Vendor found, update its pricing
+        delete body?.vendorId;
+        delete body?.sellerId;
+        const previouslySavedPricing = await CustomPricingModel.findOne({ sellerId, vendorId }).lean();
+        let savedPricing;
+        if (previouslySavedPricing) {
+          // Update custom pricing
+          savedPricing = await CustomPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
+          return res.status(200).send({ valid: true, message: "Vendor priced updated for user", savedPricing });
+        } else {
+          const toAdd = {
+            vendorId: vendorId,
+            sellerId: sellerId,
+            withinCity: vendor.withinCity,
+            withinZone: vendor.withinZone,
+            withinMetro: vendor.withinMetro,
+            withinRoi: vendor.withinRoi,
+            northEast: vendor.northEast,
+            ...body,
+          };
+          savedPricing = new CustomPricingModel(toAdd);
+          savedPricing = await savedPricing.save();
+          return res.status(200).send({ valid: true, message: "Vendor priced updated for user", savedPricing });
+        }
       }
       return res.status(200).send({ valid: false, message: "Incomplee " });
     } catch (err) {
@@ -393,11 +411,11 @@ export const rateCalculation = async (
       _id: { $in: vendorIds },
       isActive: true
     };
-    
+
     if (isReversedOrder) {
       query.isReversedCourier = true;
     }
-    
+
     const vendors = await CourierModel.find(query);
     let commonCouriers: any[] = [];
 
@@ -504,7 +522,7 @@ export const rateCalculation = async (
     }
 
     try {
-      const delhiveryToken =  await getDelhiveryToken();
+      const delhiveryToken = await getDelhiveryToken();
       if (!delhiveryToken) {
         throw new Error("Failed to retrieve Delhivery token");
       }

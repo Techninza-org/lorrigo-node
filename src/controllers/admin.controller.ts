@@ -270,7 +270,7 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
     ]);
 
     // @ts-ignore
-    const customPricingMap = new Map(customPricings.map(courier => [courier.vendorId._id.toString(), courier]));
+    const customPricingMap = new Map(customPricings.map(courier => [courier?.vendorId?._id.toString(), courier]));
 
     const couriersWithNickname = couriers.map((courier) => {
       const customPricing = customPricingMap.get(courier._id.toString());
@@ -289,6 +289,7 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
       couriers: couriersWithNickname,
     });
   } catch (err) {
+    console.log(err, 'err')
     return next(err);
   }
 }

@@ -97,7 +97,7 @@ if (!config.MONGODB_URI) {
 mongoose
   .connect(config.MONGODB_URI)
   .then(() => {
-    Logger.plog(" db connected successfully");
+    console.log("db connected successfully");
     CONNECT_SHIPROCKET();
     CONNECT_SMARTSHIP();
     CONNECT_SMARTR();
