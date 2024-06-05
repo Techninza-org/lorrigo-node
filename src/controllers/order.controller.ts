@@ -22,6 +22,8 @@ import exceljs from "exceljs";
 import { DELIVERED, IN_TRANSIT, NDR, NEW, NEW_ORDER_DESCRIPTION, NEW_ORDER_STATUS, READY_TO_SHIP, RETURN_CANCELLATION, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_PICKED, RTO } from "../utils/lorrigo-bucketing-info";
 import { convertToISO, validateBulkOrderField } from "../utils";
 import CourierModel from "../models/courier.model";
+import { calculateB2BPriceCouriers } from "../utils/B2B-helper";
+import { OrderDetails } from "../types/b2b";
 
 // TODO create api to delete orders
 
@@ -898,9 +900,25 @@ export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: Ne
 export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const orderId = req.params.id;
-    const orderDetails = await B2BOrderModel.findById(orderId).populate(["pickupAddress", "customer"]).lean();
-    const courier = await CourierModel.find({ vendor_channel_id: '6628abf779087bcaf24ef7b2' }).lean();
-    return res.status(200).send({ valid: true, couriers: courier, orderDetails });
+    const users_vendors = req.seller.vendors
+    const order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate(["pickupAddress", "customer"]);
+    if (!order) return res.status(200).send({ valid: false, message: "Order not found" });
+
+    const orderDetails: OrderDetails = { ...order.toObject() };
+
+    // Rename customer to customerDetails
+    orderDetails.customerDetails = orderDetails.customer;
+    delete orderDetails.customer;
+
+    // Rename total_weight to orderWeight
+    orderDetails.orderWeight = orderDetails.total_weight;
+    delete orderDetails.total_weight;
+
+    orderDetails.payment_mode = orderDetails.freightType;
+    delete orderDetails.freightType;
+
+    const data2send = await calculateB2BPriceCouriers(orderId, users_vendors)
+    return res.status(200).send({ valid: true, orderDetails, courierPartner: data2send });
   } catch (error) {
     return next(error);
   }
@@ -916,13 +934,6 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
     if (type === "b2c") {
       try {
         orderDetails = await B2COrderModel.findOne({ _id: productId, sellerId: req.seller._id }).populate(["pickupAddress", "productId"]);
-      } catch (err) {
-        return next(err);
-      }
-    } else {
-      return res.status(200).send({ valid: false, message: "Invalid order type" });
-      try {
-        orderDetails = await B2BOrderModel.findById(productId);
       } catch (err) {
         return next(err);
       }
@@ -1041,6 +1052,8 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
       sellerId,
       collectableAmount,
       hubId,
+
+      orderDetails.isReverseOrder,
     );
 
     return res.status(200).send({
@@ -1049,7 +1062,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
       orderDetails,
     });
   } catch (error: any) {
-    console.log("error", error.response.data.errors)
+    console.log(error, "error")
     return next(error);
   }
 };

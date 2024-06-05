@@ -21,6 +21,8 @@ import PincodeModel from "./models/pincode.model";
 import HubModel from "./models/hub.model";
 import SellerModel from "./models/seller.model";
 import { getSpecificOrder } from "./controllers/order.controller";
+import B2BCalcModel from "./models/b2b.calc.model";
+import { calculateRateAndPrice, regionToZoneMapping, regionToZoneMappingLowercase } from "./utils/B2B-helper";
 
 app.use(cors({ origin: "*" }));
 
@@ -64,6 +66,32 @@ if (!config.MONGODB_URI) {
 // }
 
 
+// async function testData() {
+//   const pincodeDelhi = 110085;
+//   const pincodeMumbai = 400005;
+
+//   const pincodeDataDelhi = await PincodeModel.findOne({ Pincode: pincodeDelhi }).exec();
+//   const pincodeDataMumbai = await PincodeModel.findOne({ Pincode: pincodeMumbai }).exec();
+
+//   if (!pincodeDataDelhi || !pincodeDataMumbai) {
+//     throw new Error('Pincode data not found');
+//   }
+
+//   const regionNameDelhi = pincodeDataDelhi.District.toLowerCase(); // convert to lowercase
+//   const regionNameMumbai = pincodeDataMumbai.District.toLowerCase(); // convert to lowercase
+
+//   const Fzone = regionToZoneMappingLowercase[regionNameDelhi];
+//   const Tzone = regionToZoneMappingLowercase[regionNameMumbai];
+
+//   if (!Fzone || !Tzone) {
+//     throw new Error('Zone not found for the given region');
+//   }
+
+
+//   const result = await calculateRateAndPrice(Tzone, Fzone, 100, '665ef71c95b70be4d1e5efc7', regionNameDelhi, regionNameMumbai);
+//   console.log(`The calculated rate and price is: `);
+//   console.log(result);
+// }
 
 
 mongoose

@@ -2,13 +2,13 @@ import mongoose from "mongoose";
 
 const B2COrderSchema = new mongoose.Schema({
   awb: { type: String },
-  shipmentCharges : { type: Number, required: false },
+  shipmentCharges: { type: Number, required: false },
   isReverseOrder: { type: Boolean, required: true, default: false },
   channelOrderId: { type: String, required: false },
   channelFulfillmentId: { type: String, required: false },
   channelName: { type: String, required: false },
-  shiprocket_order_id: { type: String , required: false },
-  shiprocket_shipment_id: { type: String, required: false  },
+  shiprocket_order_id: { type: String, required: false },
+  shiprocket_shipment_id: { type: String, required: false },
 
   sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true },
   bucket: { type: Number, required: true }, // 0 -> not shipped, 1 -> shipped, 2 -> Cancelation Request, 3->Canceled
@@ -101,7 +101,7 @@ const B2BOrderSchema = new mongoose.Schema({
   packageDetails: {
     type: [packageDetailsSchema],
     required: true,
-  },  
+  },
   bucket: { type: Number, required: true }, // 0 -> not shipped, 1 -> shipped, 2 -> Cancelation Request, 3->Canceled
   orderStages: [
     {
@@ -111,6 +111,8 @@ const B2BOrderSchema = new mongoose.Schema({
     },
   ],
   awb: { type: String },
+  shipmentCharges: { type: Number, required: false },
+  carrierName: { type: String, required: false },
 })
 
 // const B2BOrderSchema = new mongoose.Schema({

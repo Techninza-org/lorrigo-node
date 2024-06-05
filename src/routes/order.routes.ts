@@ -56,4 +56,5 @@ orderRouter.get("/courier/b2b/:id", getB2BCourier);
 
 // @ts-ignore
 orderRouter.get("/courier/:type/:vendorType/:id", getCourier);
+
 export default orderRouter;

@@ -426,7 +426,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         const axisoRes = await axios.request(config);
         const smartRShipmentResponse = axisoRes.data;
 
-        console.log(smartRShipmentResponse, "smartRShipmentResponse")
 
         let orderAWB = smartRShipmentResponse.total_success[0]?.awbNumber;
         if (orderAWB === undefined) {
@@ -472,7 +471,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               country: "India",
               phone: order.customerDetails.get("phone"),
               order: order.order_reference_id,
-              payment_mode: order.payment_mode ? "COD" : "Prepaid",
+              payment_mode: order?.isReverseOrder ? "Pickup" : order.payment_mode ? "COD" : "Prepaid",
               return_pin: hubDetails.rtoPincode,
               return_city: hubDetails.rtoCity,
               return_phone: hubDetails.phone,
@@ -527,12 +526,22 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         order.awb = delhiveryRes?.waybill;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
         order.shipmentCharges = body.charge;
-        order.bucket = READY_TO_SHIP;
+        // order.bucket = READY_TO_SHIP;
+        order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
         order.orderStages.push({
           stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
           action: COURRIER_ASSIGNED_ORDER_DESCRIPTION, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_DESCRIPTION
           stageDateTime: new Date(),
-        });
+        }, {
+          stage: SMARTSHIP_MANIFEST_ORDER_STATUS,
+          action: MANIFEST_ORDER_DESCRIPTION,
+          stageDateTime: new Date(),
+        }, {
+          stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
+          action: PICKUP_SCHEDULED_DESCRIPTION,
+          stageDateTime: new Date(),
+        }
+        );
 
         await order.save();
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
@@ -551,12 +560,19 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 export async function cancelShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {
     const { orderIds, type } = req.body;
+    const sellerId = req.seller._id;
 
     if (!orderIds?.length) {
       return res.status(200).send({ valid: false, message: "Invalid payload" });
     }
 
-    const orders = await B2COrderModel.find({ _id: { $in: orderIds }, sellerId: req.seller._id });
+    const [b2cOrders, b2bOrders] = await Promise.all([
+      B2COrderModel.find({ _id: { $in: orderIds }, sellerId }),
+      B2BOrderModel.find({ _id: { $in: orderIds }, sellerId })
+    ]);
+
+    // Merge the results
+    const orders: any = [...b2cOrders, ...b2bOrders];
 
     if (!orders.length) {
       return res.status(200).send({ valid: false, message: "No active orders found" });
@@ -712,6 +728,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             },
           }
           )
+          console.log(cancelOrder.data, "cancelOrder")
           const response = cancelOrder?.data
           const isCancelled = response.data[0].success;
           if (isCancelled) {
@@ -1085,8 +1102,11 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
     const order: any | null = await B2BOrderModel.findOne({ _id: body?.orderId, sellerId }) //OrderPayload
       .populate("customer")
       .populate("pickupAddress")
-      .lean();
     if (!order) return res.status(200).send({ valid: false, message: "order not found" });
+
+    const vendorName = await EnvModel.findOne({ nickName: body.carrierNickName });
+    const courier = await CourierModel.findOne({ vendor_channel_id: vendorName?._id.toString() });
+
     const smartr_token = await getSMARTRToken();
     if (!smartr_token) return res.status(500).send({ valid: false, message: "SMARTR token not found" });
 
@@ -1171,19 +1191,35 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
     };
 
     try {
-      // TODO: UPDATE ORDER STATUS, AWB NUMBER, CARRIER NAME, SHIPMENT CHARGES, BUCKET, ORDER STAGES, SELLER WALLET BALANCE, 
-      const resp = await axios
-        .request(config)
-        .then((response) => {
-          console.log(JSON.stringify(response.data), 'res');
-          return response;
-        })
-        .catch((error) => {
-          return res.status(200).send({ valid: false, message: "Shipment not created" });
+      const axisoRes = await axios.request(config);
+      const smartRShipmentResponse = axisoRes.data;
+
+      let orderAWB = smartRShipmentResponse.total_success[0]?.awbNumber;
+      if (orderAWB === undefined) {
+        orderAWB = smartRShipmentResponse.total_failure[0]?.awbNumber
+      }
+      order.awb = orderAWB;
+      order.shipmentCharges = body.charge;
+      order.carrierName = courier?.name + " " + (vendorName?.nickName);
+
+      console.log(orderAWB, "orderAWB")
+
+      if (orderAWB) {
+        order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : IN_TRANSIT;
+        order.orderStages.push({
+          stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,  // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
+          action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
+          stageDateTime: new Date(),
         });
-      return res.status(200).send({ valid: true, message: "Shipment created successfully" });
-    } catch (err) {
-      return next(err);
+        await order.save();
+        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+        return res.status(200).send({ valid: true, order });
+      }
+      return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });
+
+    } catch (error) {
+      console.error("Error creating SMARTR shipment:", error);
+      return next(error);
     }
 
     return res.status(500).send({ valid: false, message: "Incomplete route" });

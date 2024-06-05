@@ -69,3 +69,10 @@ export interface OrderPayload extends Document {
   eways: Eways[];
   customers: Customer[] | null;
 }
+
+export interface OrderDetails {
+  customerDetails?: any;
+  orderWeight?: number;
+  payment_mode?: string;
+  [key: string]: any; // Index signature for other properties
+}

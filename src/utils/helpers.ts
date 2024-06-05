@@ -356,7 +356,8 @@ export const rateCalculation = async (
   users_vendors: string[],
   seller_id: any,
   collectableAmount?: any,
-  hubId?: number
+  hubId?: number,
+  isReversedOrder?: boolean
 ) => {
   try {
     const numPaymentType = Number(paymentType);
@@ -382,19 +383,22 @@ export const rateCalculation = async (
 
     if (!pickupDetails || !deliveryDetails) throw new Error("invalid pickup or delivery pincode");
 
-    // Convert vendor IDs to ObjectId format
     const vendorIds = users_vendors.map(convertToObjectId).filter((id) => id !== null);
 
-    // Check if any IDs failed to convert
-    if (vendorIds.length !== users_vendors.length) {
-      console.error('Some vendor IDs could not be converted.');
-    }
-
-    const vendors = await CourierModel.find({
+    let query: {
+      _id: { $in: (Types.ObjectId | null)[] };
+      isActive: boolean;
+      isReversedCourier?: boolean;
+    } = {
       _id: { $in: vendorIds },
-      isActive: true,
-    });
-
+      isActive: true
+    };
+    
+    if (isReversedOrder) {
+      query.isReversedCourier = true;
+    }
+    
+    const vendors = await CourierModel.find(query);
     let commonCouriers: any[] = [];
 
     try {
@@ -513,8 +517,6 @@ export const rateCalculation = async (
           },
         }
       );
-
-      console.log("isDelhiveryServicable", )
 
       if (!!isDelhiveryServicable.data.delivery_codes[0]) {
         const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY" }).select("_id nickName");

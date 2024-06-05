@@ -29,6 +29,7 @@ export const courierSchema = new mongoose.Schema(
     northEast: { type: pricingSchema, required: true },
     carrierID: { type: Number, required: true },
     isActive: { type: Boolean, required: true, default: true },
+    isReversedCourier: { type: Boolean, required: true, default: false },
   },
   { timestamps: true }
 );
