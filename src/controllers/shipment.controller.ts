@@ -160,8 +160,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         smartshipToken = await getSmartShipToken();
         if (!smartshipToken) return res.status(200).send({ valid: false, message: "Invalid token" });
       } catch (err) {
-        console.log(err, "erro");
-
         return next(err);
       }
       let externalAPIResponse: any;
@@ -277,16 +275,16 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             }
           );
 
-          const { awb_code, courier_name } = awbResponse?.data?.response?.data;
+          let awb = awbResponse?.data?.response?.data?.awb_code || awbResponse?.data?.response?.data?.awb_assign_error?.split("-")[1].split(" ")[1];
 
-          if (!awb_code || !courier_name) {
+          if (!awb) {
             return res
               .status(200)
               .send({ valid: false, message: "Internal Server Error, Please use another courier partner" });
           }
 
-          order.awb = awbResponse?.data?.response?.data?.awb_code;
-          order.carrierName = awbResponse?.data?.response?.data.courier_name + " " + (vendorName?.nickName);
+          order.awb = awb;
+          order.carrierName = (awbResponse?.data?.response?.data.courier_name || courier?.name) + " " + (vendorName?.nickName);
           order.shipmentCharges = body.charge;
           order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
           order.orderStages.push({
@@ -339,10 +337,12 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           }
           await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
           return res.status(200).send({ valid: true, order });
-        } catch (error) {
+        } catch (error: any) {
+          console.log(error.response.data.errors, "error");
           return next(error);
         }
-      } catch (error) {
+      } catch (error: any) {
+        console.log(error.response.data.errors, "error");
         return next(error);
       }
     } else if (vendorName?.name === "SMARTR") {
@@ -435,7 +435,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         order.shipmentCharges = body.charge;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
 
-        console.log(orderAWB, "orderAWB")
 
         if (orderAWB) {
           order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : IN_TRANSIT;
@@ -444,7 +443,48 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
             stageDateTime: new Date(),
           });
+
+          if (order.channelName === "shopify") {
+            const shopfiyConfig = await getSellerChannelConfig(sellerId);
+            const shopifyOrders = await axios.get(
+              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
+              {
+                headers: {
+                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                },
+              }
+            );
+
+            const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
+
+            const shopifyFulfillment = {
+              fulfillment: {
+                line_items_by_fulfillment_order: [
+                  {
+                    fulfillment_order_id: fulfillmentOrderId,
+                  },
+                ],
+                tracking_info: {
+                  company: orderAWB,
+                  number: courier?.name + " " + (vendorName?.nickName),
+                  url: `https://lorrigo.in/track/${order?._id}`,
+                },
+              },
+            };
+            const shopifyFulfillmentResponse = await axios.post(
+              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
+              shopifyFulfillment,
+              {
+                headers: {
+                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                },
+              }
+            );
+            order.channelFulfillmentId = fulfillmentOrderId;
+          }
+
           await order.save();
+
           await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
           return res.status(200).send({ valid: true, order });
         }
@@ -455,7 +495,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         return next(error);
       }
     } else if (vendorName?.name === "DELHIVERY") {
-      const delhiveryToken = await  await getDelhiveryToken();
+      const delhiveryToken = await await getDelhiveryToken();
       if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
       const delhiveryShipmentPayload = {
@@ -526,7 +566,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         order.awb = delhiveryRes?.waybill;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
         order.shipmentCharges = body.charge;
-        // order.bucket = READY_TO_SHIP;
         order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
         order.orderStages.push({
           stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
@@ -542,6 +581,45 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           stageDateTime: new Date(),
         }
         );
+
+        if (order.channelName === "shopify") {
+          const shopfiyConfig = await getSellerChannelConfig(sellerId);
+          const shopifyOrders = await axios.get(
+            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
+            {
+              headers: {
+                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+              },
+            }
+          );
+
+          const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
+
+          const shopifyFulfillment = {
+            fulfillment: {
+              line_items_by_fulfillment_order: [
+                {
+                  fulfillment_order_id: fulfillmentOrderId,
+                },
+              ],
+              tracking_info: {
+                company: delhiveryRes?.waybill,
+                number: courier?.name + " " + (vendorName?.nickName),
+                url: `https://lorrigo.in/track/${order?._id}`,
+              },
+            },
+          };
+          const shopifyFulfillmentResponse = await axios.post(
+            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
+            shopifyFulfillment,
+            {
+              headers: {
+                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+              },
+            }
+          );
+          order.channelFulfillmentId = fulfillmentOrderId;
+        }
 
         await order.save();
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
@@ -581,26 +659,27 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
     for (let i = 0; i < orders.length; i++) {
       const order = orders[i];
 
-      try {
-        if (order.channelName === "shopify") {
-          const shopfiyConfig = await getSellerChannelConfig(req.seller._id);
-          const shopifyOrders = await axios.post(
-            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_CANCEL}/${order.channelOrderId}/cancel.json`,
-            {
-              cancellation_request: {
-                message: "The customer changed his mind.",
-              },
-            },
-            {
-              headers: {
-                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-              },
-            }
-          );
-        }
-      } catch (error) {
-        console.log(error, "error");
-      }
+      // Lorrigo never cancel the order from the channel
+      // try {
+      //   if (order.channelName === "shopify") {
+      //     const shopfiyConfig = await getSellerChannelConfig(req.seller._id);
+      //     const shopifyOrders = await axios.post(
+      //       `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_CANCEL}/${order.channelOrderId}/cancel.json`,
+      //       {
+      //         cancellation_request: {
+      //           message: "The customer changed his mind.",
+      //         },
+      //       },
+      //       {
+      //         headers: {
+      //           "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+      //         },
+      //       }
+      //     );
+      //   }
+      // } catch (error) {
+      //   console.log(error, "error");
+      // }
 
       if (!order.awb && type === "order") {
         // @ts-ignore
@@ -728,7 +807,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             },
           }
           )
-          console.log(cancelOrder.data, "cancelOrder")
           const response = cancelOrder?.data
           const isCancelled = response.data[0].success;
           if (isCancelled) {
@@ -742,7 +820,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           }
         }
       } else if (vendorName?.name === "DELHIVERY") {
-        const delhiveryToken =  await getDelhiveryToken();
+        const delhiveryToken = await getDelhiveryToken();
         if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
         const cancelShipmentPayload = {
@@ -930,7 +1008,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
       // Delhiery Manifest is not working
       const hubDetail = await HubModel.findById(order?.pickupAddress);
       if (!hubDetail) return res.status(200).send({ valid: false, message: "Hub not found" });
-      const delhiveryToken =  await getDelhiveryToken();
+      const delhiveryToken = await getDelhiveryToken();
       if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
       const delhiveryManifestPayload = {
