@@ -157,7 +157,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
     }
 
     try {
-      const delhiveryToken =  getDelhiveryToken();
+      const delhiveryToken =   await getDelhiveryToken();
       const delhiveryResponse = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
         headers: { Authorization: delhiveryToken }
       });

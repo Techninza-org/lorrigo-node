@@ -455,7 +455,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         return next(error);
       }
     } else if (vendorName?.name === "DELHIVERY") {
-      const delhiveryToken = getDelhiveryToken();
+      const delhiveryToken = await  await getDelhiveryToken();
       if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
       const delhiveryShipmentPayload = {
@@ -742,7 +742,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           }
         }
       } else if (vendorName?.name === "DELHIVERY") {
-        const delhiveryToken = getDelhiveryToken();
+        const delhiveryToken =  await getDelhiveryToken();
         if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
         const cancelShipmentPayload = {
@@ -930,7 +930,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
       // Delhiery Manifest is not working
       const hubDetail = await HubModel.findById(order?.pickupAddress);
       if (!hubDetail) return res.status(200).send({ valid: false, message: "Hub not found" });
-      const delhiveryToken = getDelhiveryToken();
+      const delhiveryToken =  await getDelhiveryToken();
       if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
       const delhiveryManifestPayload = {

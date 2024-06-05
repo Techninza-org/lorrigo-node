@@ -504,7 +504,7 @@ export const rateCalculation = async (
     }
 
     try {
-      const delhiveryToken = getDelhiveryToken();
+      const delhiveryToken =  await getDelhiveryToken();
       if (!delhiveryToken) {
         throw new Error("Failed to retrieve Delhivery token");
       }
@@ -741,8 +741,11 @@ export async function getSMARTRToken(): Promise<string | false> {
   // }
 }
 
-export function getDelhiveryToken() {
-  const token = `Token ${envConfig.DELHIVERY_API_TOKEN}`
+export async function getDelhiveryToken() {
+  const env = await EnvModel.findOne({ name: "DELHIVERY" }).lean();
+  if (!env) return false;
+  //@ts-ignore
+  const token = "Token" + " " + env?.token;
   return token;
 }
 
