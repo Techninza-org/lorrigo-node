@@ -629,6 +629,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         return next(error);
       }
 
+    } else if (vendorName?.name === "ECOMM") {
+      
     }
   } catch (error) {
     return next(error);

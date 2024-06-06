@@ -22,8 +22,6 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
     const fromRegionName = pickupPincodeData.District.toLowerCase(); // convert to lowercase
     const toRegionName = deliveryPincodeData.District.toLowerCase(); // convert to lowercase
 
-    console.log(fromRegionName, toRegionName, "fromRegionName, toRegionName")
-
     const Fzone = regionToZoneMappingLowercase[fromRegionName];
     const Tzone = regionToZoneMappingLowercase[toRegionName];
 
@@ -45,10 +43,10 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
     if (b2bCouriers.length === 0) {
         return [];
     }
-    
+
     const courierDataPromises = b2bCouriers.map(async (courier) => {
         try {
-            const result = await calculateRateAndPrice(courier, Tzone, Fzone, order.amount, courier._id.toString(), fromRegionName, toRegionName);
+            const result = await calculateRateAndPrice(courier, Tzone, Fzone, order.total_weight, courier._id.toString(), fromRegionName, toRegionName, order.amount);
             console.log(courier.vendor_channel_id)
             return {
                 // @ts-ignore
@@ -71,7 +69,7 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
     return courierData.filter(data => data !== null);
 }
 
-export async function calculateRateAndPrice(calcData: any, zoneFrom: string, zoneTo: string, weight: number, calcId: string, fromRegion: string, toRegion: string) {
+export async function calculateRateAndPrice(calcData: any, zoneFrom: string, zoneTo: string, weight: number, calcId: string, fromRegion: string, toRegion: string, amount: number) {
     try {
         const zoneMatrix = calcData.zoneMatrix;
         const zoneMapping = calcData.zoneMapping;
@@ -86,17 +84,28 @@ export async function calculateRateAndPrice(calcData: any, zoneFrom: string, zon
         }
 
         const baseFreightCharge = rate * weight;
+
         const fuelSurcharge = (calcData.fuelSurcharge / 100) * baseFreightCharge;
-        const ODACharge = weight * calcData.ODACharge < 800 ? 800 : weight * calcData.ODACharge;
+
+        const ODACharge = 0; // As of now not required, 
+        // const ODACharge = weight * calcData.ODACharge < 800 ? 800 : weight * calcData.ODACharge;
 
         let greenTax = 0;
         if (fromRegion !== 'delhi' && toRegion === 'delhi') {
             greenTax = calcData.greenTax;
         }
 
+        const foValue = calcData.foValue;
+        const foVPercent = calcData.foPercentage;
+
+        let baseFreightOne = (Number(amount) * Number(foVPercent));
+        if (baseFreightOne < 100) {
+            baseFreightOne = foValue;
+        }
+
         const otherExpensesTotal = 0; // calcData.otherExpenses.reduce((total, expense) => total + expense.amount, 0);
 
-        const totalCostBeforeGST = baseFreightCharge + fuelSurcharge + calcData.docketCharge + ODACharge + greenTax + otherExpensesTotal;
+        const totalCostBeforeGST = baseFreightCharge + fuelSurcharge + calcData.docketCharge + ODACharge + greenTax + baseFreightOne + otherExpensesTotal;
         const gst = (18 / 100) * totalCostBeforeGST;
         const finalAmount = totalCostBeforeGST + gst;
 

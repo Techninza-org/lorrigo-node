@@ -9,11 +9,13 @@ const B2BCalcSchema = new mongoose.Schema(
         type: { type: String, required: true }, // surface , air
         pickupTime: { type: String, required: true, default: currentTime },
         vendor_channel_id: { type: Types.ObjectId, ref: "Env", required: true },
-        
+        foValue: { type: Number, required: true, default: 100 },
+        foPercentage: { type: String, required: true, default: 0.001 },
+
         carrierID: { type: Number, required: true },
         isActive: { type: Boolean, required: true, default: true },
         isReversedCourier: { type: Boolean, required: true, default: false },
-        
+
         baseFreight: { type: Number, required: true, min: 0 },
         greenTax: { type: Number, required: true, min: 100 }, // 100rs
         fuelSurcharge: { type: Number, required: true, min: 0 }, // in percentage

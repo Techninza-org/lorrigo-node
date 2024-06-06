@@ -48,6 +48,7 @@ const DELHIVERY_CREATE_ORDER = "/api/cmu/create.json"
 const DELHIVERY_CANCEL_ORDER = "/api/p/edit"
 const DELHIVERY_MANIFEST_ORDER = "/fm/request/new"
 
+const ECOMM_PINCODE_SERVICEABILITY = "/services/expp/expppincode/";
 
 const APIs = {
   HUB_REGISTRATION,
@@ -92,6 +93,8 @@ const APIs = {
   DELHIVERY_PICKUP_LOCATION,
   DELHIVERY_CREATE_ORDER,
   DELHIVERY_CANCEL_ORDER,
-  DELHIVERY_MANIFEST_ORDER
+  DELHIVERY_MANIFEST_ORDER,
+
+  ECOMM_PINCODE_SERVICEABILITY
 };
 export default APIs;

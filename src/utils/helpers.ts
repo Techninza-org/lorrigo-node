@@ -480,13 +480,10 @@ export const rateCalculation = async (
         []
       );
 
-      console.log("smartShipCouriers", smartShipCouriers.map((item:any)=>item.carrier_id))
-
       const smartShipNiceName = await EnvModel.findOne({ name: "SMARTSHIP" }).select("_id nickName");
 
       vendors?.forEach((vendor: any) => {
         const courier = smartShipCouriers?.find((company: { carrier_id: number; }) => Number(company.carrier_id) === vendor.carrierID);
-        console.log("courier", courier)
         if (courier && smartShipNiceName) {
           const smartShipVendors = vendors.filter((vendor) => {
             return vendor.carrierID === Number(courier.carrier_id);
@@ -786,6 +783,13 @@ export async function getDelhiveryToken() {
   //@ts-ignore
   const token = "Token" + " " + env?.token;
   return token;
+}
+
+export async function getEcommToken() {
+  const env = await EnvModel.findOne({ name: "ECOMM" }).lean();
+  if (!env) return false;
+  // @ts-ignore
+  return { username: env.email, password: env.password };
 }
 
 export async function getSellerChannelConfig(sellerId: string) {
