@@ -4,6 +4,7 @@ export const HUB_REGISTRATION = "/v2/app/Fulfillmentservice/hubRegistration";
 export const HUB_UPDATE = "/v2/app/Fulfillmentservice/updateHubDetails";
 export const HUB_DELETE = "/v2/app/Fulfillmentservice/deleteHub";
 export const HUB_SERVICEABILITY = "/v2/app/Fulfillmentservice/ServiceabilityHubWise";
+export const RATE_CALCULATION = "/v2/app/Fulfillmentservice/rateCalculator";
 export const CREATE_SHIPMENT = "/v2/app/Fulfillmentservice/orderRegistrationOneStep";
 export const CANCEL_SHIPMENT = "/v2/app/Fulfillmentservice/orderCancellation";
 export const ORDER_REATTEMPT = "/v2/app/Fulfillmentservice/orderReattempt";
@@ -52,6 +53,7 @@ const APIs = {
   HUB_REGISTRATION,
   HUB_UPDATE,
   HUB_DELETE,
+  RATE_CALCULATION,
   CREATE_SHIPMENT,
   HUB_SERVICEABILITY,
   CANCEL_SHIPMENT,

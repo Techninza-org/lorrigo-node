@@ -565,9 +565,6 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    console.log(amount, isCredit, sellerId, "amount, isCredit, sellerId");
-
-    // Ensure amount is a valid number
     if (typeof amount !== 'number' || isNaN(amount)) {
       throw new Error('Invalid amount');
     }
@@ -591,7 +588,6 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
       throw new Error('Seller not found');
     }
 
-    console.log(updatedSeller, "updatedSeller");
     return updatedSeller;
   } catch (err) {
     await session.abortTransaction();

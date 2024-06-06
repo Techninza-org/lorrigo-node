@@ -527,7 +527,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               seller_name: hubDetails.name,
               seller_inv: order.order_invoice_number,
               quantity: productDetails.quantity,
-              waybill: "",
+              waybill: order.ewaybill || "",
               shipment_width: order.orderBoxWidth,
               shipment_height: order.orderBoxHeight,
               weight: order.orderWeight,

@@ -111,6 +111,7 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
     let savedOrder;
     const data = {
       sellerId: req.seller?._id,
+      ewaybill: body?.ewaybill,
       isReverseOrder: body?.isReverseOrder,
       bucket: NEW,
       client_order_reference_id: body?.order_reference_id,
@@ -1014,7 +1015,8 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
         shipping_pincode: orderDetails?.sellerDetails.get("sellerPincode"),
         shipping_country: "India",
         shipping_state: orderDetails?.sellerDetails.get("sellerState"),
-        shipping_phone: orderDetails?.sellerDetails.get("sellerPhone")
+        shipping_phone: orderDetails?.sellerDetails.get("sellerPhone"),
+        ewaybill_no: orderDetails?.ewaybill,
       });
     }
 

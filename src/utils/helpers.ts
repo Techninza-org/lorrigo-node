@@ -28,39 +28,51 @@ export const validatePhone = (phone: number): boolean => {
 };
 
 export const validateSmartShipServicablity = async (
-  orderType: 0 | 1,
-  hub_id: number,
-  destinationPinode: number,
-  orderWeight: number,
+  pickupPin: number,
+  deliveryPin: number,
+  weight: number,
+  orderValue: number,
+  length: number,
+  width: number,
+  height: number,
+  paymentType: 0 | 1,
+  shipmentType: number, // 1 for forward 0 for reverse
+
   prefferredCarrier: number[]
-): Promise<boolean> => {
+
+): Promise<any> => {
+
   const requestBody: any = {
     order_info: {
-      hub_ids: [hub_id],
-      destination_pincode: destinationPinode,
-      orderWeight: orderWeight,
+      email: "noreply@lorrigo.com",
+      source_pincode: pickupPin,
+      destination_pincode: deliveryPin,
+      order_weight: weight,
+      order_value: orderValue || 1000,
+      payment_type: paymentType === 1 ? "cod" : "prepaid",
+      length,
+      width,
+      height,
+      shipment_type: shipmentType === 1 ? "forward" : "return",
       preferred_carriers: [...prefferredCarrier],
     },
     request_info: { extra_info: true, cost_info: false },
   };
-  if (orderType) {
-    // 1/ true for forward 0 for reverse
-    requestBody.order_info.destination_pincode = destinationPinode;
-  } else {
-    requestBody.source_pincode = destinationPinode;
-  }
+
   const smartshipToken = await getSmartShipToken();
 
   const smartshipAPIconfig = { headers: { Authorization: smartshipToken } };
   try {
     const response = await axios.post(
-      config.SMART_SHIP_API_BASEURL + APIs.HUB_SERVICEABILITY,
+      config.SMART_SHIP_API_BASEURL + APIs.RATE_CALCULATION,
       requestBody,
       smartshipAPIconfig
     );
     const responseData = response.data;
-    return responseData.data.serviceability_status;
+    const mappedCouriers = Object?.keys(responseData?.data?.carrier_info)?.map((item: any) => responseData.data.carrier_info[item])
+    return mappedCouriers || [];
   } catch (err) {
+    console.log(err, "err")
     return false;
   }
 
@@ -438,9 +450,8 @@ export const rateCalculation = async (
       vendors?.forEach((vendor: any) => {
         const courier = courierCompanies?.find((company: { courier_company_id: number; }) => company.courier_company_id === vendor.carrierID);
         if (courier && shiprocketNiceName) {
-
           const shiprocketVendors = vendors.filter((vendor) => {
-            return vendor?.vendor_channel_id?.toString() === shiprocketNiceName._id.toString();
+            return courier.courier_company_id === vendor.carrierID;
           });
 
           if (shiprocketVendors.length > 0) {
@@ -455,32 +466,43 @@ export const rateCalculation = async (
       console.log("error", error);
     }
 
-
     try {
-      const isSmartshipServicable = await validateSmartShipServicablity(
-        1,
-        hubId || 1,
-        Number(deliveryPincode),
+      const smartShipCouriers = await validateSmartShipServicablity(
+        pickupPincode,
+        deliveryPincode,
         weight,
+        collectableAmount,
+        boxLength,
+        boxWidth,
+        boxHeight,
+        paymentType,
+        isReversedOrder ? 1 : 0,
         []
       );
 
+      console.log("smartShipCouriers", smartShipCouriers.map((item:any)=>item.carrier_id))
+
       const smartShipNiceName = await EnvModel.findOne({ name: "SMARTSHIP" }).select("_id nickName");
-      if (smartShipNiceName) {
-        const smartShipVendors = vendors.filter((vendor) => {
-          return vendor?.vendor_channel_id?.toString() === smartShipNiceName._id.toString();
-        });
-        if (isSmartshipServicable) {
-          // Add nickname for each vendor in smartShipVendors array
-          const smartShipVendorsWithNickname = smartShipVendors.map((vendor) => {
-            return {
-              ...vendor.toObject(), // Convert vendor to plain JavaScript object
-              nickName: smartShipNiceName.nickName
-            };
+
+      vendors?.forEach((vendor: any) => {
+        const courier = smartShipCouriers?.find((company: { carrier_id: number; }) => Number(company.carrier_id) === vendor.carrierID);
+        console.log("courier", courier)
+        if (courier && smartShipNiceName) {
+          const smartShipVendors = vendors.filter((vendor) => {
+            return vendor.carrierID === Number(courier.carrier_id);
           });
-          commonCouriers.push(...smartShipVendorsWithNickname);
+
+          if (smartShipVendors.length > 0) {
+            smartShipVendors.forEach((vendor) => {
+              commonCouriers.push({
+                ...vendor.toObject(),
+                nickName: smartShipNiceName.nickName
+              });
+            });
+          }
         }
-      }
+      });
+
     } catch (error) {
       console.log("error", error);
     }
@@ -507,7 +529,6 @@ export const rateCalculation = async (
             vendor?.vendor_channel_id?.toString() === smartrNiceName._id.toString()
           );
           if (smartrVendors.length > 0) {
-            // commonCouriers.push(...smartrVendors);
             smartrVendors.forEach((vendor) => {
               commonCouriers.push({
                 ...vendor.toObject(),
