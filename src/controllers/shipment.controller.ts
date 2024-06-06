@@ -187,6 +187,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         try {
           const savedShipmentResponse = await shipmentResponseToSave.save();
           const awbNumber = externalAPIResponse?.data?.success_order_details?.orders[0]?.awb_number;
+          if (!awbNumber) {
+            return res.status(200).send({ valid: false, message: "Please choose another courier partner!" });
+          }
           const carrierName =
             externalAPIResponse?.data?.success_order_details?.orders[0]?.carrier_name + " " + vendorName?.nickName;
           order.client_order_reference_id = client_order_reference_id;
@@ -630,7 +633,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       }
 
     } else if (vendorName?.name === "ECOMM") {
-      
+
     }
   } catch (error) {
     return next(error);
