@@ -421,7 +421,8 @@ export const rateCalculation = async (
       isReversedCourier?: boolean;
     } = {
       _id: { $in: vendorIds },
-      isActive: true
+      isActive: true,
+      isReversedCourier: false
     };
 
     if (isReversedOrder) {
@@ -445,6 +446,10 @@ export const rateCalculation = async (
 
       const response = await axios.get(url, config);
       const courierCompanies = response?.data?.data?.available_courier_companies;
+
+      console.log("[Shiprocket Heavy weight Couries]", courierCompanies.map((item: any) => {
+        return [item.courier_company_id, item.courier_name]
+      }))
 
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
       vendors?.forEach((vendor: any) => {
@@ -480,10 +485,16 @@ export const rateCalculation = async (
         []
       );
 
+      // console.log(smartShipCouriers[0], "smartShipCouriers")
+      console.log(smartShipCouriers.map((item: any) => {
+        return [item.carrier_id, item.carrier_name]
+      }), "smartShipCouriers")
+
       const smartShipNiceName = await EnvModel.findOne({ name: "SMARTSHIP" }).select("_id nickName");
 
+
       vendors?.forEach((vendor: any) => {
-        const courier = smartShipCouriers?.find((company: { carrier_id: number; }) => Number(company.carrier_id) === vendor.carrierID);
+        const courier = smartShipCouriers?.find((company: { carrier_id: string; }) => Number(company.carrier_id) === vendor.carrierID);
         if (courier && smartShipNiceName) {
           const smartShipVendors = vendors.filter((vendor) => {
             return vendor.carrierID === Number(courier.carrier_id);
@@ -554,12 +565,15 @@ export const rateCalculation = async (
         }
       );
 
+
       if (!!isDelhiveryServicable.data.delivery_codes[0]) {
         const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY" }).select("_id nickName");
         if (delhiveryNiceName) {
-          const delhiveryVendors = vendors.filter((vendor) =>
-            vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString()
-          );
+          const delhiveryVendors = vendors.filter((vendor) => {
+            console.log(vendor?.vendor_channel_id?.toString(), delhiveryNiceName._id.toString())
+            return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString()
+          });
+          console.log(delhiveryVendors, "delhiveryVendors")
           if (delhiveryVendors.length > 0) {
             delhiveryVendors.forEach((vendor) => {
               commonCouriers.push({
@@ -621,7 +635,7 @@ export const rateCalculation = async (
         increment_price = cv.withinMetro;
         order_zone = "Zone C";
       } else if (
-        NorthEastStates.find((state) => state === pickupDetails?.StateName) &&
+        NorthEastStates.find((state) => state === pickupDetails?.StateName) ||
         NorthEastStates.find((state) => state === deliveryDetails?.StateName)
       ) {
         // north east
@@ -649,19 +663,31 @@ export const rateCalculation = async (
       }
 
       const minWeight = cv.weightSlab;
-      // TODO apply cod
       //@ts-ignore
       let totalCharge = 0;
       totalCharge += increment_price.basePrice;
-      orderWeight = orderWeight - cv.weightSlab;
+
+
+      if (orderWeight < minWeight) {
+        orderWeight = minWeight;
+      }
+
+
+      // minW = 5kg 
+      // or: 6.49kg
+      // zone c (inP: 40, BaseP : 240)
+      // 7kg - 5kg = 2kg 
+      // totalW = baseP + (inP * 2)
+
       const codPrice = cv.codCharge?.hard;
       const codAfterPercent = (cv.codCharge?.percent / 100) * collectableAmount;
       let cod = 0;
       if (paymentType === 1) {
         cod = codPrice > codAfterPercent ? codPrice : codAfterPercent;
       }
-      const weightIncrementRatio = Math.ceil(orderWeight / cv.incrementWeight);
-      totalCharge += increment_price.incrementPrice * weightIncrementRatio + cod;
+
+      const weightIncrementRatio = Math.ceil((orderWeight - minWeight) / cv.incrementWeight);
+      totalCharge += (increment_price.incrementPrice * weightIncrementRatio) + cod;
 
       data2send.push({
         nickName: cv.nickName,
@@ -742,7 +768,7 @@ export const validateStringDate = (date: string): boolean => {
 };
 
 export const MetroCitys = [
-  "New Delhi",
+  "Delhi",
   "MUMBAI",
   "Pune",
   "GURGAON",
@@ -758,7 +784,7 @@ export const MetroCitys = [
   "Ahmedabad City",
   "Ahmedabad",
 ];
-export const NorthEastStates = ["Sikkim", "Mizoram", "Manipur", "Assam", "Megalaya", "Nagaland", "Tripura"];
+export const NorthEastStates = ["Sikkim", "Mizoram", "Manipur", "Assam", "Megalaya", "Nagaland", "Tripura", "KAMRUP METROPOLITAN"];
 
 export async function getSmartShipToken(): Promise<string | false> {
   const env = await EnvModel.findOne({ name: "SMARTSHIP" }).lean();

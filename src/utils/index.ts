@@ -1,5 +1,5 @@
 import mongoose, { Types } from "mongoose";
-import { B2COrderModel } from "../models/order.model";
+import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
 import { startOfWeek, addDays, getDay, format } from "date-fns";
 import { MetroCitys, NorthEastStates, validateEmail } from "./helpers";
@@ -98,7 +98,7 @@ export function calculateAverageShippingCost(orders: any[]) {
 
 export async function updateOrderStatus(orderId: Types.ObjectId, stage: number, action: string) {
   try {
-    const updatedOrder = await B2COrderModel.findByIdAndUpdate(
+    let updatedOrder = await B2COrderModel.findByIdAndUpdate(
       orderId,
       {
         $push: {
@@ -112,6 +112,25 @@ export async function updateOrderStatus(orderId: Types.ObjectId, stage: number, 
       },
       { new: true }
     );
+
+    // If order not found in B2C, try finding it in the B2B modal
+    if (!updatedOrder) {
+      updatedOrder = await B2BOrderModel.findByIdAndUpdate(
+        orderId,
+        {
+          $push: {
+            orderStages: {
+              stage,
+              action,
+              stageDateTime: new Date(),
+            },
+          },
+          $set: { bucket: stage },
+        },
+        { new: true }
+      );
+    }
+
     return updatedOrder;
   } catch (err) {
     throw err;

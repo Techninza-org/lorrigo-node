@@ -372,7 +372,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           toState: order.customerDetails.get("state"),
           toPin: order.customerDetails.get("pincode"),
           // @ts-ignore
-          toMobile: order.customerDetails.get("phone").toString().slice(-10),
+          toMobile: order.customerDetails.get("phone").toString().toString().replaceAll(' ', '').slice(3, 13),
           toEmail: order.customerDetails.get("email") || "noreply@lorrigo.com",
           toAddType: "Home", // Mendatory 
           toLat: order.customerDetails.get("lat") || "",
@@ -440,7 +440,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
 
         if (orderAWB) {
-          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : IN_TRANSIT;
+          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
           order.orderStages.push({
             stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,  // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
             action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
@@ -868,6 +868,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
     return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
   } catch (error) {
+    console.log(error, 'erroe')
     return next(error);
   }
 }

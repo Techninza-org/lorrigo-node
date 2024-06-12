@@ -425,13 +425,14 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
         return res.status(200).send({ valid: false, message: "Ewaybill required." });
     }
 
+    let orderDetails: any;
     try {
-      const orderWithOrderReferenceId = await B2COrderModel.findOne({
+      orderDetails = await B2COrderModel.findOne({
         sellerId: req.seller._id,
         order_reference_id: body?.order_reference_id,
-      }).lean();
+      }).populate(["pickupAddress", "productId"]);;
 
-      if (!orderWithOrderReferenceId) {
+      if (!orderDetails) {
         const newError = new Error("Order not found.");
         return next(newError);
       }
@@ -506,6 +507,83 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
         //@ts-ignore
         data.ewaybill = body?.ewaybill;
       }
+
+      const shiprocketToken = await getShiprocketToken();
+      if (shiprocketToken && orderDetails.shiprocket_order_id) {
+        const orderPayload = {
+          order_id: body?.order_reference_id,
+          order_date: format(orderDetails?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
+          pickup_location: orderDetails?.pickupAddress?.name,
+          billing_customer_name: orderDetails?.customerDetails.get("name"),
+          billing_last_name: orderDetails?.customerDetails.get("name") || "",
+          billing_address: orderDetails?.customerDetails.get("address"),
+          billing_city: orderDetails?.customerDetails.get("city"),
+          billing_pincode: orderDetails?.customerDetails.get("pincode"),
+          billing_state: orderDetails?.customerDetails.get("state"),
+          billing_country: "India",
+          billing_email: orderDetails?.customerDetails.get("email") || "noreply@lorrigo.com",
+          billing_phone: orderDetails?.customerDetails.get("phone").replace("+91", ""),
+          order_items: [
+            {
+              name: orderDetails.productId.name,
+              sku: orderDetails.productId.category.slice(0, 40),
+              units: 1,
+              selling_price: Number(orderDetails.productId.taxable_value),
+            }
+          ],
+          payment_method: orderDetails?.payment_mode === 0 ? "Prepaid" : "COD",
+          sub_total: Number(orderDetails.productId?.taxable_value),
+          length: 20,
+          breadth: 10,
+          height: 10,
+          weight: body?.orderWeight,
+        };
+
+        if (orderDetails?.isReverseOrder) {
+          Object.assign(orderPayload, {
+            pickup_customer_name: orderDetails?.customerDetails?.get("name"),
+            pickup_phone: orderDetails?.customerDetails?.get("phone").toString()?.slice(2, 12),
+            pickup_address: orderDetails?.customerDetails?.get("address"),
+            pickup_pincode: orderDetails?.customerDetails?.get("pincode"),
+            pickup_city: orderDetails?.customerDetails?.get("city"),
+            pickup_state: orderDetails?.customerDetails?.get("state"),
+            pickup_country: "India",
+            shipping_customer_name: orderDetails?.pickupAddress?.name,
+            shipping_country: "India",
+            shipping_address: orderDetails?.pickupAddress?.address1,
+            shipping_pincode: orderDetails?.pickupAddress?.pincode,
+            shipping_city: orderDetails?.pickupAddress?.city,
+            shipping_state: orderDetails?.pickupAddress?.state,
+            shipping_phone: orderDetails?.pickupAddress?.phone.toString()?.slice(2, 12)
+          });
+        } else {
+          Object.assign(orderPayload, {
+            shipping_is_billing: true,
+            shipping_customer_name: orderDetails?.sellerDetails.get("sellerName") || "",
+            shipping_last_name: orderDetails?.sellerDetails.get("sellerName") || "",
+            shipping_address: orderDetails?.sellerDetails.get("sellerAddress"),
+            shipping_address_2: "",
+            shipping_city: orderDetails?.sellerDetails.get("sellerCity"),
+            shipping_pincode: orderDetails?.sellerDetails.get("sellerPincode"),
+            shipping_country: "India",
+            shipping_state: orderDetails?.sellerDetails.get("sellerState"),
+            shipping_phone: orderDetails?.sellerDetails.get("sellerPhone"),
+            ewaybill_no: orderDetails?.ewaybill,
+          });
+        }
+
+        // try {
+        //   const updateOrderShiprocket = await axios.post(`${envConfig.SHIPROCKET_API_BASEURL}${APIs.SHIPROCKET_UPDATE_ORDER}`, orderPayload, {
+        //     headers: {
+        //       Authorization: `${shiprocketToken}`,
+        //     },
+        //   });
+        // } catch (error) {
+        //   console.log(error)
+        //   return res.json({ valid: false, message: "Please try again, we're facing high traffic!", error });
+        // }
+      }
+
       // Find and update the existing order
       savedOrder = await B2COrderModel.findByIdAndUpdate(body?.orderId, data);
 
@@ -514,6 +592,7 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
       return next(err);
     }
   } catch (error) {
+    console.log(error)
     return next(error);
   }
 };
@@ -875,12 +954,12 @@ export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: Ne
         query.bucket = { $in: obj[status as keyof typeof obj] };
       }
 
-      orders = await B2BOrderModel
+      orders = (await B2BOrderModel
         .find(query)
         .sort({ createdAt: -1 })
         .populate("customer")
         .populate("pickupAddress")
-        .lean();
+        .lean()).reverse();
 
       orderCount =
         status && obj.hasOwnProperty(status)
@@ -939,6 +1018,8 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
         return next(err);
       }
     }
+
+    const randomInt = Math.round(Math.random() * 20)
     const pickupPincode = orderDetails.pickupAddress.pincode;
     const deliveryPincode = orderDetails.customerDetails.get("pincode");
     const weight = orderDetails.orderWeight;
@@ -958,7 +1039,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
     if (!shiprocketToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
     const orderPayload = {
-      order_id: orderDetails?.client_order_reference_id,
+      order_id: orderDetails?.client_order_reference_id + "-" + randomInt,
       order_date: format(orderDetails?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
       pickup_location: orderDetails?.pickupAddress?.name,
       billing_customer_name: orderDetails?.customerDetails.get("name"),
@@ -969,7 +1050,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
       billing_state: orderDetails?.customerDetails.get("state"),
       billing_country: "India",
       billing_email: orderDetails?.customerDetails.get("email") || "noreply@lorrigo.com",
-      billing_phone: orderDetails?.customerDetails.get("phone").replace("+91", ""),
+      billing_phone: orderDetails?.customerDetails.get("phone").toString().replaceAll(' ', '').slice(3, 13),
       order_items: [
         {
           name: orderDetails.productId.name,
@@ -983,14 +1064,15 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
       length: 20,
       breadth: 10,
       height: 10,
-      weight: 0.5,
-
+      // weight: 0.5,
+      // if Weight is less than 5, then set it to 0.5, else set it to orderWeight
+      weight: orderDetails.orderWeight >= 5 ? orderDetails.orderWeight : 0.5,
     };
 
     if (orderDetails?.isReverseOrder) {
       Object.assign(orderPayload, {
         pickup_customer_name: orderDetails?.customerDetails?.get("name"),
-        pickup_phone: orderDetails?.customerDetails?.get("phone").toString().slice(2, 12),
+        pickup_phone: orderDetails?.customerDetails?.get("phone").toString().slice(3, 13),
         pickup_address: orderDetails?.customerDetails?.get("address"),
         pickup_pincode: orderDetails?.customerDetails?.get("pincode"),
         pickup_city: orderDetails?.customerDetails?.get("city"),
@@ -1002,7 +1084,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
         shipping_pincode: orderDetails?.pickupAddress?.pincode,
         shipping_city: orderDetails?.pickupAddress?.city,
         shipping_state: orderDetails?.pickupAddress?.state,
-        shipping_phone: orderDetails?.pickupAddress?.phone.toString().slice(2, 12)
+        shipping_phone: orderDetails?.pickupAddress?.phone.toString().slice(3, 13)
       });
     } else {
       Object.assign(orderPayload, {
@@ -1080,7 +1162,7 @@ export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next
 
     if (!order) {
       const orderId = req.params?.orderId;
-      order = await B2COrderModel.findById(awb).populate(["pickupAddress", "productId"]).lean();
+      order = await B2COrderModel.findById(awb).populate(["pickupAddress", "productId"]).lean() || await B2BOrderModel.findById(awb).populate(["pickupAddress"]).lean();
     }
 
     return !order
