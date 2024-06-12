@@ -9,11 +9,11 @@ import EnvModel from "../models/env.model";
 import https from "node:https";
 import Logger from "./logger";
 import { RequiredTrackResponse, TrackResponse } from "../types/b2c";
-import { generateRemittanceId, getFridayDate, getNextToNextFriday } from ".";
+import { generateRemittanceId, getFridayDate, getNextToNextFriday, nextFriday } from ".";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
 import { CANCELED, CANCELLATION_REQUESTED_ORDER_STATUS, CANCELLED_ORDER_DESCRIPTION, DELIVERED, ORDER_TO_TRACK } from "./lorrigo-bucketing-info";
-import { addDays, format, nextFriday, parseISO } from "date-fns";
+import { addDays, format,parseISO } from "date-fns";
 import { getNextToNextFriday } from ".";
 
 /**

@@ -9,10 +9,11 @@ import { calculateShippingCharges, convertToISO, csvJSON, validateClientBillingF
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
 import CustomPricingModel from "../models/custom_pricing.model";
-import { nextFriday } from "date-fns";
+import { nextFriday } from "../utils";
 import ClientBillingModal from "../models/client.billing.modal";
 import csvtojson from "csvtojson";
 import exceljs from "exceljs";
+import { format } from "date-fns";
 
 
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
@@ -105,9 +106,9 @@ export const getAllRemittances = async (req: ExtendedRequest, res: Response, nex
 export const getFutureRemittances = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const currentDate = new Date();
-    const futureFriday = nextFriday(currentDate);
+    const currDate = format(currentDate, 'yy-MM-dd');
     const futureRemittances = await RemittanceModel.find({
-      remittanceDate: { $gte: currentDate },
+      remittanceDate: { $gte: currDate },
     }).populate("sellerId").lean();;
     return res.status(200).send({
       valid: true,

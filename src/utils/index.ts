@@ -1,7 +1,7 @@
 import mongoose, { Types } from "mongoose";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
-import { startOfWeek, addDays, getDay, format } from "date-fns";
+import { startOfWeek, addDays, getDay, format, startOfDay } from "date-fns";
 import { MetroCitys, NorthEastStates, validateEmail } from "./helpers";
 import { DELIVERED, IN_TRANSIT, READY_TO_SHIP, RTO } from "./lorrigo-bucketing-info";
 import { DeliveryDetails, IncrementPrice, PickupDetails, Vendor, Body } from "../types/rate-cal";
@@ -207,17 +207,17 @@ export async function sendMail({ user }: { user: { email: string; name: string; 
   }
 }
 
-export function generateRemittanceId(companyName: string, sellerId: string, currentDate: Date) {
+export function generateRemittanceId(companyName: string, sellerId: string, currentDate: string) {
   // Extracting relevant components from the current date
-  const year = String(currentDate.getFullYear()).slice(-2);
-  const month = ("0" + (currentDate.getMonth() + 1)).slice(-2);
-  const date = ("0" + currentDate.getDate()).slice(-2);
+  // const year = String(currentDate.getFullYear()).slice(-2);
+  // const month = ("0" + (currentDate.getMonth() + 1)).slice(-2);
+  // const date = ("0" + currentDate.getDate()).slice(-2);
 
   // Generating remittance ID
   const remittanceNumber = ("0000" + Math.floor(Math.random() * 10000)).slice(-4);
 
   // Combining components to form the remittance ID
-  const remittanceId = `${companyName.toUpperCase()}${sellerId.slice(-6)}${year}${month}${date}${remittanceNumber}`;
+  const remittanceId = `${companyName.toUpperCase()}${sellerId.slice(-6)}${currentDate.replaceAll("-", "")}${remittanceNumber}`;
 
   return remittanceId;
 }
@@ -226,6 +226,15 @@ export const getFridayDate = (date: Date) => {
   const startOfCurrentWeek = startOfWeek(date, { weekStartsOn: 1 }); // Assuming Monday is the start of the week
   const fridayDate = addDays(startOfCurrentWeek, 5); // Adding 5 days to get to Friday
   return fridayDate;
+};
+
+export const nextFriday = (currentDate: Date) => {
+  const dayOfWeek = currentDate.getDay();
+  const daysUntilFriday = (5 - dayOfWeek + 7) % 7 || 7; // 5 represents Friday
+  const date = addDays(startOfDay(currentDate), daysUntilFriday);
+  const formattedDate = format(date, 'yy-MM-dd'); // Formats date as 'YYYY-MM-DD'
+  console.log("Next Friday:", formattedDate);
+  return formattedDate;
 };
 
 // What is this function doing? 

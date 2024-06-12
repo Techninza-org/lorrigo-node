@@ -565,12 +565,84 @@ export const rateCalculation = async (
         }
       );
 
-
       if (!!isDelhiveryServicable.data.delivery_codes[0]) {
         const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY" }).select("_id nickName");
         if (delhiveryNiceName) {
           const delhiveryVendors = vendors.filter((vendor) => {
-            console.log(vendor?.vendor_channel_id?.toString(), delhiveryNiceName._id.toString())
+            console.log(vendor?.vendor_channel_id?.toString(), delhiveryNiceName._id.toString(), vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString())
+            return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString()
+          });
+
+          if (delhiveryVendors.length > 0) {
+            delhiveryVendors.forEach((vendor) => {
+              commonCouriers.push({
+                ...vendor.toObject(),
+                nickName: delhiveryNiceName.nickName
+              });
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.log("error", error);
+    }
+    try {
+      const delhiveryToken = await getDelhiveryTokenPoint5();
+      if (!delhiveryToken) {
+        throw new Error("Failed to retrieve Delhivery token");
+      }
+
+      const isDelhiveryServicable = await axios.get(
+        `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_PINCODE_SERVICEABILITY}${deliveryPincode}`,
+        {
+          headers: {
+            Authorization: `${delhiveryToken}`,
+          },
+        }
+      );
+
+
+      if (!!isDelhiveryServicable.data.delivery_codes[0]) {
+        const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY_0.5" }).select("_id nickName");
+        if (delhiveryNiceName) {
+          const delhiveryVendors = vendors.filter((vendor) => {
+            return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString()
+          });
+          console.log(delhiveryVendors, "delhiveryVendors")
+          if (delhiveryVendors.length > 0) {
+            delhiveryVendors.forEach((vendor) => {
+              commonCouriers.push({
+                ...vendor.toObject(),
+                nickName: delhiveryNiceName.nickName
+              });
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.log("error", error);
+    }
+
+    try {
+      const delhiveryToken = await getDelhiveryToken10();
+      if (!delhiveryToken) {
+        throw new Error("Failed to retrieve Delhivery token");
+      }
+
+      const isDelhiveryServicable = await axios.get(
+        `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_PINCODE_SERVICEABILITY}${deliveryPincode}`,
+        {
+          headers: {
+            Authorization: `${delhiveryToken}`,
+          },
+        }
+      );
+
+
+      if (!!isDelhiveryServicable.data.delivery_codes[0]) {
+        const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY_10" }).select("_id nickName");
+        if (delhiveryNiceName) {
+          const delhiveryVendors = vendors.filter((vendor) => {
             return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString()
           });
           console.log(delhiveryVendors, "delhiveryVendors")
@@ -784,7 +856,7 @@ export const MetroCitys = [
   "Ahmedabad City",
   "Ahmedabad",
 ];
-export const NorthEastStates = ["Sikkim", "Mizoram", "Manipur", "Assam", "Megalaya", "Nagaland", "Tripura", "KAMRUP METROPOLITAN"];
+export const NorthEastStates = ["Sikkim", "Mizoram", "Manipur", "Assam", "Megalaya", "Nagaland", "Tripura", "Jammu and Kashmir", "Himachal Pradesh", "Mizoram"];
 
 export async function getSmartShipToken(): Promise<string | false> {
   const env = await EnvModel.findOne({ name: "SMARTSHIP" }).lean();
@@ -805,6 +877,20 @@ export async function getSMARTRToken(): Promise<string | false> {
 
 export async function getDelhiveryToken() {
   const env = await EnvModel.findOne({ name: "DELHIVERY" }).lean();
+  if (!env) return false;
+  //@ts-ignore
+  const token = "Token" + " " + env?.token;
+  return token;
+}
+export async function getDelhiveryTokenPoint5() {
+  const env = await EnvModel.findOne({ name: "DELHIVERY_0.5" }).lean();
+  if (!env) return false;
+  //@ts-ignore
+  const token = "Token" + " " + env?.token;
+  return token;
+}
+export async function getDelhiveryToken10() {
+  const env = await EnvModel.findOne({ name: "DELHIVERY_10" }).lean();
   if (!env) return false;
   //@ts-ignore
   const token = "Token" + " " + env?.token;

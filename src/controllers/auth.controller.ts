@@ -34,7 +34,7 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
       });
     }
 
-    const isAvailable = (await SellerModel.findOne({ email: body.email }).lean()) !== null;
+    const isAvailable = (await SellerModel.findOne({ email: body.email.toLocaleLowerCase() }).lean()) !== null;
 
     if (isAvailable) {
       return res.send({
@@ -50,7 +50,7 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
       return acc.concat(cv._id);
     }, []);
 
-    const user = new SellerModel({ name: body?.name, email: body?.email, password: hashPassword, vendors: vendorsId });
+    const user = new SellerModel({ name: body?.name, email: body?.email.toLocaleLowerCase(), password: hashPassword, vendors: vendorsId });
 
     let savedUser;
     try {
@@ -90,7 +90,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       });
     }
 
-    const existingUser = await SellerModel.findOne({ email: body.email }).select(["name", "email", "password", "walletBalance", "isVerified"]).lean();
+    const existingUser = await SellerModel.findOne({ email: body.email.toLocaleLowerCase() }).select(["name", "email", "password", "walletBalance", "isVerified"]).lean();
     if (!existingUser) {
       return res.status(200).send({
         valid: false,
@@ -112,7 +112,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     return res.status(200).send({
       valid: true,
       user: {
-        email: existingUser.email,
+        email: existingUser.email.toLocaleLowerCase(),
         name: existingUser.name,
         id: existingUser._id,
         isVerified: false,

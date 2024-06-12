@@ -4,7 +4,7 @@ const RemittanceSchema = new mongoose.Schema({
   sellerId: { type: mongoose.Schema.ObjectId, ref: "Seller", required: true },
 
   remittanceId: { type: String, required: true, unique: true},
-  remittanceDate: { type: Date, required: true },
+  remittanceDate: { type: String, required: true },
   remittanceAmount: { type: Number, required: true },
   remittanceStatus: { type: String, required: true },
   orders : { type: Array, required: true },

@@ -7,7 +7,7 @@ const app = express();
 import config from "./utils/config";
 import orderRouter from "./routes/order.routes";
 import { AuthMiddleware, ErrorHandler } from "./utils/middleware";
-import { addVendors, getDelhiveryToken, getSellers, ratecalculatorController, updateVendor4Seller } from "./utils/helpers";
+import { addVendors, getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getSellers, ratecalculatorController, updateVendor4Seller } from "./utils/helpers";
 import hubRouter from "./routes/hub.routes";
 import cors from "cors";
 import customerRouter from "./routes/customer.routes";
@@ -138,7 +138,7 @@ async function processChunk(chunk: any) {
 
     // Uncomment the following block to make the API call
     // try {
-    //   const delhiveryToken = await getDelhiveryToken();
+    //   const delhiveryToken = await getDelhiveryToken10();
     //   const delhiveryResponse = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
     //     headers: { Authorization: delhiveryToken }
     //   });

@@ -1,6 +1,8 @@
 import { type Response, type NextFunction } from "express";
 import {
   getDelhiveryToken,
+  getDelhiveryToken10,
+  getDelhiveryTokenPoint5,
   getSMARTRToken,
   getSellerChannelConfig,
   getShiprocketToken,
@@ -634,6 +636,276 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         return next(error);
       }
 
+    } else if (vendorName?.name === "DELHIVERY_0.5") {
+      const delhiveryToken = await getDelhiveryTokenPoint5();
+      if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+      const delhiveryShipmentPayload = {
+        format: "json",
+        data: {
+          shipments: [
+            {
+              name: order.customerDetails.get("name"),
+              add: order.customerDetails.get("address"),
+              pin: order.customerDetails.get("pincode"),
+              city: order.customerDetails.get("city"),
+              state: order.customerDetails.get("state"),
+              country: "India",
+              phone: order.customerDetails.get("phone"),
+              order: order.order_reference_id,
+              payment_mode: order?.isReverseOrder ? "Pickup" : order.payment_mode ? "COD" : "Prepaid",
+              return_pin: hubDetails.rtoPincode,
+              return_city: hubDetails.rtoCity,
+              return_phone: hubDetails.phone,
+              return_add: hubDetails.rtoAddress || hubDetails.address1,
+              return_state: hubDetails.rtoState || hubDetails.state,
+              return_country: "India",
+              products_desc: productDetails.name,
+              hsn_code: productDetails.hsn_code,
+              cod_amount: order.payment_mode ? order.amount2Collect : 0,
+              order_date: order.order_invoice_date,
+              total_amount: productDetails.taxable_value,
+              seller_add: hubDetails.address1,
+              seller_name: hubDetails.name,
+              seller_inv: order.order_invoice_number,
+              quantity: productDetails.quantity,
+              waybill: order.ewaybill || "",
+              shipment_width: order.orderBoxWidth,
+              shipment_height: order.orderBoxHeight,
+              weight: order.orderWeight,
+              seller_gst_tin: req.seller.gstno,
+              shipping_mode: "Surface",
+              address_type: "home",
+            },
+          ],
+          pickup_location: {
+            name: hubDetails.name,
+            add: hubDetails.address1,
+            city: hubDetails.city,
+            pin_code: hubDetails.pincode,
+            country: "India",
+            phone: hubDetails.phone,
+          },
+        },
+      };
+
+      const urlEncodedPayload = `format=json&data=${encodeURIComponent(JSON.stringify(delhiveryShipmentPayload.data))}`;
+
+      try {
+        const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_CREATE_ORDER}`, urlEncodedPayload, {
+          headers: {
+            Authorization: delhiveryToken,
+          },
+        });
+
+        const delhiveryShipmentResponse = response.data;
+        const delhiveryRes = delhiveryShipmentResponse?.packages[0]
+
+        if (!delhiveryRes?.status) {
+          return res.status(200).send({ valid: false, message: "Must Select the Delhivery Registered Hub" });
+        }
+
+        order.awb = delhiveryRes?.waybill;
+        order.carrierName = courier?.name + " " + (vendorName?.nickName);
+        order.shipmentCharges = body.charge;
+        order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
+        order.orderStages.push({
+          stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
+          action: COURRIER_ASSIGNED_ORDER_DESCRIPTION, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_DESCRIPTION
+          stageDateTime: new Date(),
+        }, {
+          stage: SMARTSHIP_MANIFEST_ORDER_STATUS,
+          action: MANIFEST_ORDER_DESCRIPTION,
+          stageDateTime: new Date(),
+        }, {
+          stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
+          action: PICKUP_SCHEDULED_DESCRIPTION,
+          stageDateTime: new Date(),
+        }
+        );
+
+        if (order.channelName === "shopify") {
+          const shopfiyConfig = await getSellerChannelConfig(sellerId);
+          const shopifyOrders = await axios.get(
+            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
+            {
+              headers: {
+                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+              },
+            }
+          );
+
+          const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
+
+          const shopifyFulfillment = {
+            fulfillment: {
+              line_items_by_fulfillment_order: [
+                {
+                  fulfillment_order_id: fulfillmentOrderId,
+                },
+              ],
+              tracking_info: {
+                company: delhiveryRes?.waybill,
+                number: courier?.name + " " + (vendorName?.nickName),
+                url: `https://lorrigo.in/track/${order?._id}`,
+              },
+            },
+          };
+          const shopifyFulfillmentResponse = await axios.post(
+            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
+            shopifyFulfillment,
+            {
+              headers: {
+                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+              },
+            }
+          );
+          order.channelFulfillmentId = fulfillmentOrderId;
+        }
+
+        await order.save();
+        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+        return res.status(200).send({ valid: true, order });
+      } catch (error) {
+        console.error("Error creating Delhivery shipment:", error);
+        return next(error);
+      }
+
+    } else if (vendorName?.name === "DELHIVERY_10") {
+      const delhiveryToken = await await getDelhiveryToken10();
+      if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+      const delhiveryShipmentPayload = {
+        format: "json",
+        data: {
+          shipments: [
+            {
+              name: order.customerDetails.get("name"),
+              add: order.customerDetails.get("address"),
+              pin: order.customerDetails.get("pincode"),
+              city: order.customerDetails.get("city"),
+              state: order.customerDetails.get("state"),
+              country: "India",
+              phone: order.customerDetails.get("phone"),
+              order: order.order_reference_id,
+              payment_mode: order?.isReverseOrder ? "Pickup" : order.payment_mode ? "COD" : "Prepaid",
+              return_pin: hubDetails.rtoPincode,
+              return_city: hubDetails.rtoCity,
+              return_phone: hubDetails.phone,
+              return_add: hubDetails.rtoAddress || hubDetails.address1,
+              return_state: hubDetails.rtoState || hubDetails.state,
+              return_country: "India",
+              products_desc: productDetails.name,
+              hsn_code: productDetails.hsn_code,
+              cod_amount: order.payment_mode ? order.amount2Collect : 0,
+              order_date: order.order_invoice_date,
+              total_amount: productDetails.taxable_value,
+              seller_add: hubDetails.address1,
+              seller_name: hubDetails.name,
+              seller_inv: order.order_invoice_number,
+              quantity: productDetails.quantity,
+              waybill: order.ewaybill || "",
+              shipment_width: order.orderBoxWidth,
+              shipment_height: order.orderBoxHeight,
+              weight: order.orderWeight,
+              seller_gst_tin: req.seller.gstno,
+              shipping_mode: "Surface",
+              address_type: "home",
+            },
+          ],
+          pickup_location: {
+            name: hubDetails.name,
+            add: hubDetails.address1,
+            city: hubDetails.city,
+            pin_code: hubDetails.pincode,
+            country: "India",
+            phone: hubDetails.phone,
+          },
+        },
+      };
+
+      const urlEncodedPayload = `format=json&data=${encodeURIComponent(JSON.stringify(delhiveryShipmentPayload.data))}`;
+
+      try {
+        const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_CREATE_ORDER}`, urlEncodedPayload, {
+          headers: {
+            Authorization: delhiveryToken,
+          },
+        });
+
+        const delhiveryShipmentResponse = response.data;
+        const delhiveryRes = delhiveryShipmentResponse?.packages[0]
+
+        if (!delhiveryRes?.status) {
+          return res.status(200).send({ valid: false, message: "Must Select the Delhivery Registered Hub" });
+        }
+
+        order.awb = delhiveryRes?.waybill;
+        order.carrierName = courier?.name + " " + (vendorName?.nickName);
+        order.shipmentCharges = body.charge;
+        order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
+        order.orderStages.push({
+          stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
+          action: COURRIER_ASSIGNED_ORDER_DESCRIPTION, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_DESCRIPTION
+          stageDateTime: new Date(),
+        }, {
+          stage: SMARTSHIP_MANIFEST_ORDER_STATUS,
+          action: MANIFEST_ORDER_DESCRIPTION,
+          stageDateTime: new Date(),
+        }, {
+          stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
+          action: PICKUP_SCHEDULED_DESCRIPTION,
+          stageDateTime: new Date(),
+        }
+        );
+
+        if (order.channelName === "shopify") {
+          const shopfiyConfig = await getSellerChannelConfig(sellerId);
+          const shopifyOrders = await axios.get(
+            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
+            {
+              headers: {
+                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+              },
+            }
+          );
+
+          const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
+
+          const shopifyFulfillment = {
+            fulfillment: {
+              line_items_by_fulfillment_order: [
+                {
+                  fulfillment_order_id: fulfillmentOrderId,
+                },
+              ],
+              tracking_info: {
+                company: delhiveryRes?.waybill,
+                number: courier?.name + " " + (vendorName?.nickName),
+                url: `https://lorrigo.in/track/${order?._id}`,
+              },
+            },
+          };
+          const shopifyFulfillmentResponse = await axios.post(
+            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
+            shopifyFulfillment,
+            {
+              headers: {
+                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+              },
+            }
+          );
+          order.channelFulfillmentId = fulfillmentOrderId;
+        }
+
+        await order.save();
+        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+        return res.status(200).send({ valid: true, order });
+      } catch (error) {
+        console.error("Error creating Delhivery shipment:", error);
+        return next(error);
+      }
+
     } else if (vendorName?.name === "ECOMM") {
 
     }
@@ -815,6 +1087,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           }
           )
           const response = cancelOrder?.data
+          console.log(response, "response")
           const isCancelled = response.data[0].success;
           if (isCancelled) {
             order.awb = null;
@@ -826,8 +1099,89 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             order.save();
           }
         }
-      } else if (vendorName?.name === "DELHIVERY") {
+      } 
+      else if (vendorName?.name === "DELHIVERY") {
         const delhiveryToken = await getDelhiveryToken();
+        if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+        const cancelShipmentPayload = {
+          waybill: order.awb,
+          cancellation: true
+        };
+
+        try {
+          const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_CANCEL_ORDER}`, cancelShipmentPayload, {
+            headers: {
+              Authorization: delhiveryToken,
+            },
+          });
+
+          const delhiveryShipmentResponse = response.data;
+
+          if (delhiveryShipmentResponse.status) {
+            if (type === "order") {
+              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+            } else {
+              order.awb = null;
+              order.carrierName = null
+              order.save();
+
+              await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
+              await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
+
+            }
+            // @ts-ignore
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+          }
+          return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
+
+        } catch (error) {
+          console.error("Error creating Delhivery shipment:", error);
+          return next(error);
+        }
+      }
+      else if (vendorName?.name === "DELHIVERY_0.5") {
+        const delhiveryToken = await getDelhiveryTokenPoint5();
+        if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+        const cancelShipmentPayload = {
+          waybill: order.awb,
+          cancellation: true
+        };
+
+        try {
+          const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_CANCEL_ORDER}`, cancelShipmentPayload, {
+            headers: {
+              Authorization: delhiveryToken,
+            },
+          });
+
+          const delhiveryShipmentResponse = response.data;
+
+          if (delhiveryShipmentResponse.status) {
+            if (type === "order") {
+              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+            } else {
+              order.awb = null;
+              order.carrierName = null
+              order.save();
+
+              await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
+              await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
+
+            }
+            // @ts-ignore
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+          }
+          return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
+
+        } catch (error) {
+          console.error("Error creating Delhivery shipment:", error);
+          return next(error);
+        }
+      }
+      else if (vendorName?.name === "DELHIVERY_10") {
+        const delhiveryToken = await getDelhiveryToken10();
         if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
         const cancelShipmentPayload = {

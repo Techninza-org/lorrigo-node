@@ -8,6 +8,8 @@ import APIs from "../utils/constants/third_party_apis";
 import EnvModel from "../models/env.model";
 import {
   getDelhiveryToken,
+  getDelhiveryToken10,
+  getDelhiveryTokenPoint5,
   getPincodeDetails,
   getShiprocketToken,
   getSmartShipToken,
@@ -91,7 +93,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
 
     const shiprocketAPIconfig = { headers: { Authorization: shiprocketToken } };
 
-    const smartshipApiBody = {
+    const smartshipApiBodySurface = {
       hub_details: {
         hub_name: name,
         pincode: pincode,
@@ -101,6 +103,18 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
         address2: address2,
         hub_phone: phone,
         delivery_type_id: 2,  // 1 for express, 2 for surface
+      },
+    };
+    const smartshipApiBodyExpress = {
+      hub_details: {
+        hub_name: name,
+        pincode: pincode,
+        city: city,
+        state: state,
+        address1: address1,
+        address2: address2,
+        hub_phone: phone,
+        delivery_type_id: 1,  // 1 for express, 2 for surface
       },
     };
 
@@ -133,13 +147,22 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
     }
 
     let smartShipResponse;
+    let smartShipResponseExpress;
     let shiprocketResponse;
     try {
       smartShipResponse = await axios.post(
         config.SMART_SHIP_API_BASEURL! + APIs.HUB_REGISTRATION,
-        smartshipApiBody,
+        smartshipApiBodySurface,
         smartshipAPIconfig
       );
+      smartShipResponseExpress = await axios.post(
+        config.SMART_SHIP_API_BASEURL! + APIs.HUB_REGISTRATION,
+        smartshipApiBodyExpress,
+        smartshipAPIconfig
+      );
+
+      console.log(smartShipResponseExpress.data, "smartship express response")
+
     } catch (err) {
       return next(err);
     }
@@ -157,11 +180,18 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
     }
 
     try {
-      const delhiveryToken = await getDelhiveryToken();
-      const delhiveryResponse = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
-        headers: { Authorization: delhiveryToken }
+      const delhiveryToken5 = await getDelhiveryToken();
+      const delhiveryTokenPoint5 = await getDelhiveryTokenPoint5();
+      const delhiveryToken10 = await getDelhiveryToken10();
+      const delhiveryResponse5 = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
+        headers: { Authorization: delhiveryToken5 }
       });
-      console.log(delhiveryResponse.data, "delhivery response")
+      const delhiveryResponsePoint5 = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
+        headers: { Authorization: delhiveryTokenPoint5 }
+      });
+      const delhiveryResponse10 = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
+        headers: { Authorization: delhiveryToken10 }
+      });
     } catch (error: any) {
       console.log(error.response?.data, "error in delhivery")
       return res.status(500).send({ valid: false, error });
