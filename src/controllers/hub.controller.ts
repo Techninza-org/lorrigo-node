@@ -100,7 +100,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
         address1: address1,
         address2: address2,
         hub_phone: phone,
-        delivery_type_id: 2,
+        delivery_type_id: 2,  // 1 for express, 2 for surface
       },
     };
 
@@ -124,10 +124,10 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       address: address1,
       city: city,
       country: "India",
-      pin: pincode.toString(),
-      return_address: rtoAddress.toString() || "NA",
-      return_pin: rtoPincode.toString() || "NA",
-      return_city: rtoCity,
+      pin: pincode?.toString(),
+      return_address: rtoAddress?.toString() || address1,
+      return_pin: rtoPincode?.toString() || pincode?.toString(),
+      return_city: rtoCity || city,
       return_state: rtoState,
       return_country: "India"
     }
@@ -157,7 +157,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
     }
 
     try {
-      const delhiveryToken =   await getDelhiveryToken();
+      const delhiveryToken = await getDelhiveryToken();
       const delhiveryResponse = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
         headers: { Authorization: delhiveryToken }
       });

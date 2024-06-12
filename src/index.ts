@@ -7,7 +7,7 @@ const app = express();
 import config from "./utils/config";
 import orderRouter from "./routes/order.routes";
 import { AuthMiddleware, ErrorHandler } from "./utils/middleware";
-import { addVendors, getSellers, ratecalculatorController, updateVendor4Seller } from "./utils/helpers";
+import { addVendors, getDelhiveryToken, getSellers, ratecalculatorController, updateVendor4Seller } from "./utils/helpers";
 import hubRouter from "./routes/hub.routes";
 import cors from "cors";
 import customerRouter from "./routes/customer.routes";
@@ -23,6 +23,8 @@ import SellerModel from "./models/seller.model";
 import { getSpecificOrder } from "./controllers/order.controller";
 import B2BCalcModel from "./models/b2b.calc.model";
 import { calculateRateAndPrice, regionToZoneMapping, regionToZoneMappingLowercase } from "./utils/B2B-helper";
+import axios from "axios";
+import APIs from "./utils/constants/third_party_apis";
 
 app.use(cors({ origin: "*" }));
 
@@ -94,6 +96,60 @@ if (!config.MONGODB_URI) {
 // }
 
 
+async function hubRegDelhivery() {
+  try {
+    const allHub = await HubModel.find();
+    
+    const chunkSize = Math.ceil(allHub.length / 4); // Calculate chunk size to divide the array into 4 parts
+    const chunks = [];
+    
+    for (let i = 0; i < allHub.length; i += chunkSize) {
+      chunks.push(allHub.slice(i, i + chunkSize));
+    }
+
+    for (const chunk of chunks) {
+      await processChunk(chunk);
+    }
+    
+  } catch (error) {
+    console.error('Error fetching hubs:', error);
+  }
+}
+
+async function processChunk(chunk: any) {
+  for (const hub of chunk) {
+    const { name, phone, address1, city, pincode, rtoAddress, rtoPincode, rtoCity, rtoState } = hub;
+    const delhiveryHubPayload = {
+      name: name,
+      email: "noreply@lorrigo.com",
+      phone: phone.toString().slice(2, 12),
+      address: address1,
+      city: city,
+      country: "India",
+      pin: pincode?.toString(),
+      return_address: rtoAddress?.toString() || address1,
+      return_pin: rtoPincode?.toString() || pincode?.toString(),
+      return_city: rtoCity || city,
+      return_state: rtoState || "",
+      return_country: "India"
+    };
+
+    // console.log(delhiveryHubPayload);
+
+    // Uncomment the following block to make the API call
+    // try {
+    //   const delhiveryToken = await getDelhiveryToken();
+    //   const delhiveryResponse = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
+    //     headers: { Authorization: delhiveryToken }
+    //   });
+    //   console.log(delhiveryResponse.data, "delhivery response");
+    // } catch (error: any) {
+    //   console.log(error.response?.data, "error in delhivery");
+    // }
+  }
+}
+
+
 mongoose
   .connect(config.MONGODB_URI)
   .then(() => {
@@ -101,7 +157,6 @@ mongoose
     CONNECT_SHIPROCKET();
     CONNECT_SMARTSHIP();
     CONNECT_SMARTR();
-    // trackOrder_Smartr()
   })
   .catch((err) => {
     Logger.log(err.message);

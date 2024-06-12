@@ -187,6 +187,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         try {
           const savedShipmentResponse = await shipmentResponseToSave.save();
           const awbNumber = externalAPIResponse?.data?.success_order_details?.orders[0]?.awb_number;
+          console.log("[SmartShip createShipment controller] awbNumber", externalAPIResponse?.data?.success_order_details?.orders[0]);
           if (!awbNumber) {
             return res.status(200).send({ valid: false, message: "Please choose another courier partner!" });
           }
@@ -254,6 +255,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           return res.status(200).send({ valid: true, order: updatedOrder, shipment: savedShipmentResponse });
         } catch (err) {
+          console.log(err, "error")
           return next(err);
         }
       }
