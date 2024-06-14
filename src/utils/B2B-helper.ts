@@ -35,7 +35,8 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
         isReversedCourier?: boolean;
     } = {
         _id: { $in: allowedCourierIds },
-        isActive: true
+        isActive: true,
+        isReversedCourier: false,
     };
 
     const b2bCouriers = await B2BCalcModel.find(query).populate("vendor_channel_id");
@@ -47,7 +48,6 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
     const courierDataPromises = b2bCouriers.map(async (courier) => {
         try {
             const result = await calculateRateAndPrice(courier, Tzone, Fzone, order.total_weight, courier._id.toString(), fromRegionName, toRegionName, order.amount);
-            console.log(courier.vendor_channel_id)
             return {
                 // @ts-ignore
                 nickName: courier.vendor_channel_id.nickName,

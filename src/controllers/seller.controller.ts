@@ -9,6 +9,7 @@ import envConfig from "../utils/config";
 import ClientBillingModal from "../models/client.billing.modal";
 import crypto from "crypto";
 import PaymentTransactionModal from "../models/payment.transaction.modal";
+import { rechargeWalletInfo } from "../utils/recharge-wallet-info";
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -269,7 +270,7 @@ export const getSellerBilling = async (req: ExtendedRequest, res: Response, next
 
 export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   const sellerId = req.seller._id;
-  const { amount } = req.body;
+  const { amount, origin } = req.body;
   // Phonepe Integration
   // working on it
   try {
@@ -279,9 +280,9 @@ export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, 
       "merchantTransactionId": merchantTransactionId,
       "merchantUserId": sellerId._id.toString(),
       "amount": amount * 100, // 100 paise = 1 rupee
-      "redirectUrl": `${envConfig.PHONEPE_SUCCESS_URL}/${merchantTransactionId}`,
+      "redirectUrl": `${origin}/wallet/recharge/success/${merchantTransactionId}`,
       "redirectMode": "REDIRECT",
-      "callbackUrl": `http://localhost:3000/recharge-wallet/success/${merchantTransactionId}`,
+      "callbackUrl": `${origin}/wallet/recharge/success/${merchantTransactionId}`,
       "mobileNumber": "9999999999",
       "paymentInstrument": {
         "type": "PAY_PAGE"
@@ -315,7 +316,7 @@ export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, 
       code: rechargeWalletViaPhoenpeData.code,
       data: rechargeWalletViaPhoenpeData,
       stage: [{
-        action: "Initiated",
+        action: rechargeWalletInfo.PAYMENT_INITIATED,
         dateTime: new Date().toISOString()
       }]
     }
@@ -359,12 +360,12 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
 
     const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId }, {
       $set: {
-        code: rechargeWalletViaPhoenpeData.code,
+        code: rechargeWalletViaPhoenpeData.code.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL) ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletViaPhoenpeData.code,
         data: rechargeWalletViaPhoenpeData,
       },
       $push: {
         stage: {
-          action: "Completed",
+          action: rechargeWalletInfo.PAYMENT_SUCCESSFUL,
           dateTime: new Date().toISOString()
         }
       }
@@ -397,6 +398,20 @@ export const getSellerWalletBalance = async (req: ExtendedRequest, res: Response
     return res.status(200).send({
       valid: true,
       walletBalance: seller.walletBalance,
+    });
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export const getSellerTransactionHistory = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const transactions = (await PaymentTransactionModal.find({ sellerId: req.seller._id })).reverse();
+    if (!transactions) return res.status(200).send({ valid: false, message: "No transaction found" });
+
+    return res.status(200).send({
+      valid: true,
+      transactions,
     });
   } catch (error) {
     return next(error)

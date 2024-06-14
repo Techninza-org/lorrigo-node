@@ -16,6 +16,8 @@ import { Types } from "mongoose";
 import { CANCELED, DELIVERED, IN_TRANSIT, LOST_DAMAGED, NDR, READY_TO_SHIP, RTO, RETURN_CANCELLATION, RETURN_CANCELLED_BY_CLIENT, RETURN_CANCELLED_BY_SMARTSHIP, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_ORDER_MANIFESTED, RETURN_OUT_FOR_PICKUP, RETURN_PICKED, RETURN_SHIPMENT_LOST } from "./lorrigo-bucketing-info";
 import ChannelModel from "../models/channel.model";
 import HubModel from "../models/hub.model";
+import { calculateRateAndPrice, regionToZoneMappingLowercase } from "./B2B-helper";
+import B2BCalcModel from "../models/b2b.calc.model";
 
 export const validateEmail = (email: string): boolean => {
   return /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)*[a-zA-Z]{2,}))$/.test(
@@ -147,6 +149,8 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
             northEast: vendor.northEast,
             ...body,
           };
+
+          console.log(toAdd, "toAdd")
           savedPricing = new CustomPricingModel(toAdd);
           savedPricing = await savedPricing.save();
           return res.status(200).send({ valid: true, message: "Vendor priced updated for user", savedPricing });
@@ -246,6 +250,7 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
     const data2send: {
       name: string;
       minWeight: number;
+      rtoCharges: number;
       charge: number;
       type: string;
       expectedPickup: string;
@@ -330,10 +335,16 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
       }
 
       const minWeight = cv.weightSlab;
-      // TODO apply cod
       //@ts-ignore
       let totalCharge = 0;
       totalCharge += increment_price.basePrice;
+
+
+      if (orderWeight < minWeight) {
+        orderWeight = minWeight;
+      }
+      
+      //@ts-ignore
       orderWeight = orderWeight - cv.weightSlab;
       const codPrice = cv.codCharge?.hard;
       const codAfterPercent = (cv.codCharge?.percent / 100) * body.collectableAmount;
@@ -343,9 +354,11 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
       }
       const weightIncrementRatio = Math.ceil(orderWeight / cv.incrementWeight);
       totalCharge += increment_price.incrementPrice * weightIncrementRatio + cod;
+      let rtoCharges = (totalCharge - cod) * 2
 
       data2send.push({
         name: cv.name,
+        rtoCharges,
         // @ts-ignore
         nickName: cv.vendor_channel_id.nickName,
         minWeight,
@@ -362,6 +375,72 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
     return next(err);
   }
 };
+
+export const B2BRatecalculatorController = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  const body = req.body;
+  const users_vendors = req.seller?.vendors;
+
+  const {
+    deliveryPincode: toPin,
+    pickupPincode: fromPin,
+    amount,
+    orderWeight,
+  } = body
+
+  const pickupPincode = Number(fromPin);
+  const deliveryPincode = Number(toPin);
+
+  const pickupPincodeData = await PincodeModel.findOne({ Pincode: pickupPincode }).exec();
+  const deliveryPincodeData = await PincodeModel.findOne({ Pincode: deliveryPincode }).exec();
+
+  if (!pickupPincodeData || !deliveryPincodeData) {
+    throw new Error('Pincode data not found');
+  }
+
+  const fromRegionName = pickupPincodeData.District.toLowerCase(); // convert to lowercase
+  const toRegionName = deliveryPincodeData.District.toLowerCase(); // convert to lowercase
+
+  const Fzone = regionToZoneMappingLowercase[fromRegionName];
+  const Tzone = regionToZoneMappingLowercase[toRegionName];
+
+  let query: {
+    _id: { $in: (Types.ObjectId | null)[] };
+    isActive: boolean;
+    isReversedCourier?: boolean;
+  } = {
+    _id: { $in: users_vendors },
+    isActive: true,
+    isReversedCourier: false,
+  };
+
+
+  const b2bCouriers = await B2BCalcModel.find(query).populate("vendor_channel_id");
+  const courierDataPromises = b2bCouriers.map(async (courier) => {
+    try {
+      const result = await calculateRateAndPrice(courier, Tzone, Fzone, orderWeight, courier._id.toString(), fromRegionName, toRegionName, amount);
+      return {
+        // @ts-ignore
+        nickName: courier.vendor_channel_id.nickName,
+        name: courier.name,
+        minWeight: 0.5,
+        type: courier.type,
+        carrierID: courier.carrierID,
+        order_zone: `${Fzone}-${Tzone}`,
+        charge: result.finalAmount,
+        ...result
+      };
+    } catch (error) {
+      console.log(error)
+      return null;
+    }
+  });
+
+  const courierData = await Promise.all(courierDataPromises);
+  const b2bCouriersData = courierData.filter(data => data !== null);
+
+  return res.status(200).send({ valid: true, rates: b2bCouriersData });
+
+}
 
 const convertToObjectId = (id: string) => {
   try {
@@ -569,7 +648,6 @@ export const rateCalculation = async (
         const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY" }).select("_id nickName");
         if (delhiveryNiceName) {
           const delhiveryVendors = vendors.filter((vendor) => {
-            console.log(vendor?.vendor_channel_id?.toString(), delhiveryNiceName._id.toString(), vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString())
             return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString()
           });
 
@@ -608,7 +686,6 @@ export const rateCalculation = async (
           const delhiveryVendors = vendors.filter((vendor) => {
             return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString()
           });
-          console.log(delhiveryVendors, "delhiveryVendors")
           if (delhiveryVendors.length > 0) {
             delhiveryVendors.forEach((vendor) => {
               commonCouriers.push({
@@ -645,7 +722,6 @@ export const rateCalculation = async (
           const delhiveryVendors = vendors.filter((vendor) => {
             return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString()
           });
-          console.log(delhiveryVendors, "delhiveryVendors")
           if (delhiveryVendors.length > 0) {
             delhiveryVendors.forEach((vendor) => {
               commonCouriers.push({
@@ -664,6 +740,8 @@ export const rateCalculation = async (
       name: string;
       minWeight: number;
       charge: number;
+      isReversedCourier: boolean;
+      rtoCharges: number;
       type: string;
       expectedPickup: string;
       carrierID: number;
@@ -760,11 +838,14 @@ export const rateCalculation = async (
 
       const weightIncrementRatio = Math.ceil((orderWeight - minWeight) / cv.incrementWeight);
       totalCharge += (increment_price.incrementPrice * weightIncrementRatio) + cod;
+      let rtoCharges = (totalCharge - cod) * 2
 
       data2send.push({
         nickName: cv.nickName,
         name: cv.name,
         minWeight,
+        isReversedCourier: cv.isReversedCourier,
+        rtoCharges,
         charge: totalCharge,
         type: cv.type,
         expectedPickup,
@@ -1040,97 +1121,98 @@ export function getSmartshipBucketing(status: number) {
   );
 }
 
-export function getSmartRBucketing(status: string, desc: string) {
+export function getSmartRBucketing(status: string, desc: string, reasonCode: string) {
   type SSTYPE = {
     description: string;
+    reasonCode?: string;
     bucket: number;
   }
 
   const smarRBuckets: Record<string, SSTYPE[]> = {
-    "MAN": [{ description: "Shipment manifested", bucket: 0 }],
-    "CAN": [{ description: "Shipment Cancelled", bucket: 6 }],
-    "PKA": [{ description: "Pickup assigned", bucket: 1 }],
-    "PKU": [{ description: "Pickup un-assigned", bucket: 6 }],
-    "OFP": [{ description: "Out for Pickup", bucket: 1 }],
-    "PKF": [
-      { description: "Pickup Failed", bucket: 1 },
-      { description: "Package Not Travel Worthy; Shipment Hold", bucket: 2 },
-      { description: "Change In Product-On Shippers Request on Fresh AWB", bucket: 6 },
-      { description: "Shipment Not Connected-Space Constraint", bucket: 2 },
-      { description: "Shipment Returned Back to Shipper", bucket: 5 },
-      { description: "Missed Pickup- Reached Late", bucket: 1 },
-      { description: "Pickup Declined-Prohibited Content", bucket: 1 },
-      { description: "Pickup Not Done - Destination Pin Code Not Serviceable", bucket: 1 },
-      { description: "Pickup Wrongly Registered By Shipper", bucket: 1 },
-      { description: "Pickup Not Done - Contact Person Not Available", bucket: 1 },
-      { description: "Shipment Not Ready or No Shipment Today", bucket: 1 },
-      { description: "Pickup Cancelled By Shipper", bucket: 1 },
-      { description: "Holiday- Shipper Closed", bucket: 1 },
-      { description: "Shippers or Consignee Request to Hold at Location", bucket: 1 },
-      { description: "Shipment Manifested But Not Received By Destination", bucket: 1 },
-      { description: "Disturbance or Natural Disaster or Strike", bucket: 1 },
-      { description: "Shipment Lost", bucket: 1 },
-      { description: "Shipment Held-Regulartory Paperworks Required", bucket: 1 },
-      { description: "Security Cleared", bucket: 1 },
-      { description: "Shipment or Package Damaged", bucket: 1 },
-      { description: "Canvas Bag or shipment received short", bucket: 1 }
-    ],
-    "PKD": [{ description: "Shipment Picked up", bucket: 2 }],
-    "IND": [{ description: "Shipment Inscan at facility", bucket: 2 }],
-    "BGD": [{ description: "Shipment Bagged", bucket: 2 }],
-    "BGU": [{ description: "Shipment de-Bagged", bucket: 2 }],
-    "DPD": [{ description: "Shipment Departed", bucket: 2 }],
-    "ARD": [{ description: "Shipment Arrived", bucket: 2 }],
-    "RDC": [{ description: "Shipment Reached at DC", bucket: 2 }],
-    "OFD": [{ description: "Out for Delivery", bucket: 2 }],
-    "SUD": [
-      { description: "Undelivered", bucket: 2 },
-      { description: "Shippers or Consignee Request to Hold at Location", bucket: 3 },
-      { description: "Non Serviceable Area or Pin code", bucket: 3 },
-      { description: "Residence or Office Closed", bucket: 3 },
-      { description: "Holiday:Scheduled for Delivery on Next Working Day", bucket: 2 },
-      { description: "Address Incomplete or Incorrect Can not Deliver", bucket: 3 },
-      { description: "Consignee Refused To Accept", bucket: 3 },
-      { description: "No Such Consignee At Given Address", bucket: 3 },
-      { description: "Consignee Not Available At Given Address", bucket: 3 },
-      { description: "Consignee Shifted", bucket: 3 },
-      { description: "Tender Schedule Expired", bucket: 3 },
-      { description: "Disturbance or Natural Disaster or Strike", bucket: 3 },
-      { description: "Consignee Not Yet Checked In", bucket: 3 },
-      { description: "Consignee Out Of Station", bucket: 3 },
-      { description: "Shipment Lost", bucket: 7 },
-      { description: "Shipment Destroyed or Abandoned", bucket: 7 },
-      { description: "Shipment Redirected to Alternate Address", bucket: 2 },
-      { description: "Package Interchanged At Org or Dest", bucket: 3 },
-      { description: "Late Arrival or Scheduled For Next Working Day Delivery", bucket: 2 },
-      { description: "Shipment Held-Regulartory Paperworks Required", bucket: 2 },
-      { description: "Shipment Misrouted In Network", bucket: 2 },
-      { description: "Schedule for Next Business Day Delivery", bucket: 2 },
-      { description: "Security Cleared", bucket: 2 },
-      { description: "Shipment or Package Damaged", bucket: 7 },
-      { description: "Shipment Partially Delivered", bucket: 4 },
-      { description: "Attempt in Secondary Address", bucket: 2 },
-      { description: "SHIPMENT RECEIVED;PAPERWORK NOT RECEIVED", bucket: 2 },
-      { description: "DOD or FOD or COD not ready", bucket: 3 },
-      { description: "Entry restricted, no response on call", bucket: 3 },
-      { description: "No response from consignee", bucket: 3 },
-      { description: "OTP NOT RECEIVED BY CONSIGNEE", bucket: 3 }
-    ],
-    "DDL": [{ description: "Delivered", bucket: 4 }],
-    "SDL": [{ description: "Delivered-Self Pickup", bucket: 4 }],
-    "PDL": [{ description: "Delivered-partially", bucket: 4 }],
-    "RTL": [{ description: "RTO Locked", bucket: 5 }],
-    "RTR": [{ description: "RTO Lock Revoked", bucket: 2 }],
-    "RTS": [{ description: "Return to Shipper", bucket: 5 }],
-    "RTD": [{ description: "RTO Delivered", bucket: 5 }],
-    "LST": [{ description: "Shipment Lost", bucket: 7 }],
-    "DMG": [{ description: "Damaged", bucket: 7 }],
-    "DSD": [{ description: "Destroyed", bucket: 7 }],
-    "DLD": [{ description: "Delayed", bucket: 2 }],
-    "HLD": [{ description: "Hold", bucket: 2 }]
-  }
+    // "MAN": [{ description: "Shipment manifested", bucket: NEW }],
 
-  const smarRPossibleResponse = smarRBuckets[status]?.find(statusD => new RegExp(statusD.description, "i").test(desc));
+    "CAN": [{ description: "Shipment Cancelled", bucket: CANCELED }],
+    "PKA": [{ description: "Pickup assigned", bucket: READY_TO_SHIP }],
+    "PKU": [{ description: "Pickup un-assigned", bucket: CANCELED }],
+    "OFP": [{ description: "Out for Pickup", bucket: READY_TO_SHIP }],
+    "PKF": [
+      { description: "Pickup Failed", bucket: READY_TO_SHIP },
+      { description: "Package Not Travel Worthy; Shipment Hold", reasonCode: "PF001", bucket: IN_TRANSIT },
+      { description: "Change In Product-On Shippers Request on Fresh AWB", reasonCode: "PF002", bucket: CANCELED },
+      { description: "Shipment Not Connected-Space Constraint", reasonCode: "PF003", bucket: IN_TRANSIT },
+      { description: "Shipment Returned Back to Shipper", reasonCode: "PF004", bucket: RTO },
+      { description: "Missed Pickup- Reached Late", reasonCode: "PF005", bucket: READY_TO_SHIP },
+      { description: "Pickup Declined-Prohibited Content", reasonCode: "PF006", bucket: READY_TO_SHIP },
+      { description: "Pickup Not Done - Destination Pin Code Not Serviceable", reasonCode: "PF007", bucket: READY_TO_SHIP },
+      { description: "Pickup Wrongly Registered By Shipper", reasonCode: "PF008", bucket: READY_TO_SHIP },
+      { description: "Pickup Not Done - Contact Person Not Available", reasonCode: "PF009", bucket: READY_TO_SHIP },
+      { description: "Shipment Not Ready or No Shipment Today", reasonCode: "PF010", bucket: READY_TO_SHIP },
+      { description: "Pickup Cancelled By Shipper", reasonCode: "PF011", bucket: READY_TO_SHIP },
+      { description: "Holiday- Shipper Closed", reasonCode: "PF012", bucket: READY_TO_SHIP },
+      { description: "Shippers or Consignee Request to Hold at Location", reasonCode: "PF013", bucket: READY_TO_SHIP },
+      { description: "Shipment Manifested But Not Received By Destination", reasonCode: "PF014", bucket: READY_TO_SHIP },
+      { description: "Disturbance or Natural Disaster or Strike", reasonCode: "PF015", bucket: READY_TO_SHIP },
+      { description: "Shipment Lost", reasonCode: "PF016", bucket: READY_TO_SHIP },
+      { description: "Shipment Held-Regulartory Paperworks Required", reasonCode: "PF017", bucket: READY_TO_SHIP },
+      { description: "Security Cleared", reasonCode: "PF018", bucket: READY_TO_SHIP },
+      { description: "Shipment or Package Damaged", reasonCode: "PF019", bucket: READY_TO_SHIP },
+      { description: "Canvas Bag or shipment received short", reasonCode: "PF021", bucket: READY_TO_SHIP }
+    ],
+    "PKD": [{ description: "Shipment Picked up", bucket: IN_TRANSIT }],
+    "IND": [{ description: "Shipment Inscan at facility", bucket: IN_TRANSIT }],
+    "BGD": [{ description: "Shipment Bagged", bucket: IN_TRANSIT }],
+    "BGU": [{ description: "Shipment de-Bagged", bucket: IN_TRANSIT }],
+    "DPD": [{ description: "Shipment Departed", bucket: IN_TRANSIT }],
+    "ARD": [{ description: "Shipment Arrived", bucket: IN_TRANSIT }],
+    "RDC": [{ description: "Shipment Reached at DC", bucket: IN_TRANSIT }],
+    "OFD": [{ description: "Out for Delivery", bucket: IN_TRANSIT }],
+    "SUD": [
+      { description: "Undelivered", bucket: IN_TRANSIT },
+      { description: "Shippers or Consignee Request to Hold at Location", reasonCode: "UD001", bucket: NDR },
+      { description: "Non Serviceable Area or Pin code", reasonCode: "UD002", bucket: NDR },
+      { description: "Residence or Office Closed", reasonCode: "UD003", bucket: NDR },
+      { description: "Holiday:Scheduled for Delivery on Next Working Day", reasonCode: "UD004", bucket: IN_TRANSIT },
+      { description: "Address Incomplete or Incorrect Can not Deliver", reasonCode: "UD005", bucket: NDR },
+      { description: "Consignee Refused To Accept", reasonCode: "UD006", bucket: NDR },
+      { description: "No Such Consignee At Given Address", reasonCode: "UD007", bucket: NDR },
+      { description: "Consignee Not Available At Given Address", reasonCode: "UD008", bucket: NDR },
+      { description: "Consignee Shifted", reasonCode: "UD009", bucket: NDR },
+      { description: "Tender Schedule Expired", reasonCode: "UD010", bucket: NDR },
+      { description: "Disturbance or Natural Disaster or Strike", reasonCode: "UD011", bucket: NDR },
+      { description: "Consignee Not Yet Checked In", reasonCode: "UD012", bucket: NDR },
+      { description: "Consignee Out Of Station", reasonCode: "UD013", bucket: NDR },
+      { description: "Shipment Lost", reasonCode: "UD014", bucket: LOST_DAMAGED },
+      { description: "Shipment Destroyed or Abandoned", reasonCode: "UD015", bucket: LOST_DAMAGED },
+      { description: "Shipment Redirected to Alternate Address", reasonCode: "UD016", bucket: IN_TRANSIT },
+      { description: "Package Interchanged At Org or Dest", reasonCode: "UD017", bucket: NDR },
+      { description: "Late Arrival or Scheduled For Next Working Day Delivery", reasonCode: "UD019", bucket: IN_TRANSIT },
+      { description: "Shipment Held-Regulartory Paperworks Required", reasonCode: "UD020", bucket: IN_TRANSIT },
+      { description: "Shipment Misrouted In Network", reasonCode: "UD021", bucket: IN_TRANSIT },
+      { description: "Schedule for Next Business Day Delivery", reasonCode: "UD022", bucket: IN_TRANSIT },
+      { description: "Security Cleared", reasonCode: "UD024", bucket: IN_TRANSIT },
+      { description: "Shipment or Package Damaged", reasonCode: "UD025", bucket: LOST_DAMAGED },
+      { description: "Shipment Partially Delivered", reasonCode: "UD026", bucket: DELIVERED },
+      { description: "Attempt in Secondary Address", reasonCode: "UD028", bucket: IN_TRANSIT },
+      { description: "SHIPMENT RECEIVED;PAPERWORK NOT RECEIVED", reasonCode: "UD029", bucket: IN_TRANSIT },
+      { description: "DOD or FOD or COD not ready", reasonCode: "UD030", bucket: NDR },
+      { description: "Entry restricted, no response on call", reasonCode: "UD031", bucket: NDR },
+      { description: "No response from consignee", reasonCode: "UD032", bucket: NDR },
+      { description: "OTP NOT RECEIVED BY CONSIGNEE", reasonCode: "UD033", bucket: NDR }
+    ],
+    "DDL": [{ description: "Delivered", bucket: DELIVERED }],
+    "SDL": [{ description: "Delivered-Self Pickup", bucket: DELIVERED }],
+    "PDL": [{ description: "Delivered-partially", bucket: DELIVERED }],
+    "RTL": [{ description: "RTO Locked", bucket: RTO }],
+    "RTR": [{ description: "RTO Lock Revoked", bucket: IN_TRANSIT }],
+    "RTS": [{ description: "Return to Shipper", bucket: RTO }],
+    "RTD": [{ description: "RTO Delivered", bucket: RTO }],
+    "LST": [{ description: "Shipment Lost", bucket: LOST_DAMAGED }],
+    "DMG": [{ description: "Damaged", bucket: LOST_DAMAGED }],
+    "DSD": [{ description: "Destroyed", bucket: LOST_DAMAGED }],
+    "DLD": [{ description: "Delayed", bucket: IN_TRANSIT }],
+    "HLD": [{ description: "Hold", bucket: IN_TRANSIT }]
+  }
+  const smarRPossibleResponse = smarRBuckets[status]?.find(statusD => !statusD.reasonCode || statusD.reasonCode === reasonCode);
 
   return smarRPossibleResponse ? { bucket: smarRPossibleResponse.bucket, description: smarRPossibleResponse.description } : { bucket: -1, description: "Status code not found" }
 }

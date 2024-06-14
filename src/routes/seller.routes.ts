@@ -11,7 +11,8 @@ import {
     rechargeWalletIntent,
     getSellerBilling,
     confirmRechargeWallet,
-    getSellerWalletBalance
+    getSellerWalletBalance,
+    getSellerTransactionHistory
 } from "../controllers/seller.controller";
 
 import multer from 'multer';
@@ -62,6 +63,9 @@ sellerRouter.post("/confirm-recharge-wallet", confirmRechargeWallet);
 
 //@ts-ignore
 sellerRouter.get("/wallet-balance", getSellerWalletBalance);
+
+//@ts-ignore
+sellerRouter.get("/transactions", getSellerTransactionHistory);
 
 
 export default sellerRouter;

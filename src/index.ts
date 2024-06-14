@@ -7,7 +7,7 @@ const app = express();
 import config from "./utils/config";
 import orderRouter from "./routes/order.routes";
 import { AuthMiddleware, ErrorHandler } from "./utils/middleware";
-import { addVendors, getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getSellers, ratecalculatorController, updateVendor4Seller } from "./utils/helpers";
+import { B2BRatecalculatorController, addVendors, getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getSellers, ratecalculatorController, updateVendor4Seller } from "./utils/helpers";
 import hubRouter from "./routes/hub.routes";
 import cors from "cors";
 import customerRouter from "./routes/customer.routes";
@@ -176,6 +176,8 @@ app.post("/api/shopify", (req, res) => {
 
 //@ts-ignore
 app.post("/api/ratecalculator", AuthMiddleware, ratecalculatorController);
+//@ts-ignore
+app.post("/api/ratecalculator/b2b", AuthMiddleware, B2BRatecalculatorController);
 //@ts-ignore
 app.use("/api/seller", AuthMiddleware, sellerRouter);
 //@ts-ignore
