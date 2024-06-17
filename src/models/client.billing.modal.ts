@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const modal = new mongoose.Schema({
-  sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },
+  sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true },
   orderRefId: { type: String, required: true },
   awb: { type: String, required: true },
   rtoAwb: { type: String, required: true },
@@ -14,7 +14,7 @@ const modal = new mongoose.Schema({
   isForwardApplicable: { type: Boolean, required: true },
   isRTOApplicable: { type: Boolean, required: true },
   billingDate: { type: Date, required: true },
-  billingAmount: { type: String, required: true },
+  billingAmount: { type: String, required: false },
 });
 
 const ClientBillingModal = mongoose.model("ClientBilling", modal);

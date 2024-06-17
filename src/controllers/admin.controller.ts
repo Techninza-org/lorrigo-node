@@ -5,7 +5,7 @@ import { DELIVERED, IN_TRANSIT, NDR, NEW, READY_TO_SHIP, RTO } from "../utils/lo
 import { isValidObjectId } from "mongoose";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
-import { calculateShippingCharges, convertToISO, csvJSON, validateClientBillingFeilds } from "../utils";
+import { calculateShippingCharges, convertToISO, csvJSON, updateSellerWalletBalance, validateClientBillingFeilds } from "../utils";
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
 import CustomPricingModel from "../models/custom_pricing.model";
@@ -411,9 +411,6 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       console.log(error, 'error');
     }
 
-
-
-
     try {
       const billsWithCharges = await Promise.all(bills.map(async (bill) => {
         const order: any = orders.find(o => o.order_reference_id === bill.orderRefId);
@@ -449,22 +446,25 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
             billingAmount: totalCharge,
           };
         } else {
-          return bill; // Or handle the case when the order is not found
+          return res.status(400).json({ valid: false, message: "Order not found, Please Emter the valid Order Ref Id!" });
         }
       }));
       const bulkInsertBills = await ClientBillingModal.insertMany(billsWithCharges);
 
+      billsWithCharges.forEach(async (bill: any) => {
+        if (bill.sellerId && bill.billingAmount) {
+          await updateSellerWalletBalance(bill.sellerId, bill.billingAmount, false)
+        }
+      })
+
       return res.status(200).send({
         valid: true,
         message: "Billing uploaded successfully",
-        billsWithCharges
+        bulkInsertBills
       });
     } catch (error) {
-      console.log("Error in calculating shipping charges", error);
+      return next(error);
     }
-
-
-
 
   } catch (error) {
     return next(error);

@@ -12,7 +12,7 @@ import { RequiredTrackResponse, TrackResponse } from "../types/b2c";
 import { generateRemittanceId, getFridayDate, getNextToNextFriday, nextFriday } from ".";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
-import { CANCELED, CANCELLATION_REQUESTED_ORDER_STATUS, CANCELLED_ORDER_DESCRIPTION, DELIVERED, ORDER_TO_TRACK } from "./lorrigo-bucketing-info";
+import { CANCELED, CANCELLATION_REQUESTED_ORDER_STATUS, CANCELLED_ORDER_DESCRIPTION, DELIVERED, ORDER_TO_TRACK, RTO } from "./lorrigo-bucketing-info";
 import { addDays, format, parseISO } from "date-fns";
 import { getNextToNextFriday } from ".";
 
@@ -189,6 +189,12 @@ export const trackOrder_Smartship = async () => {
 
         const bucketInfo = getSmartshipBucketing(Number(requiredResponse?.status_code) ?? -1);
 
+        if (bucketInfo.bucket === RTO) {
+          const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
+          await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false)
+          if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true)
+        }
+
 
         if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
@@ -242,6 +248,11 @@ export const trackOrder_Shiprocket = async () => {
             action: bucketInfo.description,
             stageDateTime: new Date(),
           });
+          if (bucketInfo.bucket === RTO) {
+            const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
+            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false)
+            if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true)
+          }
           try {
             await orderWithOrderReferenceId.save();
           } catch (error) {
@@ -278,6 +289,12 @@ export const trackOrder_Smartr = async () => {
 
           const shipment_status = res.data.data[0].shipmentStatus[0]
           const bucketInfo = getSmartRBucketing(shipment_status.statusCode, shipment_status.reasonCode);
+
+          if (bucketInfo.bucket === RTO) {
+            const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
+            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false)
+            if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true)
+          }
 
           if ((bucketInfo.bucket !== -1) && (ordersReferenceIdOrders.bucket !== bucketInfo.bucket)) {
           console.log("SmartR bucktinng", bucketInfo);

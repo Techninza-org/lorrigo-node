@@ -30,6 +30,7 @@ import {
   calculateRevenue,
   calculateShipmentDetails,
   sendMailToScheduleShipment,
+  shipmentAmtCalcToWalletDeduction,
   updateOrderStatus,
   updateSellerWalletBalance,
 } from "../utils";
@@ -291,7 +292,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           }
 
           order.awb = awb;
-          order.carrierName = (awbResponse?.data?.response?.data.courier_name || courier?.name) + " " + (vendorName?.nickName);
+          order.carrierName = (courier?.name.split(" ").slice(0, 2).join(" ")) + " " + (vendorName?.nickName);
           order.shipmentCharges = body.charge;
           order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
           order.orderStages.push({
@@ -938,28 +939,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
     for (let i = 0; i < orders.length; i++) {
       const order = orders[i];
 
-      // Lorrigo never cancel the order from the channel
-      // try {
-      //   if (order.channelName === "shopify") {
-      //     const shopfiyConfig = await getSellerChannelConfig(req.seller._id);
-      //     const shopifyOrders = await axios.post(
-      //       `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_CANCEL}/${order.channelOrderId}/cancel.json`,
-      //       {
-      //         cancellation_request: {
-      //           message: "The customer changed his mind.",
-      //         },
-      //       },
-      //       {
-      //         headers: {
-      //           "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-      //         },
-      //       }
-      //     );
-      //   }
-      // } catch (error) {
-      //   console.log(error, "error");
-      // }
-
       if (!order.awb && type === "order") {
         // @ts-ignore
         await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
@@ -968,8 +947,14 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
       }
 
       const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
-
       const vendorName = await EnvModel.findOne({ nickName: assignedVendorNickname });
+
+      if (order.bucket === IN_TRANSIT) {
+        const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb) ?? { rtoCharges: 0, cod: 0 };
+        console.log(rtoCharges, "rtoCharges")
+        await updateSellerWalletBalance(sellerId, rtoCharges?.rtoCharges || 0, false)
+        if (!!rtoCharges.cod) await updateSellerWalletBalance(sellerId, rtoCharges.cod || 0, true)
+      }
 
       if (vendorName?.name === "SMARTSHIP") {
         const smartshipToken = await getSmartShipToken();
@@ -1099,7 +1084,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             order.save();
           }
         }
-      } 
+      }
       else if (vendorName?.name === "DELHIVERY") {
         const delhiveryToken = await getDelhiveryToken();
         if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });

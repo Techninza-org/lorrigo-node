@@ -6,6 +6,7 @@ import { MetroCitys, NorthEastStates, validateEmail } from "./helpers";
 import { DELIVERED, IN_TRANSIT, READY_TO_SHIP, RTO } from "./lorrigo-bucketing-info";
 import { DeliveryDetails, IncrementPrice, PickupDetails, Vendor, Body } from "../types/rate-cal";
 import SellerModel from "../models/seller.model";
+import CourierModel from "../models/courier.model";
 
 
 export function calculateShipmentDetails(orders: any[]) {
@@ -554,7 +555,7 @@ function getIncrementPrice(
   deliveryDetails: DeliveryDetails,
   MetroCitys: string[],
   NorthEastStates: string[],
-  vendor: Vendor
+  vendor: any
 ): IncrementPrice | null {
   if (pickupDetails.District === deliveryDetails.District) {
     return vendor.withinCity;
@@ -622,5 +623,70 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
     session.endSession();
     console.error('Error updating seller wallet balance:', err);
     throw new Error('Failed to update seller wallet balance');
+  }
+}
+
+
+export async function shipmentAmtCalcToWalletDeduction(awb: string) {
+  try {
+    const order: any = await B2COrderModel
+      .findOne({ awb })
+      .populate('pickupAddress')
+
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    const courier = await CourierModel.findOne({
+      name: {
+        $regex: new RegExp(order.carrierName.split(' ').slice(0, 2).join(' ') + '[ -](SS|\\d+\\.\\d+kg|SR|express|.*)?', 'i')
+      }
+    });
+
+    if (!courier) {
+      throw new Error('Courier not found');
+    }
+
+    const pickupDetails = {
+      StateName: order.pickupAddress.state,
+      District: order.pickupAddress.city
+    }
+
+    const deliveryDetails = {
+      StateName: order.customerDetails.get("state"),
+      District: order.customerDetails.get("city")
+    }
+
+    const increment_price = getIncrementPrice(pickupDetails, deliveryDetails, MetroCitys, NorthEastStates, courier);
+    if (!increment_price) {
+      throw new Error("Invalid increment price");
+    }
+
+    const minWeight = courier.weightSlab;
+    //@ts-ignore
+    let totalCharge = 0;
+    totalCharge += increment_price.basePrice;
+
+    let orderWeight = order.orderWeight;
+    if (orderWeight < minWeight) {
+      orderWeight = minWeight;
+    }
+
+    const codPrice = courier.codCharge?.hard;
+    const codAfterPercent = (courier.codCharge?.percent / 100) * order.amount2Collect;
+    let cod = 0;
+    if (order.paymentType === 1) {
+      cod = codPrice > codAfterPercent ? codPrice : codAfterPercent;
+    }
+
+    const weightIncrementRatio = Math.ceil((order.orderWeight - minWeight) / courier.incrementWeight);
+    totalCharge += (increment_price.incrementPrice * weightIncrementRatio) + cod;
+    let rtoCharges = (totalCharge - cod)
+
+
+    return {rtoCharges, cod};
+
+  } catch (error) {
+    console.log(error)
   }
 }

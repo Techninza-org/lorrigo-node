@@ -1,7 +1,7 @@
 import axios from "axios";
 import config from "./config";
 import EnvModel from "../models/env.model";
-import type { NextFunction, Request, Response } from "express";
+import { json, type NextFunction, type Request, type Response } from "express";
 import CourierModel from "../models/courier.model";
 import PincodeModel from "../models/pincode.model";
 import SellerModel from "../models/seller.model";
@@ -38,7 +38,7 @@ export const validateSmartShipServicablity = async (
   width: number,
   height: number,
   paymentType: 0 | 1,
-  shipmentType: number, // 1 for forward 0 for reverse
+  shipmentType: number, // 0 for forward 1 for reverse
 
   prefferredCarrier: number[]
 
@@ -55,7 +55,7 @@ export const validateSmartShipServicablity = async (
       length,
       width,
       height,
-      shipment_type: shipmentType === 1 ? "forward" : "return",
+      shipment_type: shipmentType === 1 ?  "return" : "forward",
       preferred_carriers: [...prefferredCarrier],
     },
     request_info: { extra_info: true, cost_info: false },
@@ -678,8 +678,6 @@ export const rateCalculation = async (
           },
         }
       );
-
-
       if (!!isDelhiveryServicable.data.delivery_codes[0]) {
         const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY_0.5" }).select("_id nickName");
         if (delhiveryNiceName) {
@@ -838,7 +836,7 @@ export const rateCalculation = async (
 
       const weightIncrementRatio = Math.ceil((orderWeight - minWeight) / cv.incrementWeight);
       totalCharge += (increment_price.incrementPrice * weightIncrementRatio) + cod;
-      let rtoCharges = (totalCharge - cod) * 2
+      let rtoCharges = (totalCharge - cod)
 
       data2send.push({
         nickName: cv.nickName,
