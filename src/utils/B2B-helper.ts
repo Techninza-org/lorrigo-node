@@ -48,10 +48,25 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
     const courierDataPromises = b2bCouriers.map(async (courier) => {
         try {
             const result = await calculateRateAndPrice(courier, Tzone, Fzone, order.total_weight, courier._id.toString(), fromRegionName, toRegionName, order.amount);
+
+            const parterPickupTime = courier.pickupTime;
+            const partnerPickupHour = Number(parterPickupTime.split(":")[0]);
+            const partnerPickupMinute = Number(parterPickupTime.split(":")[1]);
+            const partnerPickupSecond = Number(parterPickupTime.split(":")[2]);
+            const pickupTime = new Date(new Date().setHours(partnerPickupHour, partnerPickupMinute, partnerPickupSecond, 0));
+
+            const currentTime = new Date();
+            let expectedPickup: string;
+            if (pickupTime < currentTime) {
+                expectedPickup = "Tomorrow";
+            } else {
+                expectedPickup = "Today";
+            }
             return {
                 // @ts-ignore
                 nickName: courier.vendor_channel_id.nickName,
                 name: courier.name,
+                expectedPickup,
                 minWeight: 0.5,
                 type: courier.type,
                 carrierID: courier.carrierID,

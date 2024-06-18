@@ -278,9 +278,14 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
       // @ts-ignore
       const { vendor_channel_id, ...courierData } = customPricing || courier;
       // @ts-ignore
-      const nameWithNickname = `${courierData?.name || courierData?.vendorId?.name} ${vendor_channel_id?.nickName || courierData?.vendorId?.vendor_channel_id?.nickName}`.trim();
+      let nameWithNickname = `${courierData?.name || courierData?.vendorId?.name} ${vendor_channel_id?.nickName || courierData?.vendorId?.vendor_channel_id?.nickName}`.trim();
+      if (customPricing) {
+        // If custom pricing exists, append "Custom" to the nickname
+        nameWithNickname += " Custom";
+      }
+
       return {
-        ...courierData,
+        ...courier,
         nameWithNickname,
       };
     });
@@ -311,6 +316,8 @@ export const manageSellerCourier = async (req: ExtendedRequest, res: Response, n
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
 
+    const updatedSellerCourier = couriers.filter((courierId) => seller.vendors.includes(courierId));
+    console.log(updatedSellerCourier, 'updatedSellerCourier')
     seller.vendors = couriers;
     await seller.save();
 

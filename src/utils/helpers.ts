@@ -418,6 +418,21 @@ export const B2BRatecalculatorController = async (req: ExtendedRequest, res: Res
   const courierDataPromises = b2bCouriers.map(async (courier) => {
     try {
       const result = await calculateRateAndPrice(courier, Tzone, Fzone, orderWeight, courier._id.toString(), fromRegionName, toRegionName, amount);
+
+      const parterPickupTime = courier.pickupTime;
+      const partnerPickupHour = Number(parterPickupTime.split(":")[0]);
+      const partnerPickupMinute = Number(parterPickupTime.split(":")[1]);
+      const partnerPickupSecond = Number(parterPickupTime.split(":")[2]);
+      const pickupTime = new Date(new Date().setHours(partnerPickupHour, partnerPickupMinute, partnerPickupSecond, 0));
+
+      const currentTime = new Date();
+      let expectedPickup: string;
+      if (pickupTime < currentTime) {
+        expectedPickup = "Tomorrow";
+      } else {
+        expectedPickup = "Today";
+      }
+
       return {
         // @ts-ignore
         nickName: courier.vendor_channel_id.nickName,
@@ -427,6 +442,7 @@ export const B2BRatecalculatorController = async (req: ExtendedRequest, res: Res
         carrierID: courier.carrierID,
         order_zone: `${Fzone}-${Tzone}`,
         charge: result.finalAmount,
+        expectedPickup,
         ...result
       };
     } catch (error) {

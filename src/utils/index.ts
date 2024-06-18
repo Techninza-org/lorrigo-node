@@ -597,7 +597,7 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
     if (typeof amount !== 'number' || isNaN(amount)) {
       throw new Error('Invalid amount');
     }
-
+    console.log(amount, 'amount')
     const update = {
       $inc: {
         walletBalance: isCredit ? amount : -amount,
@@ -616,6 +616,8 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
     if (!updatedSeller) {
       throw new Error('Seller not found');
     }
+
+    console.log(updatedSeller, 'updatedSeller')
 
     return updatedSeller;
   } catch (err) {
