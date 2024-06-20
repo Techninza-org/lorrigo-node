@@ -617,8 +617,6 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
       throw new Error('Seller not found');
     }
 
-    console.log(updatedSeller, 'updatedSeller')
-
     return updatedSeller;
   } catch (err) {
     await session.abortTransaction();
@@ -639,11 +637,20 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
       throw new Error('Order not found');
     }
 
+    // const courier = await CourierModel.findOne({
+    //   name: {
+    //     $regex: new RegExp(order.carrierName.split(' ').slice(0, 2).join(' ') + '[ -](SS|\\d+\\.\\d+kg|SR|express|.*)?', 'i')
+    //   }
+    // });
+
+
+    const regexPattern = order.carrierName.split(' ').slice(0, 2).join(' ') + '[ -](SS|SR SMR|DEL(_\\d+(\\.\\d+)?|)|.*)?';
     const courier = await CourierModel.findOne({
       name: {
-        $regex: new RegExp(order.carrierName.split(' ').slice(0, 2).join(' ') + '[ -](SS|\\d+\\.\\d+kg|SR|express|.*)?', 'i')
+        $regex: new RegExp(regexPattern, 'i')
       }
     });
+
 
     if (!courier) {
       throw new Error('Courier not found');
@@ -686,7 +693,7 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
     let rtoCharges = (totalCharge - cod)
 
 
-    return {rtoCharges, cod};
+    return { rtoCharges, cod };
 
   } catch (error) {
     console.log(error)

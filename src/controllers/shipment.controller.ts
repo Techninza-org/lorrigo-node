@@ -83,6 +83,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     const courier = await CourierModel.findOne({ vendor_channel_id: vendorName?._id.toString() });
 
     if (vendorName?.name === "SMARTSHIP") {
+      const smartShipCourier = await CourierModel.findOne({ carrierID: body.carrierId });
       const productValueWithTax =
         Number(productDetails.taxable_value) +
         (Number(productDetails.tax_rate) / 100) * Number(productDetails.taxable_value);
@@ -194,8 +195,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           if (!awbNumber) {
             return res.status(200).send({ valid: false, message: "Please choose another courier partner!" });
           }
-          const carrierName =
-            externalAPIResponse?.data?.success_order_details?.orders[0]?.carrier_name + " " + vendorName?.nickName;
+          const carrierName = smartShipCourier?.name + " " + vendorName?.nickName;
           order.client_order_reference_id = client_order_reference_id;
           order.shipmentCharges = body.charge;
           order.bucket = order.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
@@ -265,6 +265,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       return res.status(500).send({ valid: false, message: "something went wrong", order, externalAPIResponse });
     } else if (vendorName?.name === "SHIPROCKET") {
       try {
+        const shiprocketCourier = await CourierModel.findOne({ carrierID: body.carrierId });
+
         const shiprocketToken = await getShiprocketToken();
 
         const genAWBPayload = {
@@ -292,7 +294,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           }
 
           order.awb = awb;
-          order.carrierName = (courier?.name.split(" ").slice(0, 2).join(" ")) + " " + (vendorName?.nickName);
+          order.carrierName = (shiprocketCourier?.name) + " " + (vendorName?.nickName);
           order.shipmentCharges = body.charge;
           order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
           order.orderStages.push({
