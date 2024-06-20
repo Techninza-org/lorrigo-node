@@ -157,15 +157,23 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
   if (body?.password) return res.status(200).send({ valid: false, message: "Invalid payload" });
 
   try {
-    const updatedSeller = await SellerModel.findByIdAndUpdate(new_id, { ...body }, { new: true }).select([
-      "-__v",
-      "-password",
-      "-margin",
-    ]);
+    const existingSeller = await SellerModel.findById(new_id).select("-__v -password -margin");
+
+    if (!existingSeller) {
+      return res.status(404).send({ valid: false, message: "Seller not found" });
+    }
+
+    const updatedData = { ...existingSeller.toObject(), ...body };
+
+    const updatedSeller = await SellerModel.findByIdAndUpdate(
+      new_id,
+      { $set: updatedData },
+      { new: true, select: "-__v -password -margin" }
+    );
 
     return res.status(200).send({
       valid: true,
-      message: "updated success",
+      message: "Updated successfully",
       seller: updatedSeller,
     });
   } catch (err) {

@@ -19,12 +19,14 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
         throw new Error('Pincode data not found');
     }
 
-    const fromRegionName = pickupPincodeData.District.toLowerCase(); // convert to lowercase
-    const toRegionName = deliveryPincodeData.District.toLowerCase(); // convert to lowercase
+    const fromRegionName = pickupPincodeData.StateName.toLowerCase(); // convert to lowercase
+    const toRegionName = deliveryPincodeData.StateName.toLowerCase(); // convert to lowercase
 
+    console.log(fromRegionName, toRegionName)
     const Fzone = regionToZoneMappingLowercase[fromRegionName];
     const Tzone = regionToZoneMappingLowercase[toRegionName];
 
+    console.log(Fzone, Tzone)
     if (!Fzone || !Tzone) {
         throw new Error('Zone not found for the given region');
     }
@@ -148,7 +150,7 @@ export const regionToZoneMapping = {
     "himachal": "North 2",
     "punjab": "North 2",
     "uttarakhand": "North 2",
-    "up": "North 2",
+    "uttar pradesh": "North 2",
     "chandigarh": "North 2",
     "rajasthan": "North 2",
     "haryana": "North 2",

@@ -107,6 +107,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         orderWeight = orderWeight * 1000;
       }
 
+      console.log("[createShipment controller] orderWeight", orderWeight)
+
       const shipmentAPIBody = {
         request_info: {
           run_type: "create",
@@ -185,7 +187,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       if (!externalAPIResponse?.data?.total_success_orders) {
         return res
           .status(200)
-          .send({ valid: false, message: "order failed to create", order, response: externalAPIResponse });
+          .send({ valid: false, message: "SmartShip is not servicable for the order!", smartship: externalAPIResponse });
       } else {
         const shipmentResponseToSave = new ShipmentResponseModel({ order: order._id, response: externalAPIResponse });
         try {
@@ -348,11 +350,11 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
           return res.status(200).send({ valid: true, order });
         } catch (error: any) {
-          console.log(error.response.data.errors, "error");
+          console.log(error, "error");
           return next(error);
         }
       } catch (error: any) {
-        console.log(error.response.data.errors, "error");
+        console.log(error, "error");
         return next(error);
       }
     } else if (vendorName?.name === "SMARTR") {

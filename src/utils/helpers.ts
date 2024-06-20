@@ -64,6 +64,7 @@ export const validateSmartShipServicablity = async (
   const smartshipToken = await getSmartShipToken();
 
   const smartshipAPIconfig = { headers: { Authorization: smartshipToken } };
+
   try {
     const response = await axios.post(
       config.SMART_SHIP_API_BASEURL + APIs.RATE_CALCULATION,

@@ -1,6 +1,4 @@
-import { NextFunction, Response, Router } from "express";
-import B2BCustomerModel from "../models/customer.model";
-import { ExtendedRequest } from "../utils/middleware";
+import { Router } from "express";
 import { createCustomer, getCustomers } from "../controllers/customer.controller";
 
 const customerRouter = Router();

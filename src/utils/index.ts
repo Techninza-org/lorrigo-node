@@ -319,8 +319,14 @@ export function cleanPhoneNumber(phoneNumber: string) {
   return cleanedNumber;
 }
 
-export function convertToISO(invoice_date: string) {
+export function convertToISO(invoice_date?: string): string {
   let day, month, year, hour, minute, second;
+
+  if (!invoice_date || invoice_date.trim() === '') {
+    // If the date is not provided, use the current date and time
+    const now = new Date();
+    return now.toISOString();
+  }
 
   if (invoice_date.includes('-')) {
     // Format: DD-MM-YYYY or DD-MM-YYYY HH:MM:SS
@@ -350,7 +356,7 @@ export function convertToISO(invoice_date: string) {
     throw new Error("Invalid date format");
   }
 
-  const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:00`);
+  const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second || '00'}`);
   return date.toISOString();
 }
 
