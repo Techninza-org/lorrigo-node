@@ -432,9 +432,9 @@ export default async function runCron() {
   console.log("to run cron")
   const expression4every2Minutes = "*/2 * * * *";
   if (cron.validate(expression4every2Minutes)) {
-    // cron.schedule(expression4every2Minutes, trackOrder_Smartship);
-    // cron.schedule(expression4every2Minutes, trackOrder_Shiprocket);
-    // cron.schedule(expression4every2Minutes,  trackOrder_Smartr);
+    cron.schedule(expression4every2Minutes, trackOrder_Smartship);
+    cron.schedule(expression4every2Minutes, trackOrder_Shiprocket);
+    cron.schedule(expression4every2Minutes,  trackOrder_Smartr);
 
     const expression4every5Minute = "5 * * * *";
     const expression4every59Minute = "59 * * * *";
