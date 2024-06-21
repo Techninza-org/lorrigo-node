@@ -511,7 +511,7 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
       const shiprocketToken = await getShiprocketToken();
       if (shiprocketToken && orderDetails.shiprocket_order_id) {
         const orderPayload = {
-          order_id: body?.order_reference_id,
+          order_id: orderDetails?.client_order_reference_id,
           order_date: format(orderDetails?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
           pickup_location: orderDetails?.pickupAddress?.name,
           billing_customer_name: orderDetails?.customerDetails.get("name"),
@@ -572,16 +572,17 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
           });
         }
 
-        // try {
-        //   const updateOrderShiprocket = await axios.post(`${envConfig.SHIPROCKET_API_BASEURL}${APIs.SHIPROCKET_UPDATE_ORDER}`, orderPayload, {
-        //     headers: {
-        //       Authorization: `${shiprocketToken}`,
-        //     },
-        //   });
-        // } catch (error) {
-        //   console.log(error)
-        //   return res.json({ valid: false, message: "Please try again, we're facing high traffic!", error });
-        // }
+        try {
+          const updateOrderShiprocket = await axios.post(`${envConfig.SHIPROCKET_API_BASEURL}${APIs.SHIPROCKET_UPDATE_ORDER}`, orderPayload, {
+            headers: {
+              Authorization: `${shiprocketToken}`,
+            },
+          });
+          console.log(updateOrderShiprocket.data, 'updateOrderShiprocket')
+        } catch (error: any) {
+          console.log(error.response.data)
+          return res.json({ valid: false, message: "Please try again, we're facing high traffic!", error });
+        }
       }
 
       // Find and update the existing order
@@ -1020,6 +1021,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
     }
 
     const randomInt = Math.round(Math.random() * 20)
+    const customClientRefOrderId = orderDetails?.client_order_reference_id + "-" + randomInt;
     const pickupPincode = orderDetails.pickupAddress.pincode;
     const deliveryPincode = orderDetails.customerDetails.get("pincode");
     const weight = orderDetails.orderWeight;
@@ -1039,7 +1041,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
     if (!shiprocketToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
     const orderPayload = {
-      order_id: orderDetails?.client_order_reference_id + "-" + randomInt,
+      order_id: customClientRefOrderId,
       order_date: format(orderDetails?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
       pickup_location: orderDetails?.pickupAddress?.name,
       billing_customer_name: orderDetails?.customerDetails.get("name"),
@@ -1113,6 +1115,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
         });
         orderDetails.shiprocket_order_id = shiprocketOrder.data.order_id;
         orderDetails.shiprocket_shipment_id = shiprocketOrder.data.shipment_id;
+        orderDetails.client_order_reference_id = customClientRefOrderId;
         await orderDetails.save();
       }
     } catch (error: any) {

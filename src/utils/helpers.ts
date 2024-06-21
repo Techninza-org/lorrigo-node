@@ -55,7 +55,7 @@ export const validateSmartShipServicablity = async (
       length,
       width,
       height,
-      shipment_type: shipmentType === 1 ?  "return" : "forward",
+      shipment_type: shipmentType === 1 ? "return" : "forward",
       preferred_carriers: [...prefferredCarrier],
     },
     request_info: { extra_info: true, cost_info: false },
@@ -344,7 +344,7 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
       if (orderWeight < minWeight) {
         orderWeight = minWeight;
       }
-      
+
       //@ts-ignore
       orderWeight = orderWeight - cv.weightSlab;
       const codPrice = cv.codCharge?.hard;
@@ -533,6 +533,8 @@ export const rateCalculation = async (
       if (!token) return [{ message: "Invalid Shiprocket token" }];
 
       const url = envConfig.SHIPROCKET_API_BASEURL + APIs.SHIPROCKET_ORDER_COURIER + `/?pickup_postcode=${pickupPincode}&delivery_postcode=${deliveryPincode}&weight=${weight}&cod=0&order_id=${shiprocketOrderID}`;
+
+      console.log(url, "url")
 
       const config = {
         headers: {
