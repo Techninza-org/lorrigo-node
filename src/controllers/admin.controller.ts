@@ -293,7 +293,7 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
       }
 
       return {
-        ...courier,
+        ...courierData,
         nameWithNickname,
       };
     });
