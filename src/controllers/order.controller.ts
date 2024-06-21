@@ -572,6 +572,8 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
           });
         }
 
+        console.log(orderPayload, 'orderPayload')
+        
         try {
           const updateOrderShiprocket = await axios.post(`${envConfig.SHIPROCKET_API_BASEURL}${APIs.SHIPROCKET_UPDATE_ORDER}`, orderPayload, {
             headers: {
@@ -581,7 +583,6 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
           console.log(updateOrderShiprocket.data, 'updateOrderShiprocket')
         } catch (error: any) {
           console.log(error.response.data)
-          return res.json({ valid: false, message: "Please try again, we're facing high traffic!", error });
         }
       }
 
