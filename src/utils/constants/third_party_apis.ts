@@ -17,6 +17,7 @@ const PIN_CODE = "https://uat.smartr.in/api/v1/pincode/";
 
 const CREATE_PICKUP_LOCATION = "/v1/external/settings/company/addpickup";
 const SHIPROCKET_UPDATE_ORDER = "/v1/external/orders/update/adhoc";
+const SHIPROCKET_UPDATE_CUSTOMER = "/v1/external/orders/address/updatE";
 const CREATE_SHIPROCKET_ORDER = "/v1/external/orders/create/adhoc";
 const CREATE_SHIPROCKET_RETURN_ORDER = "/v1/external/orders/create/return";
 const GENRATE_AWB_SHIPROCKET = "/v1/external/courier/assign/awb";
@@ -68,6 +69,7 @@ const APIs = {
   CREATE_PICKUP_LOCATION,
   CREATE_SHIPROCKET_ORDER,
   SHIPROCKET_UPDATE_ORDER,
+  SHIPROCKET_UPDATE_CUSTOMER,
   LIST_SHIPROCKET_COURIER,
   GENRATE_AWB_SHIPROCKET,
   SHIPROCKET_ORDER_COURIER,

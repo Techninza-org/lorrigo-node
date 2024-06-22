@@ -536,7 +536,7 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
           length: 20,
           breadth: 10,
           height: 10,
-          weight: body?.orderWeight,
+          weight:body?.orderWeight >= 5 ? body?.orderWeight : 0.5,
         };
 
         if (orderDetails?.isReverseOrder) {
@@ -572,15 +572,32 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
           });
         }
 
-        console.log(orderPayload, 'orderPayload')
-        
+        const updateCustomerDetails = {
+          order_id: Number(orderDetails?.shiprocket_order_id),
+          shipping_customer_name: orderDetails?.customerDetails.get("name"),
+          shipping_phone: orderDetails?.customerDetails.get("phone").replace("+91", ""),
+          shipping_last_name: orderDetails?.customerDetails.get("name") || "",
+          shipping_address: orderDetails?.customerDetails.get("address"),
+          shipping_city: orderDetails?.customerDetails.get("city"),
+          shipping_pincode: Number(orderDetails?.customerDetails.get("pincode")),
+          shipping_state: orderDetails?.customerDetails.get("state"),
+          shipping_country: "India",
+        }
+
+        console.log(updateCustomerDetails, "updateCustomerDetails")
+
         try {
           const updateOrderShiprocket = await axios.post(`${envConfig.SHIPROCKET_API_BASEURL}${APIs.SHIPROCKET_UPDATE_ORDER}`, orderPayload, {
             headers: {
               Authorization: `${shiprocketToken}`,
             },
           });
-          console.log(updateOrderShiprocket.data, 'updateOrderShiprocket')
+          const updateCustomerDetailsShiprocket = await axios.post(`https://apiv2.shiprocket.in/v1/external/orders/address/update`, updateCustomerDetails, {
+            headers: {
+              Authorization: `${shiprocketToken}`,
+            },
+          });
+          console.log(updateCustomerDetailsShiprocket.data, 'updateOrderShiprocket')
         } catch (error: any) {
           console.log(error.response.data)
         }
