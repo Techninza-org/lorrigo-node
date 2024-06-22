@@ -117,7 +117,11 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
         console.log(previouslySavedPricing, "previouslySavedPricing")
         if (previouslySavedPricing) {
           delete body.vendorId;
-          const savedPricing = await CustomPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
+          // const savedPricing = await CustomPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
+
+          let savedPricing = await CustomPricingModel.findOne({ vendorId: vendorId, sellerId: sellerId });
+          savedPricing = await CustomPricingModel.findByIdAndUpdate(savedPricing?._id, { ...body }, { new: true });
+
           return res.status(200).send({ valid: true, message: "Vendor not found. Custom pricing updated for user", savedPricing });
         } else {
           const toAdd = {

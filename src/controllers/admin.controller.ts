@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import type { ExtendedRequest } from "../utils/middleware";
 import { B2COrderModel } from "../models/order.model";
 import { DELIVERED, IN_TRANSIT, NDR, NEW, READY_TO_SHIP, RTO } from "../utils/lorrigo-bucketing-info";
-import { isValidObjectId } from "mongoose";
+import { Types, isValidObjectId } from "mongoose";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
 import { calculateShippingCharges, convertToISO, csvJSON, updateSellerWalletBalance, validateClientBillingFeilds } from "../utils";
@@ -267,8 +267,8 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
     }
 
     const [couriers, customPricings] = await Promise.all([
-      CourierModel.find({ _id: { $in: seller.vendors } }).populate("vendor_channel_id").lean(),
-      CustomPricingModel.find({ sellerId })
+      CourierModel.find({ _id: { $in: seller?.vendors } }).populate("vendor_channel_id").lean(),
+      CustomPricingModel.find({ sellerId, vendorId: { $in: seller?.vendors } })
         .populate({
           path: 'vendorId',
           populate: {
@@ -288,7 +288,8 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
       // @ts-ignore
       let nameWithNickname = `${courierData?.name || courierData?.vendorId?.name} ${vendor_channel_id?.nickName || courierData?.vendorId?.vendor_channel_id?.nickName}`.trim();
       if (customPricing) {
-        // If custom pricing exists, append "Custom" to the nickname
+        // @ts-ignore
+        courierData._id = courierData.vendorId?._id;
         nameWithNickname += " Custom";
       }
 
@@ -311,32 +312,41 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
 export const manageSellerCourier = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { sellerId, couriers } = req.body;
-    if (!sellerId || !isValidObjectId(sellerId) || !couriers) {
-      return res.status(400).send({ valid: false, message: "Invalid or missing sellerId or courierId" });
+
+    // Validate input
+    if (!sellerId || !isValidObjectId(sellerId) || !Array.isArray(couriers)) {
+      return res.status(400).send({ valid: false, message: "Invalid or missing sellerId or couriers" });
     }
 
-    if (!Array.isArray(couriers)) {
-      return res.status(400).send({ valid: false, message: "couriers should be an array" });
-    }
-
+    // Find seller and validate
     const seller = await SellerModel.findById(sellerId);
     if (!seller) {
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
 
-    const updatedSellerCourier = couriers.filter((courierId) => seller.vendors.includes(courierId));
-    console.log(updatedSellerCourier, 'updatedSellerCourier')
-    seller.vendors = couriers;
+
+    const [validNewCouriers, validCustomCouriers] = await Promise.all([
+      CourierModel.find({ _id: { $in: couriers } }).select("_id").lean(),
+      CustomPricingModel.find({ sellerId, _id: { $in: couriers } }).select("_id").lean()
+    ]);
+
+    const validNewCourierIds = new Set(validNewCouriers.map(courier => courier._id.toString()));
+    const validCustomCourierIds = new Set(validCustomCouriers.map(courier => courier._id.toString()));
+    const mergedCourierIds = new Set([...validCustomCourierIds, ...validNewCourierIds]);
+
+    seller.vendors = Array.from(mergedCourierIds).map(id => new Types.ObjectId(id));
     await seller.save();
 
     return res.status(200).send({
       valid: true,
-      message: "Courier managed successfully",
+      message: "Couriers managed successfully",
     });
   } catch (err) {
+    console.log(err, 'err');
+
     return next(err);
   }
-}
+};
 
 export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   if (!req.file || !req.file.buffer) {

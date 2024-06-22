@@ -263,9 +263,9 @@ export function csvJSON(csv: any) {
 export const validateField = (value: any, fieldName: string, hub: any, alreadyExistingHubsName: any): string | null => {
   switch (fieldName) {
     case 'name':
-      // if (!value || value.trim().length === 0) {
-      //   return 'Name is required';
-      // }
+      if (!value || value.trim().length === 0) {
+        return 'Name is required';
+      }
       if (alreadyExistingHubsName.find((item: any) => item.name.includes(value))) {
         return "Name must be unique";
       }
@@ -280,13 +280,27 @@ export const validateField = (value: any, fieldName: string, hub: any, alreadyEx
         return "Invalid PickupLocationContact";
       }
       break;
-    // Add validation cases for other fields as needed
+    case 'isRTOAddressSame':
+      if (value === false) {
+        if (!hub.rtoAddress || hub.rtoAddress.trim().length === 0) {
+          return 'RTO Address is required';
+        }
+        if (!hub.rtoCity || hub.rtoCity.trim().length === 0) {
+          return 'RTO City is required';
+        }
+        if (!hub.rtoState || hub.rtoState.trim().length === 0) {
+          return 'RTO State is required';
+        }
+        if (!hub.rtoPincode || hub.rtoPincode.trim().length === 0) {
+          return 'RTO Pincode is required';
+        }
+      }
+      break;
     default:
       break;
   }
   return null;
 };
-
 export const validateBulkOrderField = (value: any, fieldName: string, order: any, alreadyExistingOrders: any): string | null => {
   switch (fieldName) {
     case 'order_reference_id':
