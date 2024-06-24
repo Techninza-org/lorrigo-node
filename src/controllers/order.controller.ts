@@ -440,7 +440,7 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
       return next(err);
     }
 
-    let hubDetails;
+    let hubDetails: any;
     try {
       hubDetails = await HubModel.findById(body?.pickupAddress);
       if (!hubDetails) return res.status(200).send({ valid: false, message: "Pickup address doesn't exists" });
@@ -449,7 +449,7 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
       return next(err);
     }
 
-    let savedProduct;
+    let savedProduct: any;
 
     try {
       const { _id, name, category, hsn_code, quantity, taxRate, taxableValue } = productDetails;
@@ -508,83 +508,84 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
         data.ewaybill = body?.ewaybill;
       }
 
+      savedOrder = await B2COrderModel.findByIdAndUpdate(body?.orderId, data);
+
+
       const shiprocketToken = await getShiprocketToken();
       if (shiprocketToken && orderDetails.shiprocket_order_id) {
         const orderPayload = {
           order_id: orderDetails?.client_order_reference_id,
-          order_date: format(orderDetails?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
-          pickup_location: orderDetails?.pickupAddress?.name,
-          billing_customer_name: orderDetails?.customerDetails.get("name"),
-          billing_last_name: orderDetails?.customerDetails.get("name") || "",
-          billing_address: orderDetails?.customerDetails.get("address"),
-          billing_city: orderDetails?.customerDetails.get("city"),
-          billing_pincode: orderDetails?.customerDetails.get("pincode"),
-          billing_state: orderDetails?.customerDetails.get("state"),
+          order_date: format(body?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
+          pickup_location: body?.pickupAddress?.name,
+          billing_customer_name: body?.customerDetails.name,
+          billing_last_name: body?.customerDetails.name || "",
+          billing_address: body?.customerDetails.address,
+          billing_city: body?.customerDetails.city,
+          billing_pincode: body?.customerDetails.pincode,
+          billing_state: body?.customerDetails.state,
           billing_country: "India",
-          billing_email: orderDetails?.customerDetails.get("email") || "noreply@lorrigo.com",
-          billing_phone: orderDetails?.customerDetails.get("phone").replace("+91", ""),
+          billing_email: body?.customerDetails.email || "noreply@lorrigo.com",
+          billing_phone: body?.customerDetails.phone.replace("+91", ""),
           order_items: [
             {
-              name: orderDetails.productId.name,
-              sku: orderDetails.productId.category.slice(0, 40),
+              name: savedProduct.name,
+              sku: savedProduct?.category?.slice(0, 40),
               units: 1,
-              selling_price: Number(orderDetails.productId.taxable_value),
+              selling_price: Number(savedProduct.taxable_value),
             }
           ],
-          payment_method: orderDetails?.payment_mode === 0 ? "Prepaid" : "COD",
-          sub_total: Number(orderDetails.productId?.taxable_value),
-          length: 20,
-          breadth: 10,
-          height: 10,
+          payment_method: body?.payment_mode === 0 ? "Prepaid" : "COD",
+          sub_total: Number(savedProduct?.taxable_value),
+          length: body.orderBoxLength,
+          breadth: body.orderBoxWidth,
+          height: body.orderBoxHeight,
           weight:body?.orderWeight >= 5 ? body?.orderWeight : 0.5,
         };
 
-        if (orderDetails?.isReverseOrder) {
+        if (body?.isReverseOrder) {
           Object.assign(orderPayload, {
-            pickup_customer_name: orderDetails?.customerDetails?.get("name"),
-            pickup_phone: orderDetails?.customerDetails?.get("phone").toString()?.slice(2, 12),
-            pickup_address: orderDetails?.customerDetails?.get("address"),
-            pickup_pincode: orderDetails?.customerDetails?.get("pincode"),
-            pickup_city: orderDetails?.customerDetails?.get("city"),
-            pickup_state: orderDetails?.customerDetails?.get("state"),
+            pickup_customer_name: body?.customerDetails?.name,
+            pickup_phone: body?.customerDetails?.phone.toString()?.slice(2, 12),
+            pickup_address: body?.customerDetails?.address,
+            pickup_pincode: body?.customerDetails?.pincode,
+            pickup_city: body?.customerDetails?.city,
+            pickup_state: body?.customerDetails?.state,
             pickup_country: "India",
-            shipping_customer_name: orderDetails?.pickupAddress?.name,
+            shipping_customer_name: hubDetails?.pickupAddress?.name,
             shipping_country: "India",
-            shipping_address: orderDetails?.pickupAddress?.address1,
-            shipping_pincode: orderDetails?.pickupAddress?.pincode,
-            shipping_city: orderDetails?.pickupAddress?.city,
-            shipping_state: orderDetails?.pickupAddress?.state,
-            shipping_phone: orderDetails?.pickupAddress?.phone.toString()?.slice(2, 12)
+            shipping_address: hubDetails?.pickupAddress?.address1,
+            shipping_pincode: hubDetails?.pickupAddress?.pincode,
+            shipping_city: hubDetails?.pickupAddress?.city,
+            shipping_state: hubDetails?.pickupAddress?.state,
+            shipping_phone: hubDetails?.pickupAddress?.phone.toString()?.slice(2, 12)
           });
         } else {
           Object.assign(orderPayload, {
             shipping_is_billing: true,
-            shipping_customer_name: orderDetails?.sellerDetails.get("sellerName") || "",
-            shipping_last_name: orderDetails?.sellerDetails.get("sellerName") || "",
-            shipping_address: orderDetails?.sellerDetails.get("sellerAddress"),
+            shipping_customer_name: body?.sellerDetails.sellerName || "",
+            shipping_last_name: body?.sellerDetails.sellerName || "",
+            shipping_address: body?.sellerDetails.sellerAddress,
             shipping_address_2: "",
-            shipping_city: orderDetails?.sellerDetails.get("sellerCity"),
-            shipping_pincode: orderDetails?.sellerDetails.get("sellerPincode"),
+            shipping_city: body?.sellerDetails.sellerCity,
+            shipping_pincode: body?.sellerDetails.sellerPincode,
             shipping_country: "India",
-            shipping_state: orderDetails?.sellerDetails.get("sellerState"),
-            shipping_phone: orderDetails?.sellerDetails.get("sellerPhone"),
-            ewaybill_no: orderDetails?.ewaybill,
+            shipping_state: body?.sellerDetails.sellerState,
+            shipping_phone: body?.sellerDetails.sellerPhone,
+            ewaybill_no: body?.ewaybill,
           });
         }
 
         const updateCustomerDetails = {
           order_id: Number(orderDetails?.shiprocket_order_id),
-          shipping_customer_name: orderDetails?.customerDetails.get("name"),
-          shipping_phone: orderDetails?.customerDetails.get("phone").replace("+91", ""),
-          shipping_last_name: orderDetails?.customerDetails.get("name") || "",
-          shipping_address: orderDetails?.customerDetails.get("address"),
-          shipping_city: orderDetails?.customerDetails.get("city"),
-          shipping_pincode: Number(orderDetails?.customerDetails.get("pincode")),
-          shipping_state: orderDetails?.customerDetails.get("state"),
+          shipping_customer_name: body?.customerDetails.name,
+          shipping_phone: body?.customerDetails.phone.replace("+91", ""),
+          shipping_last_name: body?.customerDetails.name || "",
+          shipping_address: body?.customerDetails.address,
+          shipping_city: body?.customerDetails.city,
+          shipping_pincode: Number(body?.customerDetails.pincode),
+          shipping_state: body?.customerDetails.state,
           shipping_country: "India",
         }
-
-        console.log(updateCustomerDetails, "updateCustomerDetails")
 
         try {
           const updateOrderShiprocket = await axios.post(`${envConfig.SHIPROCKET_API_BASEURL}${APIs.SHIPROCKET_UPDATE_ORDER}`, orderPayload, {
@@ -597,17 +598,17 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
               Authorization: `${shiprocketToken}`,
             },
           });
-          console.log(updateCustomerDetailsShiprocket.data, 'updateOrderShiprocket')
+          console.log(updateOrderShiprocket.data, 'updateOrderShiprocket')
         } catch (error: any) {
           console.log(error.response.data)
         }
       }
 
       // Find and update the existing order
-      savedOrder = await B2COrderModel.findByIdAndUpdate(body?.orderId, data);
 
       return res.status(200).send({ valid: true, order: savedOrder });
     } catch (err) {
+      console.log(err)
       return next(err);
     }
   } catch (error) {
@@ -1081,9 +1082,9 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
       ],
       payment_method: orderDetails?.payment_mode === 0 ? "Prepaid" : "COD",
       sub_total: Number(orderDetails.productId?.taxable_value),
-      length: 20,
-      breadth: 10,
-      height: 10,
+      length: orderDetails.orderBoxLength,
+      breadth: orderDetails.orderBoxWidth,
+      height: orderDetails.orderBoxHeight,
       // weight: 0.5,
       // if Weight is less than 5, then set it to 0.5, else set it to orderWeight
       weight: orderDetails.orderWeight >= 5 ? orderDetails.orderWeight : 0.5,
