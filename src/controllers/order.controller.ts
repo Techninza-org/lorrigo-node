@@ -58,7 +58,7 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
       return res.status(200).send({ valid: false, message: "Invalid payment mode" });
     if (body.payment_mode === 1) {
       if (!body?.amount2Collect) {
-        return res.status(200).send({ valid: false, message: "amount2Collect > 0 for COD order" });
+        return res.status(200).send({ valid: false, message: "Collectable Amount is required" });
       }
     }
     if (body.total_order_value > 50000) {
@@ -417,7 +417,7 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
       return res.status(200).send({ valid: false, message: "Invalid payment mode" });
     if (body.payment_mode === 1) {
       if (!body?.amount2Collect) {
-        return res.status(200).send({ valid: false, message: "amount2Collect > 0 for COD order" });
+        return res.status(200).send({ valid: false, message: "Collectable Amount is required" });
       }
     }
     if (body.total_order_value > 50000) {
@@ -539,7 +539,8 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
           length: body.orderBoxLength,
           breadth: body.orderBoxWidth,
           height: body.orderBoxHeight,
-          weight:body?.orderWeight >= 5 ? body?.orderWeight : 0.5,
+          // weight: body?.orderWeight >= 5 ? body?.orderWeight : 0.5,
+          weight: body?.orderWeight,
         };
 
         if (body?.isReverseOrder) {
@@ -1087,7 +1088,8 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
       height: orderDetails.orderBoxHeight,
       // weight: 0.5,
       // if Weight is less than 5, then set it to 0.5, else set it to orderWeight
-      weight: orderDetails.orderWeight >= 5 ? orderDetails.orderWeight : 0.5,
+      // weight: orderDetails.orderWeight >= 5 ? orderDetails.orderWeight : 0.5,
+      weight: orderDetails.orderWeight,
     };
 
     if (orderDetails?.isReverseOrder) {

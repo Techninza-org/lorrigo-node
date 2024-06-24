@@ -390,6 +390,39 @@ export const bulkHubUpload = async (req: ExtendedRequest, res: Response, next: N
         return next(err);
       }
 
+      const delhiveryHubPayload = {
+        name: hub.name,
+        email: "noreply@lorrigo.com",
+        phone: hub.phone.toString().slice(2, 12),
+        address: hub.address1,
+        city: hub.city,
+        country: "India",
+        pin: hub.pincode?.toString(),
+        return_address: hub.rtoAddress?.toString() || hub.address1,
+        return_pin: hub.rtoPincode?.toString() || hub.pincode?.toString(),
+        return_city: hub.rtoCity || hub.city,
+        return_state: hub.rtoState,
+        return_country: "India"
+      }
+
+      try {
+        const delhiveryToken5 = await getDelhiveryToken();
+        const delhiveryTokenPoint5 = await getDelhiveryTokenPoint5();
+        const delhiveryToken10 = await getDelhiveryToken10();
+        const delhiveryResponse5 = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
+          headers: { Authorization: delhiveryToken5 }
+        });
+        const delhiveryResponsePoint5 = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
+          headers: { Authorization: delhiveryTokenPoint5 }
+        });
+        const delhiveryResponse10 = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
+          headers: { Authorization: delhiveryToken10 }
+        });
+      } catch (error: any) {
+        console.log(error.response?.data, "error in delhivery")
+        return res.status(500).send({ valid: false, error });
+      }
+
       const smartShipData: SMARTSHIP_DATA = smartShipResponse.data;
 
       let hubId = 0;
