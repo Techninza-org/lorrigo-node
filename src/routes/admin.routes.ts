@@ -14,7 +14,8 @@ import {
     getFutureRemittances,
     uploadClientBillingCSV,
     getClientBillingData,
-    manageSellerRemittance
+    manageSellerRemittance,
+    getVendorBillingData
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -65,6 +66,9 @@ adminRouter.put("/pincodes", upload.single('file'), uploadPincodes);
 
 //@ts-ignore
 adminRouter.put("/billing/client-billing/upload-csv", AdminAuthMiddleware, upload.single('file'), uploadClientBillingCSV);
+
+//@ts-ignore
+adminRouter.get("/billing/vendor", AdminAuthMiddleware, getVendorBillingData);
 
 //@ts-ignore
 adminRouter.get("/billing/client", AdminAuthMiddleware, getClientBillingData);

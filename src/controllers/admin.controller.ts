@@ -458,7 +458,11 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
             paymentType: bill.shipmentType,
             collectableAmount: bill.codValue,
           };
-          const totalCharge = await calculateShippingCharges(
+          const {
+            incrementPrice,
+            totalCharge,
+            orderWeight
+          } = await calculateShippingCharges(
             pickupDetails,
             deliveryDetails,
             body,
@@ -469,6 +473,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
             ...bill,
             sellerId: order.sellerId,
             billingAmount: totalCharge,
+            incrementPrice: incrementPrice.incrementPrice,
+            basePrice: incrementPrice.basePrice,
           };
         } else {
           return res.status(400).json({ valid: false, message: "Order not found, Please Emter the valid Order Ref Id!" });
@@ -488,6 +494,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         bulkInsertBills
       });
     } catch (error) {
+      console.log(error, 'error');
       return next(error);
     }
 
@@ -496,13 +503,25 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
   }
 }
 
-export const getClientBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+export const getVendorBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const data = await ClientBillingModal.find({}).populate("sellerId").lean();
     if (!data) return res.status(200).send({ valid: false, message: "No Client Billing found" });
     return res.status(200).send({
       valid: true,
       data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+export const getClientBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const data = await ClientBillingModal.find({}).populate("sellerId").lean();
+    if (!data) return res.status(200).send({ valid: false, message: "No Client Billing found" });
+    return res.status(200).send({
+      valid: true,
+      data
     });
   } catch (error) {
     return next(error);

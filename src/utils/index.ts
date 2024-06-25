@@ -558,7 +558,11 @@ export async function calculateShippingCharges(
   deliveryDetails: DeliveryDetails,
   body: Body,
   vendor: any
-): Promise<number> {
+): Promise<{
+  totalCharge: number;
+  incrementPrice: IncrementPrice;
+  orderWeight: number;
+}> {
   const orderWeight = body.weight
 
   const increment_price = getIncrementPrice(pickupDetails, deliveryDetails, MetroCitys, NorthEastStates, vendor);
@@ -567,7 +571,11 @@ export async function calculateShippingCharges(
   }
 
   const totalCharge = calculateTotalCharge(orderWeight, increment_price, body, vendor);
-  return totalCharge;
+  return {
+    totalCharge,
+    incrementPrice: increment_price,
+    orderWeight,
+  };
 }
 
 function getIncrementPrice(
@@ -583,7 +591,7 @@ function getIncrementPrice(
     return vendor.withinZone;
   } else if (MetroCitys.includes(pickupDetails.District) && MetroCitys.includes(deliveryDetails.District)) {
     return vendor.withinMetro;
-  } else if (NorthEastStates.includes(pickupDetails.StateName) && NorthEastStates.includes(deliveryDetails.StateName)) {
+  } else if (NorthEastStates.includes(pickupDetails.StateName) || NorthEastStates.includes(deliveryDetails.StateName)) {
     return vendor.northEast;
   } else {
     return vendor.withinRoi;

@@ -15,6 +15,8 @@ const modal = new mongoose.Schema({
   isRTOApplicable: { type: Boolean, required: true },
   billingDate: { type: Date, required: true },
   billingAmount: { type: String, required: false },
+  incrementPrice : { type: String, required: false },
+  basePrice : { type: String, required: false },
 });
 
 const ClientBillingModal = mongoose.model("ClientBilling", modal);
