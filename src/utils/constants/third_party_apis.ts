@@ -1,3 +1,4 @@
+import envConfig from "../config";
 
 /* Smartship */
 export const HUB_REGISTRATION = "/v2/app/Fulfillmentservice/hubRegistration";
@@ -52,6 +53,8 @@ const DELHIVERY_MANIFEST_ORDER = "/fm/request/new"
 
 const ECOMM_PINCODE_SERVICEABILITY = "/services/expp/expppincode/";
 
+const ZOHO_CREATE_USER = `/books/v3/users?organization_id=${envConfig.ZOHO_ORG_ID}`
+
 const APIs = {
   HUB_REGISTRATION,
   HUB_UPDATE,
@@ -100,6 +103,9 @@ const APIs = {
   DELHIVERY_CANCEL_ORDER,
   DELHIVERY_MANIFEST_ORDER,
 
-  ECOMM_PINCODE_SERVICEABILITY
+  ECOMM_PINCODE_SERVICEABILITY,
+
+  ZOHO_CREATE_USER
+
 };
 export default APIs;

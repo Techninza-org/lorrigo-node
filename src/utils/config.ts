@@ -66,7 +66,9 @@ const DELHIVERY_API_BASEURL = process.env.DELHIVERY_API_BASEURL;
 const DELHIVERY_API_TOKEN = process.env.DELHIVERY_API_TOKEN;
 
 
-
+/* ZOHO */
+const ZOHO_API_BASEURL = process.env.ZOHO_API_BASEURL;
+const ZOHO_ORG_ID = process.env.ZOHO_ORG_ID;
 
 const envConfig = {
   NODE_ENV,
@@ -101,6 +103,9 @@ const envConfig = {
 
   DELHIVERY_API_BASEURL,
   DELHIVERY_API_TOKEN,
+
+  ZOHO_API_BASEURL,
+  ZOHO_ORG_ID
 
 };
 

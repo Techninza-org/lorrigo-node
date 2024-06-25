@@ -3,9 +3,11 @@ import type { NextFunction, Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import config from "../utils/config";
-import { validateEmail } from "../utils/helpers";
+import { getZohoConfig, validateEmail } from "../utils/helpers";
 import CourierModel from "../models/courier.model";
 import { sendMail } from "../utils";
+import axios from "axios";
+import APIs from "../utils/constants/third_party_apis";
 
 type SignupBodyType = { email: any; password: any; name: any };
 
@@ -54,10 +56,33 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
 
     let savedUser;
     try {
-      savedUser = await user.save();
+      // savedUser = await user.save();
     } catch (err) {
       return next(err);
     }
+
+
+    try {
+      const zohoConfig: any= await getZohoConfig();
+      const createZohoUser = await axios.post(config.ZOHO_API_BASEURL + APIs.ZOHO_CREATE_USER, {
+        name: body.name,
+        email: body.email,
+        role_id: ""
+      }, {
+        headers: {
+          Authorization: `Zoho-oauthtoken ${zohoConfig.accessToken}`
+        }
+      });
+  
+      console.log(createZohoUser.data, "createZohoUser")
+      savedUser = await user.save();
+
+    } catch (err) {
+      console.log(err, "err")
+      return next(err);
+    }
+
+    
 
     return res.send({
       valid: true,

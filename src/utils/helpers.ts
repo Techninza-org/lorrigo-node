@@ -1028,6 +1028,18 @@ export async function getShiprocketToken(): Promise<string | false> {
   }
 }
 
+export async function getZohoConfig() {
+  try {
+    const env = await EnvModel.findOne({ name: "ZOHO" }).lean();
+    if (!env) return false;
+    //@ts-ignore
+    return { accessToken: env.access_token, refreshToken: env.refresh_token };
+  } catch (error) {
+    return false;
+  }
+
+}
+
 export function getShiprocketBucketing(status: number) {
   const shiprocketStatusMapping = {
     // 13: { bucket: NEW, description: "Pickup Error" },

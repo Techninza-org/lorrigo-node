@@ -16,7 +16,6 @@ import {
   isValidPayload,
   validatePhone,
 } from "../utils/helpers";
-import Logger from "../utils/logger";
 import csvtojson from "csvtojson";
 import exceljs from "exceljs";
 import { validateField } from "../utils";
