@@ -22,11 +22,9 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
     const fromRegionName = pickupPincodeData.StateName.toLowerCase(); // convert to lowercase
     const toRegionName = deliveryPincodeData.StateName.toLowerCase(); // convert to lowercase
 
-    console.log(fromRegionName, toRegionName)
     const Fzone = regionToZoneMappingLowercase[fromRegionName];
     const Tzone = regionToZoneMappingLowercase[toRegionName];
 
-    console.log(Fzone, Tzone)
     if (!Fzone || !Tzone) {
         throw new Error('Zone not found for the given region');
     }
@@ -69,6 +67,7 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
                 nickName: courier.vendor_channel_id.nickName,
                 name: courier.name,
                 expectedPickup,
+                rtoCharges: result.finalAmount, 
                 minWeight: 0.5,
                 type: courier.type,
                 carrierID: courier.carrierID,
@@ -91,9 +90,11 @@ export async function calculateRateAndPrice(calcData: any, zoneFrom: string, zon
         const zoneMatrix = calcData.zoneMatrix;
         const zoneMapping = calcData.zoneMapping;
 
-        if (!zoneMapping.has(zoneFrom) || !zoneMapping.has(zoneTo)) {
-            throw new Error('Invalid zones');
-        }
+        // if (!zoneMapping.has(zoneFrom) || !zoneMapping.has(zoneTo)) {
+        //     throw new Error('Invalid zones');
+        // }
+
+        console.log(zoneFrom, zoneTo)
 
         const rate = zoneMatrix.get(zoneFrom)?.get(zoneTo);
         if (!rate) {
@@ -147,14 +148,31 @@ export const regionToZoneMapping = {
     "gurgaon": "North 1",
     "noida": "North 1",
     "faridabad": "North 1",
-    "himachal": "North 2",
     "punjab": "North 2",
+    "AMRITSAR": "North 2",
+    "JALANDHAR": "North 2",
+    "LUDHIANA": "North 2",
     "uttarakhand": "North 2",
+    "DEHRADUN": "North 2",
     "uttar pradesh": "North 2",
+    "GAUTAM BUDDHA NAGAR": "North 2",
+    "AGRA": "North 2",
+    "LUCKNOW": "North 2",
+    "ALLAHABAD": "North 2",
+    "VARANASI": "North 2",
+    "GHAZIABAD": "North 2",
+    "KANPUR NAGAR": "North 2",
     "chandigarh": "North 2",
-    "rajasthan": "North 2",
+    "chandighar": "North 2",
+    "solan": "North 2",
+    "panchkula": "North 2",
+    "jaipur": "North 2",
     "haryana": "North 2",
+    "JHAJJAR": "North 2",
+    "PANIPAT": "North 2",
+    "ambala": "North 2",
     "mumbai": "West 1",
+    "thane": "West 1",
     "navi mumbai": "West 1",
     "vasai": "West 1",
     "bhiwandi": "West 1",
@@ -162,33 +180,66 @@ export const regionToZoneMapping = {
     "kalyan": "West 1",
     "dombivli": "West 1",
     "goa": "West 2",
+    "SOUTH GOA": "West 2",
+    "GANDHI NAGAR": "West 2",
+    "RAJKOT": "West 2",
+    "SURAT": "West 2",
+    "VADODARA": "West 2",
+    "VALSAD": "West 2",
     "diu & daman": "West 2",
     "mp": "West 2",
+    "BHOPAL": "West 2",
+    "INDORE": "West 2",
     "chhattisgarh": "West 2",
     "gujarat": "West 2",
     "rest of maharashtra": "West 2",
+    "PALGHAR": "West 2",
+    "AURANGABAD": "West 2",
+    "Nagpur": "West 2",
+
     "chennai": "South 1",
     "bangalore": "South 1",
+    "BENGALURU": "South 1",
     "hyderabad": "South 1",
     "karnataka": "South 2",
+    "Dakshina Kannada": "South 2",
+    "UDUPI": "South 2",
+    "Mysuru": "South 2",
     "tamil nadu": "South 2",
+    "SALEM": "South 2",
+    "TIRUPPUR": "South 2",
+    "COIMBATORE": "South 2",
     "kerala": "South 2",
+    "KOZHIKODE": "South 2",
+    "ERNAKULAM": "South 2",
+    "THIRUVANANTHAPURAM": "South 2",
     "andhra pradesh": "South 2",
+    "VISAKHAPATNAM": "South 2",
+    
+    "krishna": "South 2",
     "telangana": "South 2",
+    "HYDERABAD": "South 2",
     "pondicherry": "South 2",
     "bihar": "East",
+    "PATNA": "East",
     "jharkhand": "East",
     "orissa": "East",
+    "KHORDA": "East",
+    "CUTTACK": "East",
+    "PONDICHERRY": "East",
     "west bengal": "East",
     "sikkim": "East",
     "assam": "Northeast",
+    "KAMRUP METROPOLITAN": "Northeast",
+    "MUZAFFARPUR": "Northeast",
     "nagaland": "Northeast",
     "mizoram": "Northeast",
     "manipur": "Northeast",
     "meghalaya": "Northeast",
     "ap": "Northeast",
     "tripura": "Northeast",
-    "jammu and kashmir": "J&K"
+    "jammu and kashmir": "Northeast",
+    "JAMMU": "Northeast",
 };
 
 // Ensure all keys are lowercase for case-insensitive matching

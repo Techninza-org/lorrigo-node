@@ -102,12 +102,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
       const client_order_reference_id = isReshipedOrder ? newString : `${order?._id}_${order?.order_reference_id}`;
 
-      let orderWeight = order?.orderWeight || 0;
-      if (orderWeight < 1) {
-        orderWeight = orderWeight * 1000;
-      }
-
-      console.log("[createShipment controller] orderWeight", orderWeight)
+      let orderWeight = order?.orderWeight * 1000;
 
       const shipmentAPIBody = {
         request_info: {
@@ -540,9 +535,10 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               seller_inv: order.order_invoice_number,
               quantity: productDetails.quantity,
               waybill: order.ewaybill || "",
+              shipment_length: order.orderBoxLength,
               shipment_width: order.orderBoxWidth,
               shipment_height: order.orderBoxHeight,
-              weight: order.orderWeight,
+              weight: order.orderWeight * 1000,
               seller_gst_tin: req.seller.gstno,
               shipping_mode: "Surface",
               address_type: "home",
@@ -675,9 +671,10 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               seller_inv: order.order_invoice_number,
               quantity: productDetails.quantity,
               waybill: order.ewaybill || "",
+              shipment_length: order.orderBoxLength,
               shipment_width: order.orderBoxWidth,
               shipment_height: order.orderBoxHeight,
-              weight: order.orderWeight,
+              weight: order.orderWeight * 1000, // convert to grams
               seller_gst_tin: req.seller.gstno,
               shipping_mode: "Surface",
               address_type: "home",
@@ -810,9 +807,10 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               seller_inv: order.order_invoice_number,
               quantity: productDetails.quantity,
               waybill: order.ewaybill || "",
+              shipment_length: order.orderBoxLength,
               shipment_width: order.orderBoxWidth,
               shipment_height: order.orderBoxHeight,
-              weight: order.orderWeight,
+              weight: order.orderWeight * 1000,
               seller_gst_tin: req.seller.gstno,
               shipping_mode: "Surface",
               address_type: "home",
@@ -1106,6 +1104,8 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           });
 
           const delhiveryShipmentResponse = response.data;
+
+          console.log(delhiveryShipmentResponse, "delhiveryShipmentResponse")
 
           if (delhiveryShipmentResponse.status) {
             if (type === "order") {

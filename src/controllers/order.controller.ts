@@ -1019,6 +1019,7 @@ export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: N
     delete orderDetails.freightType;
 
     const data2send = await calculateB2BPriceCouriers(orderId, users_vendors)
+    if (data2send.length < 1) return res.status(200).send({ valid: false, message: "No courier partners found" });
     return res.status(200).send({ valid: true, orderDetails, courierPartner: data2send });
   } catch (error) {
     return next(error);

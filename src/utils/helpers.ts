@@ -312,7 +312,7 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
         increment_price = cv.withinMetro;
         order_zone = "Zone C";
       } else if (
-        NorthEastStates.find((state) => state === pickupDetails?.StateName) &&
+        NorthEastStates.find((state) => state === pickupDetails?.StateName) ||
         NorthEastStates.find((state) => state === deliveryDetails?.StateName)
       ) {
         // north east
@@ -422,7 +422,7 @@ export const B2BRatecalculatorController = async (req: ExtendedRequest, res: Res
   const b2bCouriers = await B2BCalcModel.find(query).populate("vendor_channel_id");
   const courierDataPromises = b2bCouriers.map(async (courier) => {
     try {
-      const result = await calculateRateAndPrice(courier, Tzone, Fzone, orderWeight, courier._id.toString(), fromRegionName, toRegionName, amount);
+      const result = await calculateRateAndPrice(courier, Fzone, Tzone, orderWeight, courier._id.toString(), fromRegionName, toRegionName, amount);
 
       const parterPickupTime = courier.pickupTime;
       const partnerPickupHour = Number(parterPickupTime.split(":")[0]);
@@ -501,9 +501,9 @@ export const rateCalculation = async (
     let volumetricWeight = null;
     if (sizeUnit === "cm") {
       const volume = boxLength * boxWidth * boxHeight;
-      volumetricWeight = Math.round(volume / 5000);
+      volumetricWeight = Math.ceil(volume / 5000);
     } else if (sizeUnit === "m") {
-      volumetricWeight = Math.round((boxLength * boxWidth * boxHeight) / 5);
+      volumetricWeight = Math.ceil((boxLength * boxWidth * boxHeight) / 5);
     } else {
       throw new Error("unhandled size unit");
     }
@@ -903,7 +903,7 @@ export const calculateZone = async (pickupPincode: PincodePincode, deliveryPinco
   ) {
     return "Zone C";
   } else if (
-    NorthEastStates.find((state) => state === pickupDetails?.StateName) &&
+    NorthEastStates.find((state) => state === pickupDetails?.StateName) ||
     NorthEastStates.find((state) => state === deliveryDetails?.StateName)
   ) {
     return "Zone E";
@@ -957,8 +957,9 @@ export const MetroCitys = [
   "BENGALURU",
   "Ahmedabad City",
   "Ahmedabad",
+  "AHMEDABAD",
 ];
-export const NorthEastStates = ["Sikkim", "Mizoram", "Manipur", "Assam", "Megalaya", "Nagaland", "Tripura", "Jammu and Kashmir", "Himachal Pradesh", "Mizoram"];
+export const NorthEastStates = ["Sikkim", "Mizoram", "Manipur", "Assam", "Megalaya", "Nagaland", "Tripura", "Jammu and Kashmir", "Himachal Pradesh"];
 
 export async function getSmartShipToken(): Promise<string | false> {
   const env = await EnvModel.findOne({ name: "SMARTSHIP" }).lean();
