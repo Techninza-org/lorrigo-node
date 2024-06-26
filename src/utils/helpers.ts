@@ -501,9 +501,9 @@ export const rateCalculation = async (
     let volumetricWeight = null;
     if (sizeUnit === "cm") {
       const volume = boxLength * boxWidth * boxHeight;
-      volumetricWeight = Math.ceil(volume / 5000);
+      volumetricWeight = Math.round(volume / 5000);
     } else if (sizeUnit === "m") {
-      volumetricWeight = Math.ceil((boxLength * boxWidth * boxHeight) / 5);
+      volumetricWeight = Math.round((boxLength * boxWidth * boxHeight) / 5);
     } else {
       throw new Error("unhandled size unit");
     }

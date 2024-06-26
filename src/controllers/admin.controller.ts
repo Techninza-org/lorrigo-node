@@ -461,7 +461,6 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
           const {
             incrementPrice,
             totalCharge,
-            orderWeight
           } = await calculateShippingCharges(
             pickupDetails,
             deliveryDetails,
@@ -469,12 +468,17 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
             vendor
           );
 
+          const baseWeight = vendor?.weightSlab || 0;
+          const incrementWeight = Number(order.orderWeight) - baseWeight;
+
           return {
             ...bill,
             sellerId: order.sellerId,
             billingAmount: totalCharge,
             incrementPrice: incrementPrice.incrementPrice,
             basePrice: incrementPrice.basePrice,
+            incrementWeight: incrementWeight.toString(),
+            baseWeight: baseWeight.toString(),
           };
         } else {
           return res.status(400).json({ valid: false, message: "Order not found, Please Emter the valid Order Ref Id!" });

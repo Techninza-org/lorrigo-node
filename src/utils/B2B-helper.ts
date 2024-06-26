@@ -22,8 +22,12 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
     const fromRegionName = pickupPincodeData.StateName.toLowerCase(); // convert to lowercase
     const toRegionName = deliveryPincodeData.StateName.toLowerCase(); // convert to lowercase
 
+    console.log(toRegionName)
+
     const Fzone = regionToZoneMappingLowercase[fromRegionName];
     const Tzone = regionToZoneMappingLowercase[toRegionName];
+
+    console.log(Fzone, Tzone)
 
     if (!Fzone || !Tzone) {
         throw new Error('Zone not found for the given region');
@@ -193,6 +197,7 @@ export const regionToZoneMapping = {
     "chhattisgarh": "West 2",
     "gujarat": "West 2",
     "rest of maharashtra": "West 2",
+    "maharashtra": "West 2",
     "PALGHAR": "West 2",
     "AURANGABAD": "West 2",
     "Nagpur": "West 2",
