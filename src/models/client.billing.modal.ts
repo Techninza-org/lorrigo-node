@@ -19,6 +19,7 @@ const modal = new mongoose.Schema({
   basePrice : { type: String, required: false },
   baseWeight : { type: String, required: false },
   incrementWeight : { type: String, required: false },
+  vendorWNickName: { type: String, required: false },
 });
 
 const ClientBillingModal = mongoose.model("ClientBilling", modal);

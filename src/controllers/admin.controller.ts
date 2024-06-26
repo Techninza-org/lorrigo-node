@@ -439,7 +439,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     try {
       const billsWithCharges = await Promise.all(bills.map(async (bill) => {
         const order: any = orders.find(o => o.order_reference_id === bill.orderRefId);
-        const vendor = await CourierModel.findOne({ carrierID: bill.carrierID });
+        const vendor: any = await CourierModel.findOne({ carrierID: bill.carrierID }).populate("vendor_channel_id");
         if (order) {
           const pickupDetails = {
             // @ts-ignore
@@ -479,6 +479,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
             basePrice: incrementPrice.basePrice,
             incrementWeight: incrementWeight.toString(),
             baseWeight: baseWeight.toString(),
+            vendorWNickName: `${vendor.name} ${vendor.vendor_channel_id.nickName}`,
           };
         } else {
           return res.status(400).json({ valid: false, message: "Order not found, Please Emter the valid Order Ref Id!" });
