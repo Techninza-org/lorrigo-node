@@ -56,31 +56,31 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
 
     let savedUser;
     try {
-      // savedUser = await user.save();
-    } catch (err) {
-      return next(err);
-    }
-
-
-    try {
-      const zohoConfig: any= await getZohoConfig();
-      const createZohoUser = await axios.post(config.ZOHO_API_BASEURL + APIs.ZOHO_CREATE_USER, {
-        name: body.name,
-        email: body.email,
-        role_id: ""
-      }, {
-        headers: {
-          Authorization: `Zoho-oauthtoken ${zohoConfig.accessToken}`
-        }
-      });
-  
-      console.log(createZohoUser.data, "createZohoUser")
       savedUser = await user.save();
-
     } catch (err) {
-      console.log(err, "err")
       return next(err);
     }
+
+
+    // try {
+    //   const zohoConfig: any= await getZohoConfig();
+    //   const createZohoUser = await axios.post(config.ZOHO_API_BASEURL + APIs.ZOHO_CREATE_USER, {
+    //     name: body.name,
+    //     email: body.email,
+    //     role_id: ""
+    //   }, {
+    //     headers: {
+    //       Authorization: `Zoho-oauthtoken ${zohoConfig.accessToken}`
+    //     }
+    //   });
+    //   savedUser = await user.save();
+  
+    //   console.log(createZohoUser.data, "createZohoUser")
+    
+    // } catch (err) {
+    //   console.log(err, "err")
+    //   return next(err);
+    // }
 
     
 
