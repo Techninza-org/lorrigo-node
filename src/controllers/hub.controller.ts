@@ -123,7 +123,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       email: "noreply@lorrigo.com",
       phone: phone.toString().slice(2, 12),
       address: address1,
-      address_2: address2,
+      address_2: "",
       city: city,
       state: state,
       country: "India",
@@ -174,7 +174,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       );
     } catch (err) {
       // @ts-ignore
-      const isExistingHub = err?.response?.data.errors.pickup_location[0].includes("Address nick name already in use")
+      const isExistingHub = err?.response?.data?.errors?.pickup_location[0].includes("Address nick name already in use")
       if (!isExistingHub) return next(err);
     }
 
