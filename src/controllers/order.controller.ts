@@ -233,9 +233,21 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
 
       const errorRows: any = [];
 
-      errorRows.push({
-        order_reference_id: "Error",
-        errors: "Pickup address doesn't exists, Please enable the Primary Address!"
+      orders.forEach((order) => {
+        const errors: string[] = [];
+        Object.entries(order).forEach(([fieldName, value]) => {
+          const error = validateBulkOrderField(value, fieldName, orders, existingOrders);
+          if (error) {
+            errors.push(error);
+          }
+        });
+
+        if (errors.length > 0) {
+          errorRows.push({
+            order_reference_id: order.order_reference_id,
+            errors: errors.join(", ")
+          });
+        }
       });
 
       if (errorRows.length > 0) {
@@ -266,18 +278,11 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
 
           const errorRows: any = [];
 
-          orders.forEach((order) => {
-            const errors: string[] = [];
-            Object.entries(order).forEach(([fieldName, value]) => {
-              const error = validateBulkOrderField(value, fieldName, orders, existingOrders);
-              if (error) {
-                errors.push(error);
-              }
-            });
-            if (errors.length > 0) {
-
-            }
+          errorRows.push({
+            order_reference_id: "Error",
+            errors: "Pickup address doesn't exists, Please enable the Primary Address!"
           });
+          
 
           if (errorRows.length > 0) {
             errorWorksheet.addRows(errorRows);
