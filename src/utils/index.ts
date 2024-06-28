@@ -334,7 +334,7 @@ export function cleanPhoneNumber(phoneNumber: string) {
 }
 
 export function convertToISO(invoice_date?: string): string {
-  let day, month, year, hour, minute, second;
+  let day, month, year, hour = 0, minute = 0, second = 0;
 
   if (!invoice_date || invoice_date.trim() === '') {
     // If the date is not provided, use the current date and time
@@ -342,35 +342,34 @@ export function convertToISO(invoice_date?: string): string {
     return now.toISOString();
   }
 
+  let datePart, timePart;
   if (invoice_date.includes('-')) {
     // Format: DD-MM-YYYY or DD-MM-YYYY HH:MM:SS
-    const [datePart, timePart] = invoice_date.split(' ');
-    [day, month, year] = datePart.split('-');
-    if (timePart) {
-      [hour, minute, second] = timePart.split(':');
-    } else {
-      const now = new Date();
-      hour = now.getHours();
-      minute = now.getMinutes();
-      second = now.getSeconds();
-    }
+    [datePart, timePart] = invoice_date.split(' ');
+    [day, month, year] = datePart.split('-').map(Number);
   } else if (invoice_date.includes('/')) {
     // Format: MM/DD/YYYY or MM/DD/YYYY HH:MM:SS
-    const [datePart, timePart] = invoice_date.split(' ');
-    [month, day, year] = datePart.split('/');
-    if (timePart) {
-      [hour, minute, second] = timePart.split(':');
-    } else {
-      const now = new Date();
-      hour = now.getHours();
-      minute = now.getMinutes();
-      second = now.getSeconds();
-    }
+    [datePart, timePart] = invoice_date.split(' ');
+    [month, day, year] = datePart.split('/').map(Number);
   } else {
     throw new Error("Invalid date format");
   }
 
-  const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second || '00'}`);
+  if (timePart) {
+    [hour, minute, second] = timePart.split(':').map(Number);
+  } else {
+    const now = new Date();
+    hour = now.getHours();
+    minute = now.getMinutes();
+    second = now.getSeconds();
+  }
+
+  // Validate the date
+  const date = new Date(year, month - 1, day, hour, minute, second);
+  if (isNaN(date.getTime())) {
+    throw new Error("Invalid date components");
+  }
+
   return date.toISOString();
 }
 
