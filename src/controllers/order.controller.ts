@@ -233,22 +233,9 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
 
       const errorRows: any = [];
 
-      orders.forEach((order) => {
-        const errors: string[] = [];
-        Object.entries(order).forEach(([fieldName, value]) => {
-          const error = validateBulkOrderField(value, fieldName, orders, existingOrders);
-          if (error) {
-            errors.push(error);
-          }
-        });
-
-        if (errors.length > 0) {
-          errorRows.push({
-            order_reference_id: order.order_reference_id,
-            errors: errors.join(", ")
-          });
-        }
-
+      errorRows.push({
+        order_reference_id: "Error",
+        errors: "Pickup address doesn't exists, Please enable the Primary Address!"
       });
 
       if (errorRows.length > 0) {
@@ -267,7 +254,45 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
     let hubDetails;
     try {
       hubDetails = await HubModel.findOne({ sellerId: req.seller._id, isPrimary: true });
-      if (!hubDetails) return res.status(200).send({ valid: false, message: "Pickup address doesn't exists" });
+      if (!hubDetails) {
+        try {
+          const errorWorkbook = new exceljs.Workbook();
+          const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
+
+          errorWorksheet.columns = [
+            { header: 'order_reference_id', key: 'order_reference_id', width: 20 },
+            { header: 'Error Message', key: 'errors', width: 40 },
+          ];
+
+          const errorRows: any = [];
+
+          orders.forEach((order) => {
+            const errors: string[] = [];
+            Object.entries(order).forEach(([fieldName, value]) => {
+              const error = validateBulkOrderField(value, fieldName, orders, existingOrders);
+              if (error) {
+                errors.push(error);
+              }
+            });
+            if (errors.length > 0) {
+
+            }
+          });
+
+          if (errorRows.length > 0) {
+            errorWorksheet.addRows(errorRows);
+
+            res.setHeader('Content-Type', 'text/csv');
+            res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+
+            await errorWorkbook.csv.write(res);
+            return res.end();
+          }
+        } catch (error) {
+          return next(error);
+        }
+        return res.status(200).send({ valid: false, message: "Pickup address doesn't exists" });
+      }
 
     } catch (err) {
       return next(err);
@@ -275,6 +300,7 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
 
     for (let i = 0; i < orders.length; i++) {
       const order = orders[i];
+      console.log(order, " order")
       const customerDetails = order?.customerDetails;
       const productDetails = order?.productDetails;
 
