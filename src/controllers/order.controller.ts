@@ -282,7 +282,7 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
             order_reference_id: "Error",
             errors: "Pickup address doesn't exists, Please enable the Primary Address!"
           });
-          
+
 
           if (errorRows.length > 0) {
             errorWorksheet.addRows(errorRows);
@@ -547,7 +547,7 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
         const orderPayload = {
           order_id: orderDetails?.client_order_reference_id,
           order_date: format(body?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
-          pickup_location: body?.pickupAddress?.name,
+          pickup_location: hubDetails?.name,
           billing_customer_name: body?.customerDetails.name,
           billing_last_name: body?.customerDetails.name || "",
           billing_address: body?.customerDetails.address,
@@ -562,11 +562,11 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
               name: savedProduct.name,
               sku: savedProduct?.category?.slice(0, 40),
               units: 1,
-              selling_price: Number(savedProduct.taxable_value),
+              selling_price: Number(productDetails.taxableValue),
             }
           ],
           payment_method: body?.payment_mode === 0 ? "Prepaid" : "COD",
-          sub_total: Number(savedProduct?.taxable_value),
+          sub_total: Number(productDetails.taxableValue),
           length: body.orderBoxLength,
           breadth: body.orderBoxWidth,
           height: body.orderBoxHeight,
