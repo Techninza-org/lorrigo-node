@@ -98,9 +98,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
       let incrementedNumber = lastNumber ? (parseInt(lastNumber) + 1).toString() : "1";
 
-      let newString = `${order?.client_order_reference_id?.replace(/\d+$/, "")}_rs${incrementedNumber}`;
+      let newString = `${order?.client_order_reference_id?.replace(/\d+$/, "")}_R${incrementedNumber}`;
 
-      const client_order_reference_id = isReshipedOrder ? newString : `${order?._id}_${order?.order_reference_id}`;
+      const client_order_reference_id = isReshipedOrder ? newString : `${order?.order_reference_id}`;
 
       let orderWeight = order?.orderWeight * 1000;
 
@@ -302,46 +302,51 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           await order.save();
 
-          if (order.channelName === "shopify") {
-            const shopfiyConfig = await getSellerChannelConfig(sellerId);
-            const shopifyOrders = await axios.get(
-              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
-              {
-                headers: {
-                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-                },
-              }
-            );
-
-            const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
-
-            const shopifyFulfillment = {
-              fulfillment: {
-                line_items_by_fulfillment_order: [
-                  {
-                    fulfillment_order_id: fulfillmentOrderId,
+          let fulfillmentOrderId: string = "";
+          try {
+            if (order.channelName === "shopify") {
+              const shopfiyConfig = await getSellerChannelConfig(sellerId);
+              const shopifyOrders = await axios.get(
+                `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
+                {
+                  headers: {
+                    "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
                   },
-                ],
-                tracking_info: {
-                  company: awbResponse?.data?.response?.data?.awb_code,
-                  number: awbResponse?.data?.response?.data.courier_name + " " + vendorName?.nickName,
-                  url: `https://lorrigo.in/track/${order?._id}`,
-                },
-              },
-            };
-            const shopifyFulfillmentResponse = await axios.post(
-              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
-              shopifyFulfillment,
-              {
-                headers: {
-                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-                },
-              }
-            );
+                }
+              );
 
-            order.channelFulfillmentId = fulfillmentOrderId;
-            await order.save();
+              fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
+
+              const shopifyFulfillment = {
+                fulfillment: {
+                  line_items_by_fulfillment_order: [
+                    {
+                      fulfillment_order_id: fulfillmentOrderId,
+                    },
+                  ],
+                  tracking_info: {
+                    company: awbResponse?.data?.response?.data?.awb_code,
+                    number: awbResponse?.data?.response?.data.courier_name + " " + vendorName?.nickName,
+                    url: `https://lorrigo.in/track/${order?._id}`,
+                  },
+                },
+              };
+              const shopifyFulfillmentResponse = await axios.post(
+                `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
+                shopifyFulfillment,
+                {
+                  headers: {
+                    "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                  },
+                }
+              );
+            }
+          } catch (error: any) {
+            console.log("Error[shopify]", error?.response?.data?.errors);
           }
+
+          order.channelFulfillmentId = fulfillmentOrderId;
+          await order.save();
           await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
           return res.status(200).send({ valid: true, order });
         } catch (error: any) {
@@ -359,7 +364,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       const smartrShipmentPayload = [{
         packageDetails: {
           awbNumber: "",
-          orderNumber: order.order_reference_id,
+          orderNumber: order.client_order_reference_id,
           productType: order.payment_mode ? "ACC" : "ACP",
           collectableValue: order.payment_mode ? order.amount2Collect : 0,
           declaredValue: productDetails.taxable_value,
@@ -451,43 +456,47 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             stageDateTime: new Date(),
           });
 
-          if (order.channelName === "shopify") {
-            const shopfiyConfig = await getSellerChannelConfig(sellerId);
-            const shopifyOrders = await axios.get(
-              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
-              {
-                headers: {
-                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-                },
-              }
-            );
-
-            const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
-
-            const shopifyFulfillment = {
-              fulfillment: {
-                line_items_by_fulfillment_order: [
-                  {
-                    fulfillment_order_id: fulfillmentOrderId,
+          try {
+            if (order.channelName === "shopify") {
+              const shopfiyConfig = await getSellerChannelConfig(sellerId);
+              const shopifyOrders = await axios.get(
+                `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
+                {
+                  headers: {
+                    "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
                   },
-                ],
-                tracking_info: {
-                  company: orderAWB,
-                  number: courier?.name + " " + (vendorName?.nickName),
-                  url: `https://lorrigo.in/track/${order?._id}`,
+                }
+              );
+
+              const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
+
+              const shopifyFulfillment = {
+                fulfillment: {
+                  line_items_by_fulfillment_order: [
+                    {
+                      fulfillment_order_id: fulfillmentOrderId,
+                    },
+                  ],
+                  tracking_info: {
+                    company: orderAWB,
+                    number: courier?.name + " " + (vendorName?.nickName),
+                    url: `https://lorrigo.in/track/${order?._id}`,
+                  },
                 },
-              },
-            };
-            const shopifyFulfillmentResponse = await axios.post(
-              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
-              shopifyFulfillment,
-              {
-                headers: {
-                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-                },
-              }
-            );
-            order.channelFulfillmentId = fulfillmentOrderId;
+              };
+              const shopifyFulfillmentResponse = await axios.post(
+                `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
+                shopifyFulfillment,
+                {
+                  headers: {
+                    "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                  },
+                }
+              );
+              order.channelFulfillmentId = fulfillmentOrderId;
+            }
+          } catch (error: any) {
+            console.log("Error[shopify]", error?.response?.data?.errors);
           }
 
           await order.save();
@@ -517,7 +526,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               state: order.customerDetails.get("state"),
               country: "India",
               phone: order.customerDetails.get("phone"),
-              order: order.order_reference_id,
+              order: order.client_order_reference_id,
               payment_mode: order?.isReverseOrder ? "Pickup" : order.payment_mode ? "COD" : "Prepaid",
               return_pin: hubDetails.rtoPincode,
               return_city: hubDetails.rtoCity,
@@ -590,43 +599,47 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         }
         );
 
-        if (order.channelName === "shopify") {
-          const shopfiyConfig = await getSellerChannelConfig(sellerId);
-          const shopifyOrders = await axios.get(
-            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
-            {
-              headers: {
-                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-              },
-            }
-          );
-
-          const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
-
-          const shopifyFulfillment = {
-            fulfillment: {
-              line_items_by_fulfillment_order: [
-                {
-                  fulfillment_order_id: fulfillmentOrderId,
+        try {
+          if (order.channelName === "shopify") {
+            const shopfiyConfig = await getSellerChannelConfig(sellerId);
+            const shopifyOrders = await axios.get(
+              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
+              {
+                headers: {
+                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
                 },
-              ],
-              tracking_info: {
-                company: delhiveryRes?.waybill,
-                number: courier?.name + " " + (vendorName?.nickName),
-                url: `https://lorrigo.in/track/${order?._id}`,
+              }
+            );
+
+            const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
+
+            const shopifyFulfillment = {
+              fulfillment: {
+                line_items_by_fulfillment_order: [
+                  {
+                    fulfillment_order_id: fulfillmentOrderId,
+                  },
+                ],
+                tracking_info: {
+                  company: delhiveryRes?.waybill,
+                  number: courier?.name + " " + (vendorName?.nickName),
+                  url: `https://lorrigo.in/track/${order?._id}`,
+                },
               },
-            },
-          };
-          const shopifyFulfillmentResponse = await axios.post(
-            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
-            shopifyFulfillment,
-            {
-              headers: {
-                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-              },
-            }
-          );
-          order.channelFulfillmentId = fulfillmentOrderId;
+            };
+            const shopifyFulfillmentResponse = await axios.post(
+              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
+              shopifyFulfillment,
+              {
+                headers: {
+                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                },
+              }
+            );
+            order.channelFulfillmentId = fulfillmentOrderId;
+          }
+        } catch (error) {
+          console.log("Error[shopify]", error);
         }
 
         await order.save();
@@ -653,7 +666,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               state: order.customerDetails.get("state"),
               country: "India",
               phone: order.customerDetails.get("phone"),
-              order: order.order_reference_id,
+              order: order.client_order_reference_id,
               payment_mode: order?.isReverseOrder ? "Pickup" : order.payment_mode ? "COD" : "Prepaid",
               return_pin: hubDetails.rtoPincode,
               return_city: hubDetails.rtoCity,
@@ -726,43 +739,47 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         }
         );
 
-        if (order.channelName === "shopify") {
-          const shopfiyConfig = await getSellerChannelConfig(sellerId);
-          const shopifyOrders = await axios.get(
-            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
-            {
-              headers: {
-                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-              },
-            }
-          );
-
-          const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
-
-          const shopifyFulfillment = {
-            fulfillment: {
-              line_items_by_fulfillment_order: [
-                {
-                  fulfillment_order_id: fulfillmentOrderId,
+        try {
+          if (order.channelName === "shopify") {
+            const shopfiyConfig = await getSellerChannelConfig(sellerId);
+            const shopifyOrders = await axios.get(
+              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
+              {
+                headers: {
+                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
                 },
-              ],
-              tracking_info: {
-                company: delhiveryRes?.waybill,
-                number: courier?.name + " " + (vendorName?.nickName),
-                url: `https://lorrigo.in/track/${order?._id}`,
+              }
+            );
+
+            const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
+
+            const shopifyFulfillment = {
+              fulfillment: {
+                line_items_by_fulfillment_order: [
+                  {
+                    fulfillment_order_id: fulfillmentOrderId,
+                  },
+                ],
+                tracking_info: {
+                  company: delhiveryRes?.waybill,
+                  number: courier?.name + " " + (vendorName?.nickName),
+                  url: `https://lorrigo.in/track/${order?._id}`,
+                },
               },
-            },
-          };
-          const shopifyFulfillmentResponse = await axios.post(
-            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
-            shopifyFulfillment,
-            {
-              headers: {
-                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-              },
-            }
-          );
-          order.channelFulfillmentId = fulfillmentOrderId;
+            };
+            const shopifyFulfillmentResponse = await axios.post(
+              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
+              shopifyFulfillment,
+              {
+                headers: {
+                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                },
+              }
+            );
+            order.channelFulfillmentId = fulfillmentOrderId;
+          }
+        } catch (error) {
+          console.log("Error[shopify]", error);
         }
 
         await order.save();
@@ -789,7 +806,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               state: order.customerDetails.get("state"),
               country: "India",
               phone: order.customerDetails.get("phone"),
-              order: order.order_reference_id,
+              order: order.client_order_reference_id,
               payment_mode: order?.isReverseOrder ? "Pickup" : order.payment_mode ? "COD" : "Prepaid",
               return_pin: hubDetails.rtoPincode,
               return_city: hubDetails.rtoCity,
@@ -862,43 +879,47 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         }
         );
 
-        if (order.channelName === "shopify") {
-          const shopfiyConfig = await getSellerChannelConfig(sellerId);
-          const shopifyOrders = await axios.get(
-            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
-            {
-              headers: {
-                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-              },
-            }
-          );
-
-          const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
-
-          const shopifyFulfillment = {
-            fulfillment: {
-              line_items_by_fulfillment_order: [
-                {
-                  fulfillment_order_id: fulfillmentOrderId,
+        try {
+          if (order.channelName === "shopify") {
+            const shopfiyConfig = await getSellerChannelConfig(sellerId);
+            const shopifyOrders = await axios.get(
+              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
+              {
+                headers: {
+                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
                 },
-              ],
-              tracking_info: {
-                company: delhiveryRes?.waybill,
-                number: courier?.name + " " + (vendorName?.nickName),
-                url: `https://lorrigo.in/track/${order?._id}`,
+              }
+            );
+
+            const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
+
+            const shopifyFulfillment = {
+              fulfillment: {
+                line_items_by_fulfillment_order: [
+                  {
+                    fulfillment_order_id: fulfillmentOrderId,
+                  },
+                ],
+                tracking_info: {
+                  company: delhiveryRes?.waybill,
+                  number: courier?.name + " " + (vendorName?.nickName),
+                  url: `https://lorrigo.in/track/${order?._id}`,
+                },
               },
-            },
-          };
-          const shopifyFulfillmentResponse = await axios.post(
-            `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
-            shopifyFulfillment,
-            {
-              headers: {
-                "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-              },
-            }
-          );
-          order.channelFulfillmentId = fulfillmentOrderId;
+            };
+            const shopifyFulfillmentResponse = await axios.post(
+              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
+              shopifyFulfillment,
+              {
+                headers: {
+                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                },
+              }
+            );
+            order.channelFulfillmentId = fulfillmentOrderId;
+          }
+        } catch (error) {
+          console.log("Error[shopify]", error);
         }
 
         await order.save();

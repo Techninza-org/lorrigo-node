@@ -114,7 +114,7 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
       ewaybill: body?.ewaybill,
       isReverseOrder: body?.isReverseOrder,
       bucket: NEW,
-      client_order_reference_id: body?.order_reference_id,
+      client_order_reference_id: body?.client_order_reference_id,
       orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
       pickupAddress: body?.pickupAddress,
       productId: savedProduct._id,
