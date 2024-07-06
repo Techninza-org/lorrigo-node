@@ -9,18 +9,24 @@ import EnvModel from "../models/env.model";
 import https from "node:https";
 import Logger from "./logger";
 import { RequiredTrackResponse, TrackResponse } from "../types/b2c";
-import { generateRemittanceId, getFridayDate, getNextToNextFriday, nextFriday } from ".";
+import { generateRemittanceId, getFridayDate, getNextToNextFriday, nextFriday, shipmentAmtCalcToWalletDeduction, updateSellerWalletBalance } from ".";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
 import { CANCELED, CANCELLATION_REQUESTED_ORDER_STATUS, CANCELLED_ORDER_DESCRIPTION, DELIVERED, ORDER_TO_TRACK, RTO } from "./lorrigo-bucketing-info";
 import { addDays, format, parseISO } from "date-fns";
 import { getNextToNextFriday } from ".";
+import { setTimeout } from 'timers/promises';
 
 /**
  * Update order with statusCode (2) to cancelled order(3)
  * prints Error if occurred during this process
  * @returns Promise(void)
  */
+
+const BATCH_SIZE = 300;
+const API_DELAY = 120000; // 2 minutes in milliseconds
+const trackedOrders = new Set();
+
 const CANCEL_REQUESTED_ORDER_SMARTSHIP = async (): Promise<void> => {
   // get all order with statusCode 2,
   const orderUnderCancellation = await B2COrderModel.find({ bucket: CANCELLATION_REQUESTED_ORDER_STATUS });
@@ -218,53 +224,17 @@ export const trackOrder_Smartship = async () => {
 }
 
 export const trackOrder_Shiprocket = async () => {
+  const vendorNickname = await EnvModel.findOne({ name: "SHIPROCKET" }).select("nickName");
+  const orders = (await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } })).reverse();
 
-  const vendorNickname = await EnvModel.findOne({ name: "SHIPROCKET" }).select("nickName")
-  const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } });
+  const batches = [];
+  for (let i = 0; i < orders.length; i += BATCH_SIZE) {
+    batches.push(orders.slice(i, i + BATCH_SIZE));
+  }
 
-  for (const orderWithOrderReferenceId of orders) {
-    try {
-
-      const shiprocketToken = await getShiprocketToken();
-      if (!shiprocketToken) {
-        console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
-        return;
-      }
-
-      const apiUrl = `${config.SHIPROCKET_API_BASEURL}${APIs.SHIPROCKET_ORDER_TRACKING}/${orderWithOrderReferenceId.awb}`;
-      const response = await axios.get(apiUrl, {
-        headers: {
-          Authorization: shiprocketToken
-        }
-      });
-
-      if (response.data.tracking_data.shipment_status) {
-        const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
-
-        if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {
-          orderWithOrderReferenceId.bucket = bucketInfo.bucket;
-          orderWithOrderReferenceId.orderStages.push({
-            stage: bucketInfo.bucket,
-            action: bucketInfo.description,
-            stageDateTime: new Date(),
-          });
-          if (bucketInfo.bucket === RTO) {
-            const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false)
-            if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true)
-          }
-          try {
-            await orderWithOrderReferenceId.save();
-          } catch (error) {
-            console.log("Error occurred while saving order status:", error);
-          }
-        }
-      }
-
-    } catch (err) {
-      // Need to fix shiprocket throwing error "Too many attempt" 
-      Logger.err(err);
-    }
+  for (const batch of batches) {
+    await processShiprocketOrders(batch);
+    scheduleReTrackBatch(batch, API_DELAY); // Schedule re-tracking of the batch
   }
 };
 
@@ -297,7 +267,7 @@ export const trackOrder_Smartr = async () => {
           }
 
           if ((bucketInfo.bucket !== -1) && (ordersReferenceIdOrders.bucket !== bucketInfo.bucket)) {
-          console.log("SmartR bucktinng", bucketInfo);
+            console.log("SmartR bucktinng", bucketInfo);
             ordersReferenceIdOrders.bucket = bucketInfo.bucket;
             ordersReferenceIdOrders.orderStages.push({ stage: bucketInfo.bucket, action: bucketInfo.description, stageDateTime: new Date(), });
             try {
@@ -429,26 +399,91 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
 };
 
 export default async function runCron() {
-  console.log("to run cron")
-  const expression4every2Minutes = "*/2 * * * *";
-  if (cron.validate(expression4every2Minutes)) {
-    // cron.schedule(expression4every2Minutes, trackOrder_Smartship);
-    // cron.schedule(expression4every2Minutes, trackOrder_Shiprocket);
-    // cron.schedule(expression4every2Minutes,  trackOrder_Smartr);
+  console.log("Running cron scheduler");
+  trackOrder_Shiprocket()
 
-    const expression4every5Minute = "5 * * * *";
-    const expression4every59Minute = "59 * * * *";
-    const expression4every9_59Hr = "59 9 * * * ";
+  const expression4every2Minutes = "*/2 * * * *";
+  const expression4every30Minutes = "*/30 * * * *";
+  if (cron.validate(expression4every2Minutes)) {
+    cron.schedule(expression4every30Minutes, trackOrder_Shiprocket);  // Track order status every 30 minutes
+    cron.schedule(expression4every2Minutes, trackOrder_Smartship);
+    cron.schedule(expression4every2Minutes, trackOrder_Smartr);
+
+    const expression4every5Minutes = "*/5 * * * *";
+    const expression4every59Minutes = "59 * * * *";
+    const expression4every9_59Hr = "59 9 * * *";
     const expression4everyFriday = "0 0 * * 5";
 
     cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
-    cron.schedule(expression4every59Minute, CONNECT_SHIPROCKET);
-    cron.schedule(expression4every59Minute, CONNECT_SMARTSHIP);
-    cron.schedule(expression4every5Minute, CANCEL_REQUESTED_ORDER_SMARTSHIP);
+    cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
+    cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
+    cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
     cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);
 
-    Logger.log("cron scheduled");
+    Logger.log("Cron jobs scheduled successfully");
   } else {
     Logger.log("Invalid cron expression");
   }
 }
+
+const processShiprocketOrders = async (orders) => {
+  for (const orderWithOrderReferenceId of orders) {
+    // Skip orders that have already been tracked
+    if (trackedOrders.has(orderWithOrderReferenceId.awb)) {
+      continue;
+    }
+
+    try {
+      const shiprocketToken = await getShiprocketToken();
+      if (!shiprocketToken) {
+        console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
+        return;
+      }
+
+      const apiUrl = `${config.SHIPROCKET_API_BASEURL}${APIs.SHIPROCKET_ORDER_TRACKING}/${orderWithOrderReferenceId.awb}`;
+      const response = await axios.get(apiUrl, {
+        headers: {
+          Authorization: shiprocketToken
+        }
+      });
+
+      if (response.data.tracking_data.shipment_status) {
+        const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
+        
+        if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {
+          orderWithOrderReferenceId.bucket = bucketInfo.bucket;
+          orderWithOrderReferenceId.orderStages.push({
+            stage: bucketInfo.bucket,
+            action: bucketInfo.description,
+            stageDateTime: new Date(),
+          });
+
+          if (bucketInfo.bucket === RTO) {
+            const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb);
+            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false);
+            if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true);
+          }
+
+          try {
+            await orderWithOrderReferenceId.save();
+          } catch (error) {
+            console.log("Error occurred while saving order status:", error);
+          }
+        }
+
+        // Add the order to the set of tracked orders
+        trackedOrders.add(orderWithOrderReferenceId.awb);
+      }
+    } catch (err) {
+      console.log(err, "SHIPROCKET ERROR");
+      Logger.err(err);
+    }
+  }
+};
+
+const scheduleReTrackBatch = (batch, delay) => {
+  setTimeout(async () => {
+    await processBatch(batch);
+    scheduleReTrackBatch(batch, delay); // Reschedule re-tracking
+  }, delay);
+};

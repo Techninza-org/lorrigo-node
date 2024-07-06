@@ -26,7 +26,6 @@ export const ORDER_TO_TRACK = [
     READY_TO_SHIP,
     IN_TRANSIT,
     NDR,
-    DELIVERED,
     RTO,
     LOST_DAMAGED,
     DISPOSED,
