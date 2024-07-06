@@ -7,14 +7,31 @@ const app = express();
 import config from "./utils/config";
 import orderRouter from "./routes/order.routes";
 import { AuthMiddleware, ErrorHandler } from "./utils/middleware";
-import { B2BRatecalculatorController, addVendors, getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getSellers, ratecalculatorController, updateVendor4Seller } from "./utils/helpers";
+import {
+  B2BRatecalculatorController,
+  addVendors,
+  calculateSellerInvoiceAmount,
+  createContactZohoAll,
+  getDelhiveryToken,
+  getDelhiveryToken10,
+  getDelhiveryTokenPoint5,
+  getSellers,
+  ratecalculatorController,
+  updateVendor4Seller,
+} from "./utils/helpers";
 import hubRouter from "./routes/hub.routes";
 import cors from "cors";
 import customerRouter from "./routes/customer.routes";
 import morgan from "morgan";
 import shipmentRouter from "./routes/shipment.routes";
 import sellerRouter from "./routes/seller.routes";
-import runCron, { CONNECT_SHIPROCKET, CONNECT_SMARTR, CONNECT_SMARTSHIP, calculateRemittanceEveryDay, trackOrder_Smartr } from "./utils/cronjobs";
+import runCron, {
+  CONNECT_SHIPROCKET,
+  CONNECT_SMARTR,
+  CONNECT_SMARTSHIP,
+  calculateRemittanceEveryDay,
+  trackOrder_Smartr,
+} from "./utils/cronjobs";
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
 import PincodeModel from "./models/pincode.model";
@@ -25,6 +42,7 @@ import B2BCalcModel from "./models/b2b.calc.model";
 import { calculateRateAndPrice, regionToZoneMapping, regionToZoneMappingLowercase } from "./utils/B2B-helper";
 import axios from "axios";
 import APIs from "./utils/constants/third_party_apis";
+import { B2COrderModel } from "./models/order.model";
 
 app.use(cors({ origin: "*" }));
 
@@ -61,12 +79,10 @@ if (!config.MONGODB_URI) {
 //   }
 //   const allSeller = await SellerModel.find();
 
-
 //   for (let i = 0; i < allSeller.length; i++) {
 //     const update = await HubModel.updateOne({ sellerId: allSeller[i]._id.toString() }, updateQuery);
 //   }
 // }
-
 
 // async function testData() {
 //   const pincodeDelhi = 110085;
@@ -89,20 +105,18 @@ if (!config.MONGODB_URI) {
 //     throw new Error('Zone not found for the given region');
 //   }
 
-
 //   const result = await calculateRateAndPrice(Tzone, Fzone, 100, '665ef71c95b70be4d1e5efc7', regionNameDelhi, regionNameMumbai);
 //   console.log(`The calculated rate and price is: `);
 //   console.log(result);
 // }
 
-
 async function hubRegDelhivery() {
   try {
     const allHub = await HubModel.find();
-    
+
     const chunkSize = Math.ceil(allHub.length / 4); // Calculate chunk size to divide the array into 4 parts
     const chunks = [];
-    
+
     for (let i = 0; i < allHub.length; i += chunkSize) {
       chunks.push(allHub.slice(i, i + chunkSize));
     }
@@ -110,9 +124,8 @@ async function hubRegDelhivery() {
     for (const chunk of chunks) {
       await processChunk(chunk);
     }
-    
   } catch (error) {
-    console.error('Error fetching hubs:', error);
+    console.error("Error fetching hubs:", error);
   }
 }
 
@@ -131,7 +144,7 @@ async function processChunk(chunk: any) {
       return_pin: rtoPincode?.toString() || pincode?.toString(),
       return_city: rtoCity || city,
       return_state: rtoState || "",
-      return_country: "India"
+      return_country: "India",
     };
 
     // console.log(delhiveryHubPayload);
@@ -149,7 +162,6 @@ async function processChunk(chunk: any) {
   }
 }
 
-
 mongoose
   .connect(config.MONGODB_URI)
   .then(() => {
@@ -164,7 +176,7 @@ mongoose
 
 app.use("/api/auth", authRouter);
 app.post("/api/vendor", addVendors);
-app.get("/api/getsellers", getSellers);    //admin
+app.get("/api/getsellers", getSellers); //admin
 
 // @ts-ignore
 app.get("/api/order/:awb", getSpecificOrder);
@@ -200,5 +212,8 @@ app.use("*", (req: Request, res: Response) => {
 });
 
 runCron();
+
+createContactZohoAll();
+// calculateSellerInvoiceAmount();
 
 app.listen(config.PORT, () => Logger.plog("server running on port " + config.PORT));

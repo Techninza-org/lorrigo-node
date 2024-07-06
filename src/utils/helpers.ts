@@ -18,6 +18,7 @@ import ChannelModel from "../models/channel.model";
 import HubModel from "../models/hub.model";
 import { calculateRateAndPrice, regionToZoneMappingLowercase } from "./B2B-helper";
 import B2BCalcModel from "../models/b2b.calc.model";
+import { B2COrderModel } from "../models/order.model";
 
 export const validateEmail = (email: string): boolean => {
   return /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)*[a-zA-Z]{2,}))$/.test(
@@ -1328,4 +1329,103 @@ type PINCODE_RESPONSE = {
       is_active: boolean;
     }
   ];
+};
+
+export const generateAccessToken = async () => {
+  try{
+    const data = {
+      client_id: process.env.ZOHO_CLIENT_ID,
+      client_secret: process.env.ZOHO_CLIENT_SECRET,
+      grant_type: "refresh_token",
+      refresh_token: process.env.ZOHO_REFRESH_TOKEN,
+    }
+    const response = await axios.post("https://accounts.zoho.in/oauth/v2/token", data,{
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
+    });
+    return response.data.access_token
+  }catch(err){
+    console.log(err, 'err')
+  }
+}
+
+export const createContactZohoAll = async () => {
+  const token = await generateAccessToken();
+  const sellers = await SellerModel.find({});
+  const sellersToCreate = sellers.filter((seller) => !seller.zoho_contact_id);
+  let count = 0;
+  try {
+    await Promise.all(sellersToCreate.map(async (seller) => {
+      const data = {
+        contact_name: seller?.name,
+        // company_name: seller?.companyProfile?.companyName,
+        contact_type: "customer",
+        customer_sub_type: "business",
+        // gst_no: seller?.gstInvoice?.gstin,
+        // website: seller?.companyProfile?.website,
+        // billing_address: {
+        //   address: seller?.billingAddress?.address_line_1,
+        //   city: seller?.billingAddress?.city,
+        //   state: seller?.billingAddress?.state,
+        //   zip: seller?.billingAddress?.pincode,
+        //   country: "India",
+        //   phone: seller?.billingAddress?.phone,
+        // }
+      }
+      const dataJson = JSON.stringify(data);
+      const response = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, dataJson, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${token}`
+        }
+      });
+      seller.zoho_contact_id = response.data.contact_id;
+      count += 1;
+      await seller.save();
+    }));
+    console.log("All Sellers Created Successfully", count);
+
+  } catch (err) {
+    console.log(err);
+  }
+}
+
+export const calculateSellerInvoiceAmount = async () => {
+  try {
+    const sellers = await SellerModel.find({});
+    sellers.forEach(async (seller) => {
+      // const startOfMonth = new Date();
+      // startOfMonth.setDate(1);
+      // startOfMonth.setHours(0, 0, 0, 0);
+
+      // const endOfMonth = new Date();
+      // endOfMonth.setMonth(endOfMonth.getMonth() + 1, 0);
+      // endOfMonth.setHours(23, 59, 59, 999);
+      const sellerId = seller._id;
+      const zoho_contact_id = seller.zoho_contact_id || '';
+
+      const startOfMonth = new Date();
+      startOfMonth.setMonth(startOfMonth.getMonth() - 1, 1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const endOfMonth = new Date();
+      endOfMonth.setMonth(endOfMonth.getMonth(), 0);
+      endOfMonth.setHours(23, 59, 59, 999);
+
+      const orders = await B2COrderModel.find({ sellerId, bucket: 4, createdAt: { $gte: startOfMonth, $lte: endOfMonth } }).select("productId").populate("productId");
+      let totalAmount: number = 0;
+      orders.forEach((order) => {
+        const { productId } = order;
+        //@ts-ignore
+        totalAmount += Number(productId.taxable_value);
+      });
+      const invoiceAmount = totalAmount.toFixed(2);
+      // console.log(invoiceAmount, "invoiceAmount", sellerId, );
+      // invoiceDetails.push({ zoho_contact_id, invoiceAmount });
+      console.log(invoiceAmount, zoho_contact_id);
+    });
+  } catch (err) {
+    console.log(err);
+  }
 };
