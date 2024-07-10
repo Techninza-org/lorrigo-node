@@ -15,8 +15,7 @@ import {
     uploadClientBillingCSV,
     getClientBillingData,
     manageSellerRemittance,
-    getVendorBillingData,
-    createContactZoho
+    getVendorBillingData
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -76,10 +75,5 @@ adminRouter.get("/billing/client", AdminAuthMiddleware, getClientBillingData);
 
 //@ts-ignore
 adminRouter.post("/manage-remittance", AdminAuthMiddleware, manageSellerRemittance);
-
-//@ts-ignore
-adminRouter.post('/create-contact-zoho', createContactZoho)
-
-
 
 export default adminRouter;

@@ -3,7 +3,7 @@ import type { NextFunction, Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import config from "../utils/config";
-import { getZohoConfig, validateEmail } from "../utils/helpers";
+import { generateAccessToken, getZohoConfig, validateEmail } from "../utils/helpers";
 import CourierModel from "../models/courier.model";
 import { sendMail } from "../utils";
 import axios from "axios";
@@ -61,28 +61,25 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
       return next(err);
     }
 
-
-    // try {
-    //   const zohoConfig: any= await getZohoConfig();
-    //   const createZohoUser = await axios.post(config.ZOHO_API_BASEURL + APIs.ZOHO_CREATE_USER, {
-    //     name: body.name,
-    //     email: body.email,
-    //     role_id: ""
-    //   }, {
-    //     headers: {
-    //       Authorization: `Zoho-oauthtoken ${zohoConfig.accessToken}`
-    //     }
-    //   });
-    //   savedUser = await user.save();
-  
-    //   console.log(createZohoUser.data, "createZohoUser")
-    
-    // } catch (err) {
-    //   console.log(err, "err")
-    //   return next(err);
-    // }
-
-    
+    try{
+      const token = await generateAccessToken();
+        const data = {
+          contact_name: savedUser?.name,
+      }
+        
+      const dataJson = JSON.stringify(data);
+      const response = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, dataJson,{
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${token}`
+        }
+      });
+      savedUser.zoho_contact_id = response.data.contact.contact_id;
+      await savedUser.save();
+      
+    }catch(err){
+      return next(err)
+    }
 
     return res.send({
       valid: true,
@@ -90,8 +87,9 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
         email: savedUser.email,
         id: savedUser._id,
         name: savedUser.name,
-        isVerified: savedUser.isVerified,
+        isVerified: false,
         vendors: savedUser.vendors,
+        zoho_contact_id: savedUser.zoho_contact_id
       },
     });
   } catch (error) {
@@ -115,7 +113,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       });
     }
 
-    const existingUser = await SellerModel.findOne({ email: body.email.toLocaleLowerCase() }).select(["name", "email", "password", "walletBalance", "isVerified"]).lean();
+    const existingUser = await SellerModel.findOne({ email: body.email.toLocaleLowerCase() }).select(["name", "email", "password", "walletBalance", "isVerified", "isActive"]).lean();
     if (!existingUser) {
       return res.status(200).send({
         valid: false,
@@ -132,6 +130,14 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       });
     }
 
+    const isActive = existingUser.isActive;
+    if (!isActive) {
+      return res.status(200).send({
+        valid: false,
+        message: "User is not active",
+      });
+    }
+
     const token = jwt.sign(existingUser, config.JWT_SECRET!, { expiresIn: "7d" });
 
     return res.status(200).send({
@@ -140,7 +146,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         email: existingUser.email.toLocaleLowerCase(),
         name: existingUser.name,
         id: existingUser._id,
-        isVerified: false,
+        isVerified: existingUser.isVerified,
         role: "seller",
         token,
       },

@@ -11,12 +11,12 @@ import {
   B2BRatecalculatorController,
   addVendors,
   calculateSellerInvoiceAmount,
-  createContactZohoAll,
   getDelhiveryToken,
   getDelhiveryToken10,
   getDelhiveryTokenPoint5,
   getSellers,
   ratecalculatorController,
+  updateSellerZohoId,
   updateVendor4Seller,
 } from "./utils/helpers";
 import hubRouter from "./routes/hub.routes";
@@ -213,7 +213,6 @@ app.use("*", (req: Request, res: Response) => {
 
 runCron();
 
-createContactZohoAll();
 // calculateSellerInvoiceAmount();
 
 app.listen(config.PORT, () => Logger.plog("server running on port " + config.PORT));

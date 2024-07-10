@@ -5,6 +5,7 @@ const sellerSchema = new mongoose.Schema({
   role: { type: String, default: "seller" },
   email: { type: String, required: true },
   zoho_contact_id: { type: String, required: false },
+  zoho_invoice_id: { type: String, required: false },
   password: { type: String, required: true },
   walletBalance: { type: Number, default: 0,},
   entityType: { type: String, required: false },

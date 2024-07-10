@@ -14,9 +14,6 @@ import ClientBillingModal from "../models/client.billing.modal";
 import csvtojson from "csvtojson";
 import exceljs from "exceljs";
 import { format } from "date-fns";
-import axios from "axios";
-import { generateAccessToken } from "../utils/helpers";
-
 
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -553,44 +550,5 @@ export const manageSellerRemittance = async (req: ExtendedRequest, res: Response
     });
   } catch (err) {
     return next(err);
-  }
-}
-
-export const createContactZoho = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  const {sellerId} = req.body;
-  const token = await generateAccessToken();
-  try{
-    const seller = await SellerModel.findById(sellerId);
-    if(!seller){
-      return res.status(404).send({valid: false, message: "Seller not found"})
-    }
-    const data = {
-      contact_name: seller?.name,
-      company_name: seller?.companyProfile?.companyName,
-      contact_type: "customer",
-      customer_sub_type: "business",
-      gst_no: seller?.gstInvoice?.gstin,
-      // gst_no: "22AAAAA0000A1Z5",
-      website: seller?.companyProfile?.website,
-      billing_address: {
-        address: seller?.billingAddress?.address_line_1,
-        city: seller?.billingAddress?.city,
-        state: seller?.billingAddress?.state,
-        zip: seller?.billingAddress?.pincode,
-        country: "India",
-        phone: seller?.billingAddress?.phone,
-    }
-  }
-    
-    const dataJson = JSON.stringify(data);
-    const response = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, dataJson,{
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Zoho-oauthtoken ${token}`
-      }
-    });
-    return res.status(200).send({message: 'Contact created successfully', response: response.data})
-  }catch(err){
-    return next(err)
   }
 }
