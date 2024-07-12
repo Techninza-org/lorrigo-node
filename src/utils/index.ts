@@ -659,7 +659,7 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
     await session.abortTransaction();
     session.endSession();
     console.error('Error updating seller wallet balance:', err);
-    throw new Error('Failed to update seller wallet balance');
+    // throw new Error('Failed to update seller wallet balance');
   }
 }
 

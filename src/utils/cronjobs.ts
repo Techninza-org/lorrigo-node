@@ -23,7 +23,7 @@ import { setTimeout } from 'timers/promises';
  * @returns Promise(void)
  */
 
-const BATCH_SIZE = 300;
+const BATCH_SIZE = 150;
 const API_DELAY = 120000; // 2 minutes in milliseconds
 const trackedOrders = new Set();
 
@@ -400,7 +400,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
-  trackOrder_Shiprocket()
+  // trackOrder_Shiprocket()
 
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
@@ -460,7 +460,7 @@ const processShiprocketOrders = async (orders) => {
 
           if (bucketInfo.bucket === RTO) {
             const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb);
-            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false);
+            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges?.rtoCharges, false);
             if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true);
           }
 
@@ -474,8 +474,8 @@ const processShiprocketOrders = async (orders) => {
         // Add the order to the set of tracked orders
         trackedOrders.add(orderWithOrderReferenceId.awb);
       }
-    } catch (err) {
-      console.log(err, "SHIPROCKET ERROR");
+    } catch (err: any) {
+      console.log(err, "SHIPROCKET ERROR TRACKING ORDER");
       Logger.err(err);
     }
   }
