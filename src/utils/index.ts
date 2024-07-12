@@ -7,6 +7,7 @@ import { DELIVERED, IN_TRANSIT, READY_TO_SHIP, RTO } from "./lorrigo-bucketing-i
 import { DeliveryDetails, IncrementPrice, PickupDetails, Vendor, Body } from "../types/rate-cal";
 import SellerModel from "../models/seller.model";
 import CourierModel from "../models/courier.model";
+import PaymentTransactionModal from "../models/payment.transaction.modal";
 
 
 export function calculateShipmentDetails(orders: any[]) {
@@ -637,6 +638,13 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
       { new: true, session }
     );
 
+    const updatedTxn = await PaymentTransactionModal.create({ 
+      sellerId: sellerId,
+      amount: amount,
+      isCredit: isCredit,
+      transactionDate: new Date(),
+    }, { session });
+
     await session.commitTransaction();
     session.endSession();
 
@@ -646,6 +654,8 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
 
     return updatedSeller;
   } catch (err) {
+    console.log(err, 'error');
+    
     await session.abortTransaction();
     session.endSession();
     console.error('Error updating seller wallet balance:', err);
@@ -671,13 +681,24 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
     // });
 
 
-    const regexPattern = order.carrierName.split(' ').slice(0, 2).join(' ') + '[ -](SS|SR SMR|DEL(_\\d+(\\.\\d+)?|)|.*)?';
-    const courier = await CourierModel.findOne({
+    console.log(order.carrierName, order.carrierName.split(' ').slice(0, 3), "order.carrierName")
+    let regexPattern = order.carrierName.split(' ').slice(0, 3).join(' ') + '[ -](SS|SR|SMR|DEL(_\\d+(\\.\\d+)?|)|.*)?';
+    let courier = await CourierModel.findOne({
       name: {
         $regex: new RegExp(regexPattern, 'i')
       }
     });
 
+    console.log("\n\n")
+
+    if (!courier) {
+      regexPattern = order.carrierName.split(' ').slice(0, 3).join(' ') + '/(SR)/g';
+      courier = await CourierModel.findOne({
+        name: {
+          $regex: new RegExp(regexPattern, 'i')
+        }
+      });
+    }
 
     if (!courier) {
       throw new Error('Courier not found');
