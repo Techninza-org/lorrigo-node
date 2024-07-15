@@ -488,7 +488,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
       billsWithCharges.forEach(async (bill: any) => {
         if (bill.sellerId && bill.billingAmount) {
-          await updateSellerWalletBalance(bill.sellerId, bill.billingAmount, false)
+          await updateSellerWalletBalance(bill.sellerId, bill.billingAmount, false, `AWB: ${bill.awb}, Revised`);
         }
       })
 

@@ -7,7 +7,8 @@ const PaymentTransaction = new mongoose.Schema(
         merchantTransactionId: { type: String, required: true },
         amount: { type: String, required: true },
         code: { type: String, required: true },
-        data: { type: Object, required: true },
+        desc: { type: String, required: true },
+        data: { type: Object },
         stage: [
             {
                 action: { type: String, required: true },

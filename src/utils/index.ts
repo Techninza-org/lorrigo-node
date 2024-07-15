@@ -8,6 +8,7 @@ import { DeliveryDetails, IncrementPrice, PickupDetails, Vendor, Body } from "..
 import SellerModel from "../models/seller.model";
 import CourierModel from "../models/courier.model";
 import PaymentTransactionModal from "../models/payment.transaction.modal";
+import { rechargeWalletInfo } from "./recharge-wallet-info";
 
 
 export function calculateShipmentDetails(orders: any[]) {
@@ -618,14 +619,17 @@ function calculateTotalCharge(
   return totalCharge;
 }
 
-export async function updateSellerWalletBalance(sellerId: string, amount: number, isCredit: boolean) {
+export async function updateSellerWalletBalance(sellerId: string, amount: number, isCredit: boolean, desc: string) {
   const session = await mongoose.startSession();
   session.startTransaction();
+
   try {
+    // Validate amount
     if (typeof amount !== 'number' || isNaN(amount)) {
       throw new Error('Invalid amount');
     }
-    console.log(amount, 'amount')
+
+    // Update seller's wallet balance
     const update = {
       $inc: {
         walletBalance: isCredit ? amount : -amount,
@@ -638,28 +642,38 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
       { new: true, session }
     );
 
-    const updatedTxn = await PaymentTransactionModal.create({ 
-      sellerId: sellerId,
-      amount: amount,
-      isCredit: isCredit,
-      transactionDate: new Date(),
-    }, { session });
-
-    await session.commitTransaction();
-    session.endSession();
-
     if (!updatedSeller) {
       throw new Error('Seller not found');
     }
 
+    // Create payment transaction
+    const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
+    const paymentTransaction = await PaymentTransactionModal.create(
+      [
+        {
+          sellerId: sellerId.toString(),
+          amount,
+          merchantTransactionId,
+          code: isCredit ? 'CREDIT' : 'DEBIT',
+          desc,
+          stage: [{
+            action: rechargeWalletInfo.PAYMENT_SUCCESSFUL,
+            dateTime: new Date().toISOString()
+          }]
+        }
+      ],
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
     return updatedSeller;
   } catch (err) {
-    console.log(err, 'error');
-    
     await session.abortTransaction();
     session.endSession();
     console.error('Error updating seller wallet balance:', err);
-    // throw new Error('Failed to update seller wallet balance');
+    throw new Error('Failed to update seller wallet balance');
   }
 }
 
@@ -699,7 +713,7 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
         }
       });
     }
-
+    // Bluedart surface 0.5kg SR [ 'Bluedart', 'surface', '0.5kg' ] order.carrierName
     if (!courier) {
       throw new Error('Courier not found');
     }
