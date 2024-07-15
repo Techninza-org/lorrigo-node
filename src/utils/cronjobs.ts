@@ -23,7 +23,7 @@ import { setTimeout } from 'timers/promises';
  * @returns Promise(void)
  */
 
-const BATCH_SIZE = 150;
+const BATCH_SIZE = 130;
 const API_DELAY = 120000; // 2 minutes in milliseconds
 const trackedOrders = new Set();
 
@@ -224,19 +224,58 @@ export const trackOrder_Smartship = async () => {
 }
 
 export const trackOrder_Shiprocket = async () => {
-  const vendorNickname = await EnvModel.findOne({ name: "SHIPROCKET" }).select("nickName");
-  const orders = (await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } })).reverse();
+  try {
+    const vendorNickname = await EnvModel.findOne({ name: "SHIPROCKET" }).select("nickName");
+    if (!vendorNickname) {
+      console.error("Vendor nickname not found!");
+      return;
+    }
+    const orders = (
+      await B2COrderModel.find({
+        bucket: { $in: ORDER_TO_TRACK },
+        carrierName: { $regex: vendorNickname.nickName },
+      })
+    ).reverse();
 
-  const batches = [];
-  for (let i = 0; i < orders.length; i += BATCH_SIZE) {
-    batches.push(orders.slice(i, i + BATCH_SIZE));
-  }
+    const batches = [];
+    for (let i = 0; i < orders.length; i += BATCH_SIZE) {
+      batches.push(orders.slice(i, i + BATCH_SIZE));
+    }
 
-  for (const batch of batches) {
-    await processShiprocketOrders(batch);
-    scheduleReTrackBatch(batch, API_DELAY); // Schedule re-tracking of the batch
+    let batchIndex = 0;
+
+    const processBatch = async () => {
+      if (batchIndex < batches.length) {
+        const batch = batches[batchIndex];
+        try {
+          await processShiprocketOrders(batch);
+        } catch (error) {
+          console.error("Error processing batch:[SHIPROKET CRON]", error);
+        } finally {
+          batchIndex++;
+        }
+      } else {
+        console.log("Finished processing all batches.");
+        clearInterval(intervalId); // Stop the interval when all batches are processed
+      }
+    };
+
+    // Start processing batches with a delay between each batch
+    const intervalId = setInterval(async () => {
+      await processBatch();
+    }, API_DELAY);
+
+    // Process the first batch immediately
+    await processBatch();
+
+  } catch (error) {
+    console.error("Error tracking orders:", error);
   }
 };
+
+// Example usage (ensure this line is in your application entry point):
+// trackOrder_Shiprocket();
+
 
 export const trackOrder_Smartr = async () => {
   const vendorNickname = await EnvModel.findOne({ name: "SMARTR" }).select("nickName")
@@ -400,12 +439,12 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
-  // trackOrder_Shiprocket()
+  await trackOrder_Shiprocket();
 
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
-    cron.schedule(expression4every30Minutes, trackOrder_Shiprocket);  // Track order status every 30 minutes
+    cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every2Minutes, trackOrder_Smartr);
 
@@ -449,7 +488,7 @@ const processShiprocketOrders = async (orders) => {
 
       if (response.data.tracking_data.shipment_status) {
         const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
-        
+
         if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
@@ -471,19 +510,13 @@ const processShiprocketOrders = async (orders) => {
           }
         }
 
+        console.log("Order status updated successfully", orderWithOrderReferenceId.awb);
         // Add the order to the set of tracked orders
         trackedOrders.add(orderWithOrderReferenceId.awb);
       }
     } catch (err: any) {
-      console.log(err, "SHIPROCKET ERROR TRACKING ORDER");
+      // console.log(err, "SHIPROCKET ERROR TRACKING ORDER");
       Logger.err(err);
     }
   }
-};
-
-const scheduleReTrackBatch = (batch, delay) => {
-  setTimeout(async () => {
-    await processBatch(batch);
-    scheduleReTrackBatch(batch, delay); // Reschedule re-tracking
-  }, delay);
 };
