@@ -102,6 +102,7 @@ export const addVendors = async (req: Request, res: Response, next: NextFunction
   }
 };
 
+// B2C
 export const updateVendor4Seller = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = req.body;
