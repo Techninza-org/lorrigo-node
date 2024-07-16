@@ -357,7 +357,7 @@ export function convertToISO(invoice_date?: string): string {
     throw new Error("Invalid date format");
   }
 
-  if (timePart) {
+  if (!timePart.includes('00:00') && timePart) {
     [hour, minute, second] = timePart.split(':').map(Number);
   } else {
     const now = new Date();
