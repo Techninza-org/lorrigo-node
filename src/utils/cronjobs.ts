@@ -3,7 +3,7 @@ import axios from "axios";
 import { B2COrderModel } from "../models/order.model";
 import config from "./config";
 import APIs from "./constants/third_party_apis";
-import { getSMARTRToken, getShiprocketBucketing, getShiprocketToken, getSmartRBucketing, getSmartShipToken, getSmartshipBucketing } from "./helpers";
+import { getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getSMARTRToken, getShiprocketBucketing, getShiprocketToken, getSmartRBucketing, getSmartShipToken, getSmartshipBucketing } from "./helpers";
 import * as cron from "node-cron";
 import EnvModel from "../models/env.model";
 import https from "node:https";
@@ -432,6 +432,74 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
     console.error(error, "{error} in calculateRemittanceEveryDay");
   }
 };
+
+export const track_delivery = async () => {
+  const vendorNicknames = await EnvModel.find({ name: { $regex: "DEL" } }).select("nickName")
+
+
+  for (let vendor of vendorNicknames) {
+    try {
+      console.log(vendor)
+      let delhiveryToken = await getDelhiveryToken();
+
+      if (vendor.nickName === 'DEL.0.5') {
+        delhiveryToken = await getDelhiveryTokenPoint5();
+      } else if (vendor.nickName === 'DEL.10') {
+        delhiveryToken = await getDelhiveryToken10();
+      }
+
+      console.log(delhiveryToken)
+
+      const orders = (await B2COrderModel.find({
+        bucket: { $in: ORDER_TO_TRACK },
+        carrierName: { $regex: vendor?.nickName }
+      })).reverse();
+
+      console.log(orders[0].carrierName, "orders")
+
+      // for (let ordersReferenceIdOrders of orders) {
+      try {
+        const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}${orders[0].awb}`;
+        console.log(apiUrl, "apiurl")
+        const res = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
+
+        console.log((JSON.stringify(res.data)), "DELIVERY RESPONSE");
+        if (!res.data?.success) return;
+        if (res.data.ShipmentData[0]) {
+
+          const shipmentData = res.data.ShipmentData[0];
+          const shipment_status = shipmentData.Shipment.Status
+
+          // const shipment_status = res.data.data[0].shipmentStatus[0]
+          // const bucketInfo = getSmartRBucketing(shipment_status.statusCode, shipment_status.reasonCode);
+
+          // if (bucketInfo.bucket === RTO) {
+          //   const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
+          //   await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
+          //   if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
+          // }
+
+          // if ((bucketInfo.bucket !== -1) && (ordersReferenceIdOrders.bucket !== bucketInfo.bucket)) {
+          //   console.log("SmartR bucktinng", bucketInfo);
+          //   ordersReferenceIdOrders.bucket = bucketInfo.bucket;
+          //   ordersReferenceIdOrders.orderStages.push({ stage: bucketInfo.bucket, action: bucketInfo.description, stageDateTime: new Date(), });
+          //   try {
+          //     await ordersReferenceIdOrders.save();
+          //   } catch (error) {
+          //     console.log("Error occurred while saving order status:", error);
+          //   }
+          // }
+        }
+      } catch (err) {
+        console.log(err);
+      }
+      // }
+
+    } catch (err) {
+      console.log("err", err);
+    }
+  }
+}
 
 export default async function runCron() {
   console.log("Running cron scheduler");

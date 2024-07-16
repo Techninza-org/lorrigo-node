@@ -49,6 +49,7 @@ const DELHIVERY_PINCODE_SERVICEABILITY = "/c/api/pin-codes/json/?filter_codes="
 const DELHIVERY_PICKUP_LOCATION = "/api/backend/clientwarehouse/create/"
 const DELHIVERY_CREATE_ORDER = "/api/cmu/create.json"
 const DELHIVERY_CANCEL_ORDER = "/api/p/edit"
+const DELHIVERY_TRACK_ORDER = "/api/v1/packages/json/?waybill="
 const DELHIVERY_MANIFEST_ORDER = "/fm/request/new"
 
 const ECOMM_PINCODE_SERVICEABILITY = "/services/expp/expppincode/";
@@ -102,6 +103,7 @@ const APIs = {
   DELHIVERY_CREATE_ORDER,
   DELHIVERY_CANCEL_ORDER,
   DELHIVERY_MANIFEST_ORDER,
+  DELHIVERY_TRACK_ORDER,
 
   ECOMM_PINCODE_SERVICEABILITY,
 
