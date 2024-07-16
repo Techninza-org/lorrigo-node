@@ -8,7 +8,7 @@ import SellerModel from "../models/seller.model";
 import { calculateShippingCharges, convertToISO, csvJSON, updateSellerWalletBalance, validateClientBillingFeilds } from "../utils";
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
-import CustomPricingModel from "../models/custom_pricing.model";
+import CustomPricingModel, { CustomB2BPricingModel } from "../models/custom_pricing.model";
 import { nextFriday } from "../utils";
 import ClientBillingModal from "../models/client.billing.modal";
 import csvtojson from "csvtojson";
@@ -17,6 +17,8 @@ import { format } from "date-fns";
 import InvoiceModel from "../models/invoice.model";
 import { generateAccessToken } from "../utils/helpers";
 import axios from "axios";
+import B2BCalcModel from "../models/b2b.calc.model";
+import { isValidPayload } from "../utils/helpers";
 
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -250,6 +252,7 @@ export const uploadPincodes = async (req: ExtendedRequest, res: Response, next: 
 export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const couriers = await CourierModel.find().populate("vendor_channel_id").lean();
+    const b2bCouriers = await B2BCalcModel.find().populate("vendor_channel_id").lean();
     if (!couriers) return res.status(200).send({ valid: false, message: "No Couriers found" })
     const courierWNickName = couriers.map((courier) => {
 
@@ -261,19 +264,30 @@ export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: 
         nameWNickname,
       };
     });
+    const b2bCouriersWNickName = b2bCouriers.map((courier) => {
+      const { vendor_channel_id, ...courierData } = courier;
+      // @ts-ignore
+      const nameWNickname = `${courierData.name} ${vendor_channel_id?.nickName}`;
+      return {
+        ...courierData,
+        nameWNickname,
+      };
+    });
     return res.status(200).send({
       valid: true,
       couriers: courierWNickName,
+      b2bCouriers: b2bCouriersWNickName,
     });
   } catch (err) {
     return next(err);
   }
 }
 
+// B2C
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const sellerId = req.query?.sellerId as string;
-
+    
     if (!sellerId || !isValidObjectId(sellerId)) {
       return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
     }
@@ -326,6 +340,7 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
   }
 }
 
+// B2C
 export const manageSellerCourier = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { sellerId, couriers } = req.body;
@@ -364,6 +379,171 @@ export const manageSellerCourier = async (req: ExtendedRequest, res: Response, n
     return next(err);
   }
 };
+
+// B2B
+export const getSellerB2BCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = req.query?.sellerId as string;
+
+    if (!sellerId || !isValidObjectId(sellerId)) {
+      return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
+    }
+
+    const seller = await SellerModel.findById(sellerId).lean();
+    if (!seller) {
+      return res.status(404).send({ valid: false, message: "Seller not found" });
+    }
+
+    const [couriers, customPricings] = await Promise.all([
+      B2BCalcModel.find({ _id: { $in: seller?.b2bVendors || [] } }).populate("vendor_channel_id").lean(),
+      CustomB2BPricingModel.find({ sellerId, B2BVendorId: { $in: seller?.b2bVendors || [] } })
+        .populate({
+          path: 'B2BVendorId',
+          populate: {
+            path: 'vendor_channel_id'
+          }
+        })
+        .lean(),
+    ]);
+
+    // @ts-ignore
+    const customPricingMap = new Map(customPricings.map(courier => [courier?.B2BVendorId?._id.toString(), courier]));
+    
+    const couriersWithNickname = couriers.map((courier) => {
+      const customPricing = customPricingMap.get(courier._id.toString());
+      // @ts-ignore
+      const { vendor_channel_id, ...courierData } = customPricing || courier;
+      // @ts-ignore
+      let nameWithNickname = `${courierData?.name || courierData?.B2BVendorId?.name} ${vendor_channel_id?.nickName || courierData?.B2BVendorId?.vendor_channel_id?.nickName}`.trim();
+      if (customPricing) {
+        // @ts-ignore
+        courierData._id = courierData.B2BVendorId?._id;
+        nameWithNickname += " Custom";
+      }
+
+      return {
+        ...courierData,
+        nameWithNickname,
+      };
+    });
+
+    return res.status(200).send({
+      valid: true,
+      couriers: couriersWithNickname,
+    });
+  } catch (err) {
+    console.log(err, 'err')
+    return next(err);
+  }
+}
+
+// B2B
+export const manageB2BSellerCourier = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { sellerId, couriers } = req.body;
+
+    // Validate input
+    if (!sellerId || !isValidObjectId(sellerId) || !Array.isArray(couriers)) {
+      return res.status(400).send({ valid: false, message: "Invalid or missing sellerId or couriers" });
+    }
+
+    // Find seller and validate
+    const seller = await SellerModel.findById(sellerId);
+    if (!seller) {
+      return res.status(404).send({ valid: false, message: "Seller not found" });
+    }
+
+
+    const [validNewCouriers, validCustomCouriers] = await Promise.all([
+      B2BCalcModel.find({ _id: { $in: couriers } }).select("_id").lean(),
+      CustomB2BPricingModel.find({ sellerId, _id: { $in: couriers } }).select("_id").lean()
+    ]);
+
+    const validNewCourierIds = new Set(validNewCouriers.map(courier => courier._id.toString()));
+    const validCustomCourierIds = new Set(validCustomCouriers.map(courier => courier._id.toString()));
+    const mergedCourierIds = new Set([...validCustomCourierIds, ...validNewCourierIds]);
+
+    seller.b2bVendors = Array.from(mergedCourierIds).map(id => new Types.ObjectId(id));
+    await seller.save();
+
+    return res.status(200).send({
+      valid: true,
+      message: "Couriers managed successfully",
+    });
+  } catch (err) {
+    console.log(err, 'err');
+
+    return next(err);
+  }
+};
+
+export const updateB2BVendor4Seller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = req.body;
+    if (!isValidPayload(body, ["B2BVendorId", "sellerId"])) {
+      return res.status(200).send({ valid: false, message: "Invalid payload." });
+    }
+    const { B2BVendorId, sellerId } = body;
+    if (!isValidObjectId(B2BVendorId) || !isValidObjectId(sellerId)) {
+      return res.status(200).send({ valid: false, message: "Invalid B2BVendorId or sellerId." });
+    }
+    try {
+      const vendor = await B2BCalcModel.findById(B2BVendorId);
+      if (!vendor) {
+        const previouslySavedPricing = await CustomB2BPricingModel.findById(B2BVendorId).lean();
+        if (previouslySavedPricing) {
+          delete body.B2BVendorId;
+          // const savedPricing = await CustomB2BPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
+
+          let savedPricing = await CustomB2BPricingModel.findOne({ B2BVendorId: B2BVendorId, sellerId: sellerId });
+          savedPricing = await CustomB2BPricingModel.findByIdAndUpdate(savedPricing?._id, { ...body }, { new: true });
+
+          return res.status(200).send({ valid: true, message: "Vendor not found. Custom pricing updated for user", savedPricing });
+        } else {
+          const toAdd = {
+            B2BVendorId: B2BVendorId,
+            sellerId: sellerId,
+            ...body,
+          };
+          const savedPricing = new CustomB2BPricingModel(toAdd);
+          await savedPricing.save();
+          return res.status(200).send({ valid: true, message: "Vendor not found. Custom pricing created for user", savedPricing });
+        }
+      } else {
+        // Vendor found, update its pricing
+        delete body?.B2BVendorId;
+        delete body?.sellerId;
+        const previouslySavedPricing = await CustomB2BPricingModel.findOne({ sellerId, B2BVendorId }).lean();
+        let savedPricing;
+        if (previouslySavedPricing) {
+          // Update custom pricing
+          savedPricing = await CustomB2BPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
+          return res.status(200).send({ valid: true, message: "Vendor priced updated for user", savedPricing });
+        } else {
+          const toAdd = {
+            B2BVendorId: B2BVendorId,
+            sellerId: sellerId,
+            // TODO: Add other fields
+
+            ...body,
+          };
+
+          console.log(toAdd, "toAdd")
+          savedPricing = new CustomB2BPricingModel(toAdd);
+          savedPricing = await savedPricing.save();
+          return res.status(200).send({ valid: true, message: "Vendor priced updated for user", savedPricing });
+        }
+      }
+      return res.status(200).send({ valid: false, message: "Incomplee " });
+    } catch (err) {
+      return next(err);
+    }
+    return res.status(200).send({ valid: false, message: "Not implemented yet" });
+  } catch (error) {
+    return next(error)
+  }
+};
+
 
 export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   if (!req.file || !req.file.buffer) {
@@ -506,7 +686,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
       billsWithCharges.forEach(async (bill: any) => {
         if (bill.sellerId && bill.billingAmount) {
-          await updateSellerWalletBalance(bill.sellerId, bill.billingAmount, false)
+          await updateSellerWalletBalance(bill.sellerId, bill.billingAmount, false, `AWB: ${bill.awb}, Revised`);
         }
       })
 

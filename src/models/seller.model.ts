@@ -19,6 +19,7 @@ const sellerSchema = new mongoose.Schema({
   address: { type: String, required: false },
   margin: { type: Number, min: 0, max: 100, default: 20 },
   vendors: [{ type: mongoose.Schema.Types.ObjectId, ref: "Courier" }],
+  b2bVendors: [{ type: mongoose.Schema.Types.ObjectId, ref: "B2BCalc" }],
   isVerified: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
   gstInvoice: {

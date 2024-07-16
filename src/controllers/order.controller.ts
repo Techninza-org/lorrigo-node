@@ -1032,7 +1032,7 @@ export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: Ne
 export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const orderId = req.params.id;
-    const users_vendors = req.seller.vendors
+    const users_vendors = req.seller.b2bVendors
     const order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate(["pickupAddress", "customer"]);
     if (!order) return res.status(200).send({ valid: false, message: "Order not found" });
 
@@ -1049,7 +1049,7 @@ export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: N
     orderDetails.payment_mode = orderDetails.freightType;
     delete orderDetails.freightType;
 
-    const data2send = await calculateB2BPriceCouriers(orderId, users_vendors)
+    const data2send = await calculateB2BPriceCouriers(orderId, users_vendors, req.seller._id);
     if (data2send.length < 1) return res.status(200).send({ valid: false, message: "No courier partners found" });
     return res.status(200).send({ valid: true, orderDetails, courierPartner: data2send });
   } catch (error) {

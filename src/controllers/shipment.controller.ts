@@ -91,7 +91,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       const totalOrderValue = productValueWithTax * Number(productDetails.quantity);
 
       const isReshipedOrder =
-        order.orderStages.find((stage) => stage.stage === SHIPMENT_CANCELLED_ORDER_STATUS)?.action ===
+        order.orderStages.find((stage: any) => stage.stage === SHIPMENT_CANCELLED_ORDER_STATUS)?.action ===
         SHIPMENT_CANCELLED_ORDER_DESCRIPTION;
 
       let lastNumber = order?.client_order_reference_id?.match(/\d+$/)?.[0] || "";
@@ -251,7 +251,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             }
           }
 
-          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
 
           return res.status(200).send({ valid: true, order: updatedOrder, shipment: savedShipmentResponse });
         } catch (err) {
@@ -347,7 +347,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           order.channelFulfillmentId = fulfillmentOrderId;
           await order.save();
-          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           return res.status(200).send({ valid: true, order });
         } catch (error: any) {
           console.log(error, "error");
@@ -501,7 +501,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           await order.save();
 
-          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           return res.status(200).send({ valid: true, order });
         }
         return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });
@@ -643,7 +643,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         }
 
         await order.save();
-        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
         return res.status(200).send({ valid: true, order });
       } catch (error) {
         console.error("Error creating Delhivery shipment:", error);
@@ -783,7 +783,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         }
 
         await order.save();
-        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
         return res.status(200).send({ valid: true, order });
       } catch (error) {
         console.error("Error creating Delhivery shipment:", error);
@@ -923,7 +923,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         }
 
         await order.save();
-        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`)
         return res.status(200).send({ valid: true, order });
       } catch (error) {
         console.error("Error creating Delhivery shipment:", error);
@@ -964,7 +964,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
       if (!order.awb && type === "order") {
         // @ts-ignore
-        await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+        await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
         await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
         continue;
       }
@@ -975,8 +975,8 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
       if (order.bucket === IN_TRANSIT) {
         const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb) ?? { rtoCharges: 0, cod: 0 };
         console.log(rtoCharges, "rtoCharges")
-        await updateSellerWalletBalance(sellerId, rtoCharges?.rtoCharges || 0, false)
-        if (!!rtoCharges.cod) await updateSellerWalletBalance(sellerId, rtoCharges.cod || 0, true)
+        await updateSellerWalletBalance(sellerId, rtoCharges?.rtoCharges || 0, false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+        if (!!rtoCharges.cod) await updateSellerWalletBalance(sellerId, rtoCharges.cod || 0, true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
       }
 
       if (vendorName?.name === "SMARTSHIP") {
@@ -1028,7 +1028,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           } else {
             if (type === "order") {
               // @ts-ignore
-              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
               await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
             } else {
               order.awb = null;
@@ -1038,7 +1038,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
               await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
               await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
               // @ts-ignore
-              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
             }
 
             return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
@@ -1072,7 +1072,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
           }
           // @ts-ignore
-          await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+          await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
         } catch (error) {
           return next(error);
@@ -1083,7 +1083,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
         if (type === "order") {
           // @ts-ignore
-          await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+          await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
         } else {
           const cancelOrder = await axios.post(config.SMARTR_API_BASEURL + APIs.CANCEL_ORDER_SMARTR, {
@@ -1103,7 +1103,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
             await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
             // @ts-ignore
-            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
             order.save();
           }
         }
@@ -1141,7 +1141,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
             }
             // @ts-ignore
-            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           }
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
 
@@ -1181,7 +1181,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
             }
             // @ts-ignore
-            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true,  `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           }
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
 
@@ -1221,7 +1221,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
             }
             // @ts-ignore
-            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true);
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           }
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
 
@@ -1662,7 +1662,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
           stageDateTime: new Date(),
         });
         await order.save();
-        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false);
+        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
         return res.status(200).send({ valid: true, order });
       }
       return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });

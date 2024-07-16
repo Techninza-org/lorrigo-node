@@ -2,8 +2,9 @@ import { Types } from "mongoose";
 import B2BCalcModel from "../models/b2b.calc.model";
 import { B2BOrderModel } from "../models/order.model";
 import PincodeModel from "../models/pincode.model";
+import { CustomB2BPricingModel } from "../models/custom_pricing.model";
 
-export async function calculateB2BPriceCouriers(orderId: string, allowedCourierIds: any[]) {
+export async function calculateB2BPriceCouriers(orderId: string, allowedCourierIds: any[], sellerId: string) {
     const order: any = await B2BOrderModel.findById(orderId).populate(['customer', 'pickupAddress']);
     if (!order) {
         throw new Error('Order not found');
@@ -43,17 +44,32 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
         isReversedCourier: false,
     };
 
-    const b2bCouriers = await B2BCalcModel.find(query).populate("vendor_channel_id");
+    let b2bCouriers = []
 
+    b2bCouriers = await CustomB2BPricingModel.find({
+        B2BVendorId: { $in: allowedCourierIds },
+        sellerId
+    }).populate({
+        path: 'B2BVendorId',
+        populate: {
+            path: 'vendor_channel_id'
+        }
+    });
+
+    if (b2bCouriers.length === 0) {
+        b2bCouriers = await B2BCalcModel.find(query).populate("vendor_channel_id");
+    }
+
+    console.log(b2bCouriers, "  b2bCouriers")
     if (b2bCouriers.length === 0) {
         return [];
     }
 
     const courierDataPromises = b2bCouriers.map(async (courier) => {
         try {
-            const result = await calculateRateAndPrice(courier, Tzone, Fzone, order.total_weight, courier._id.toString(), fromRegionName, toRegionName, order.amount);
+            const result = await calculateRateAndPrice(courier, Fzone, Tzone, order.total_weight, courier._id.toString(), fromRegionName, toRegionName, order.amount);
 
-            const parterPickupTime = courier.pickupTime;
+            const parterPickupTime = courier.pickupTime || courier.B2BVendorId.pickupTime;
             const partnerPickupHour = Number(parterPickupTime.split(":")[0]);
             const partnerPickupMinute = Number(parterPickupTime.split(":")[1]);
             const partnerPickupSecond = Number(parterPickupTime.split(":")[2]);
@@ -68,13 +84,13 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
             }
             return {
                 // @ts-ignore
-                nickName: courier.vendor_channel_id.nickName,
-                name: courier.name,
+                nickName: courier?.vendor_channel_id?.nickName || courier?.B2BVendorId?.vendor_channel_id?.nickName,
+                name: courier?.name || courier.B2BVendorId.name,
                 expectedPickup,
-                rtoCharges: result.finalAmount, 
+                rtoCharges: result.finalAmount,
                 minWeight: 0.5,
                 type: courier.type,
-                carrierID: courier.carrierID,
+                carrierID: courier?.carrierID || courier?.B2BVendorId?.carrierID,
                 order_zone: `${Fzone}-${Tzone}`,
                 charge: result.finalAmount,
                 ...result
@@ -97,8 +113,6 @@ export async function calculateRateAndPrice(calcData: any, zoneFrom: string, zon
         // if (!zoneMapping.has(zoneFrom) || !zoneMapping.has(zoneTo)) {
         //     throw new Error('Invalid zones');
         // }
-
-        console.log(zoneFrom, zoneTo)
 
         const rate = zoneMatrix.get(zoneFrom)?.get(zoneTo);
         if (!rate) {
@@ -220,7 +234,7 @@ export const regionToZoneMapping = {
     "THIRUVANANTHAPURAM": "South 2",
     "andhra pradesh": "South 2",
     "VISAKHAPATNAM": "South 2",
-    
+
     "krishna": "South 2",
     "telangana": "South 2",
     "HYDERABAD": "South 2",

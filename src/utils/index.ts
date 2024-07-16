@@ -7,6 +7,8 @@ import { DELIVERED, IN_TRANSIT, READY_TO_SHIP, RTO } from "./lorrigo-bucketing-i
 import { DeliveryDetails, IncrementPrice, PickupDetails, Vendor, Body } from "../types/rate-cal";
 import SellerModel from "../models/seller.model";
 import CourierModel from "../models/courier.model";
+import PaymentTransactionModal from "../models/payment.transaction.modal";
+import { rechargeWalletInfo } from "./recharge-wallet-info";
 
 
 export function calculateShipmentDetails(orders: any[]) {
@@ -617,14 +619,17 @@ function calculateTotalCharge(
   return totalCharge;
 }
 
-export async function updateSellerWalletBalance(sellerId: string, amount: number, isCredit: boolean) {
+export async function updateSellerWalletBalance(sellerId: string, amount: number, isCredit: boolean, desc: string) {
   const session = await mongoose.startSession();
   session.startTransaction();
+
   try {
+    // Validate amount
     if (typeof amount !== 'number' || isNaN(amount)) {
       throw new Error('Invalid amount');
     }
-    console.log(amount, 'amount')
+
+    // Update seller's wallet balance
     const update = {
       $inc: {
         walletBalance: isCredit ? amount : -amount,
@@ -637,12 +642,31 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
       { new: true, session }
     );
 
-    await session.commitTransaction();
-    session.endSession();
-
     if (!updatedSeller) {
       throw new Error('Seller not found');
     }
+
+    // Create payment transaction
+    const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
+    const paymentTransaction = await PaymentTransactionModal.create(
+      [
+        {
+          sellerId: sellerId.toString(),
+          amount,
+          merchantTransactionId,
+          code: isCredit ? 'CREDIT' : 'DEBIT',
+          desc,
+          stage: [{
+            action: rechargeWalletInfo.PAYMENT_SUCCESSFUL,
+            dateTime: new Date().toISOString()
+          }]
+        }
+      ],
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
 
     return updatedSeller;
   } catch (err) {
@@ -671,14 +695,25 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
     // });
 
 
-    const regexPattern = order.carrierName.split(' ').slice(0, 2).join(' ') + '[ -](SS|SR SMR|DEL(_\\d+(\\.\\d+)?|)|.*)?';
-    const courier = await CourierModel.findOne({
+    console.log(order.carrierName, order.carrierName.split(' ').slice(0, 3), "order.carrierName")
+    let regexPattern = order.carrierName.split(' ').slice(0, 3).join(' ') + '[ -](SS|SR|SMR|DEL(_\\d+(\\.\\d+)?|)|.*)?';
+    let courier = await CourierModel.findOne({
       name: {
         $regex: new RegExp(regexPattern, 'i')
       }
     });
 
+    console.log("\n\n")
 
+    if (!courier) {
+      regexPattern = order.carrierName.split(' ').slice(0, 3).join(' ') + '/(SR)/g';
+      courier = await CourierModel.findOne({
+        name: {
+          $regex: new RegExp(regexPattern, 'i')
+        }
+      });
+    }
+    // Bluedart surface 0.5kg SR [ 'Bluedart', 'surface', '0.5kg' ] order.carrierName
     if (!courier) {
       throw new Error('Courier not found');
     }
