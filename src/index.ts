@@ -16,7 +16,7 @@ import {
   getDelhiveryTokenPoint5,
   getSellers,
   ratecalculatorController,
-  updateSellerZohoId,
+  // updateSellerZohoId,
   updateVendor4Seller,
 } from "./utils/helpers";
 import hubRouter from "./routes/hub.routes";

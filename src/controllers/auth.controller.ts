@@ -89,7 +89,8 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
         name: savedUser.name,
         isVerified: false,
         vendors: savedUser.vendors,
-        zoho_contact_id: savedUser.zoho_contact_id
+        zoho_contact_id: savedUser.zoho_contact_id,
+        zoho_advance_amount: 0
       },
     });
   } catch (error) {

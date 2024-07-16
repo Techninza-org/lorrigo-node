@@ -14,6 +14,9 @@ import ClientBillingModal from "../models/client.billing.modal";
 import csvtojson from "csvtojson";
 import exceljs from "exceljs";
 import { format } from "date-fns";
+import InvoiceModel from "../models/invoice.model";
+import { generateAccessToken } from "../utils/helpers";
+import axios from "axios";
 
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -169,6 +172,21 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
       { $set: updatedData },
       { new: true, select: "-__v -password -margin" }
     );
+
+    if(body.isVerified === true){
+      const accessToken = await generateAccessToken();
+      const updateContactBody = {
+        "gst_no": updatedSeller?.gstInvoice?.gstin,
+        "company_name": updatedSeller?.companyProfile?.companyName,
+      }
+      const updateRes = await axios.post(`https://www.zohoapis.in/books/v3/contacts/${updatedSeller?.zoho_contact_id}?organization_id=60014023368`, updateContactBody, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Zoho-oauthtoken ${accessToken}`
+      }
+      })
+      console.log(updateRes, 'updateRes');
+    }
 
     return res.status(200).send({
       valid: true,
@@ -550,5 +568,15 @@ export const manageSellerRemittance = async (req: ExtendedRequest, res: Response
     });
   } catch (err) {
     return next(err);
+  }
+}
+
+export const getInvoices = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const {sellerId} = req.query;
+    const invoices = await InvoiceModel.find({ sellerId });
+    return res.status(200).send({ valid: true, invoices });
+  } catch (error) {
+    return next(error)
   }
 }

@@ -10,6 +10,8 @@ import ClientBillingModal from "../models/client.billing.modal";
 import crypto from "crypto";
 import PaymentTransactionModal from "../models/payment.transaction.modal";
 import { rechargeWalletInfo } from "../utils/recharge-wallet-info";
+import { generateAccessToken } from "../utils/helpers";
+import InvoiceModel from "../models/invoice.model";
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -413,6 +415,15 @@ export const getSellerTransactionHistory = async (req: ExtendedRequest, res: Res
       valid: true,
       transactions,
     });
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export const getInvoices = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const invoices = await InvoiceModel.find({ sellerId: req.seller._id });
+    return res.status(200).send({ valid: true, invoices });
   } catch (error) {
     return next(error)
   }

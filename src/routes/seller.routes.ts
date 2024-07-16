@@ -12,7 +12,8 @@ import {
     getSellerBilling,
     confirmRechargeWallet,
     getSellerWalletBalance,
-    getSellerTransactionHistory
+    getSellerTransactionHistory,
+    getInvoices
 } from "../controllers/seller.controller";
 
 import multer from 'multer';
@@ -66,6 +67,9 @@ sellerRouter.get("/wallet-balance", getSellerWalletBalance);
 
 //@ts-ignore
 sellerRouter.get("/transactions", getSellerTransactionHistory);
+
+//@ts-ignore
+sellerRouter.get("/invoice", getInvoices)
 
 
 export default sellerRouter;
