@@ -172,8 +172,8 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
         shiprocketHubPayload,
         shiprocketAPIconfig
       );
-    } catch (err) {
-      // @ts-ignore
+    } catch (err: any) {
+      console.log(err)
       const isExistingHub = err?.response?.data?.errors?.pickup_location[0].includes("Address nick name already in use")
       if (!isExistingHub) return next(err);
     }

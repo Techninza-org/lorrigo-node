@@ -19,7 +19,8 @@ import {
     getInvoices,
     getSellerB2BCouriers,
     manageB2BSellerCourier,
-    updateB2BVendor4Seller
+    updateB2BVendor4Seller,
+    updateSellerConfig
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -50,6 +51,10 @@ adminRouter.get("/seller-remittance", AdminAuthMiddleware, getSellerRemittance);
 
 //@ts-ignore
 adminRouter.put("/seller", AdminAuthMiddleware, updateSellerAdmin);
+
+//@ts-ignore
+adminRouter.put("/seller/config/:sellerId", AdminAuthMiddleware, updateSellerConfig);
+
 //@ts-ignore
 adminRouter.get("/seller", AdminAuthMiddleware, getSellerDetails);
 

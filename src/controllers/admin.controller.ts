@@ -175,17 +175,17 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
       { new: true, select: "-__v -password -margin" }
     );
 
-    if(body.isVerified === true){
+    if (body.isVerified === true) {
       const accessToken = await generateAccessToken();
       const updateContactBody = {
         "gst_no": updatedSeller?.gstInvoice?.gstin,
         "company_name": updatedSeller?.companyProfile?.companyName,
       }
       const updateRes = await axios.post(`https://www.zohoapis.in/books/v3/contacts/${updatedSeller?.zoho_contact_id}?organization_id=60014023368`, updateContactBody, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Zoho-oauthtoken ${accessToken}`
-      }
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`
+        }
       })
       console.log(updateRes, 'updateRes');
     }
@@ -199,6 +199,36 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
     return next(err);
   }
 };
+
+export const updateSellerConfig = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { isD2C, isB2B, isPrepaid, isPostpaid } = req.body;
+    const { sellerId } = req.query;
+
+    if (!sellerId) {
+      return res.status(400).send({ error: "Seller ID is required" });
+    }
+
+    const update = {
+      $set: {
+        'config.isD2C': isD2C,
+        'config.isB2B': isB2B,
+        'config.isPrepaid': isPrepaid,
+        'config.isPostpaid': isPostpaid
+      }
+    };
+
+    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, update, { new: true });
+
+    if (!updatedSeller) {
+      return res.status(404).send({ error: "Seller not found" });
+    }
+
+    res.status(200).send(updatedSeller);
+  } catch (error) {
+    next(error);
+  }
+}
 
 export const getSellerDetails = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -287,7 +317,7 @@ export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: 
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const sellerId = req.query?.sellerId as string;
-    
+
     if (!sellerId || !isValidObjectId(sellerId)) {
       return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
     }
@@ -408,7 +438,7 @@ export const getSellerB2BCouriers = async (req: ExtendedRequest, res: Response, 
 
     // @ts-ignore
     const customPricingMap = new Map(customPricings.map(courier => [courier?.B2BVendorId?._id.toString(), courier]));
-    
+
     const couriersWithNickname = couriers.map((courier) => {
       const customPricing = customPricingMap.get(courier._id.toString());
       // @ts-ignore
@@ -753,7 +783,7 @@ export const manageSellerRemittance = async (req: ExtendedRequest, res: Response
 
 export const getInvoices = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const {sellerId} = req.query;
+    const { sellerId } = req.query;
     const invoices = await InvoiceModel.find({ sellerId });
     return res.status(200).send({ valid: true, invoices });
   } catch (error) {
