@@ -324,10 +324,7 @@ export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: 
 // B2C
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    console.log(req.seller._id.toString(), " req.seller._id")
-    const sellerId = req.query?.sellerId! as string || req.seller._id.toString();
-
-    console.log(sellerId, "sellerId", (!sellerId , !isValidObjectId(sellerId)))
+    const sellerId = req.query?.sellerId! as string
 
     if (!sellerId || !isValidObjectId(sellerId)) {
       return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });

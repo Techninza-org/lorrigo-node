@@ -13,6 +13,64 @@ import { rechargeWalletInfo } from "../utils/recharge-wallet-info";
 import { generateAccessToken } from "../utils/helpers";
 import InvoiceModel from "../models/invoice.model";
 import CustomPricingModel from "../models/custom_pricing.model";
+import CourierModel from "../models/courier.model";
+import { isValidObjectId } from "mongoose";
+
+export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = req.query?.sellerId! as string
+
+    if (!sellerId || !isValidObjectId(sellerId)) {
+      return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
+    }
+
+    const seller = await SellerModel.findById(sellerId).lean();
+    if (!seller) {
+      return res.status(404).send({ valid: false, message: "Seller not found" });
+    }
+
+    const [couriers, customPricings] = await Promise.all([
+      CourierModel.find({ _id: { $in: seller?.vendors } }).populate("vendor_channel_id").lean(),
+      CustomPricingModel.find({ sellerId, vendorId: { $in: seller?.vendors } })
+        .populate({
+          path: 'vendorId',
+          populate: {
+            path: 'vendor_channel_id'
+          }
+        })
+        .lean(),
+    ]);
+
+    // @ts-ignore
+    const customPricingMap = new Map(customPricings.map(courier => [courier?.vendorId?._id.toString(), courier]));
+
+    const couriersWithNickname = couriers.map((courier) => {
+      const customPricing = customPricingMap.get(courier._id.toString());
+      // @ts-ignore
+      const { vendor_channel_id, ...courierData } = customPricing || courier;
+      // @ts-ignore
+      let nameWithNickname = `${courierData?.name || courierData?.vendorId?.name} ${vendor_channel_id?.nickName || courierData?.vendorId?.vendor_channel_id?.nickName}`.trim();
+      if (customPricing) {
+        // @ts-ignore
+        courierData._id = courierData.vendorId?._id;
+        nameWithNickname += " Custom";
+      }
+
+      return {
+        ...courierData,
+        nameWithNickname,
+      };
+    });
+
+    return res.status(200).send({
+      valid: true,
+      couriers: couriersWithNickname,
+    });
+  } catch (err) {
+    console.log(err, 'err')
+    return next(err);
+  }
+}
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {

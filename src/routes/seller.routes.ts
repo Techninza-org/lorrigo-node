@@ -14,7 +14,8 @@ import {
     getSellerWalletBalance,
     getSellerTransactionHistory,
     getInvoices,
-    getCodPrice
+    getCodPrice,
+    getSellerCouriers
 } from "../controllers/seller.controller";
 
 import multer from 'multer';
@@ -37,7 +38,10 @@ sellerRouter.put("/kyc", fileUpload.fields([
 ]), uploadKycDocs);
 
 //@ts-ignore
-sellerRouter.get("/", getSeller);
+sellerRouter.get("/", getSeller); 
+
+//@ts-ignore
+sellerRouter.get("/couriers", getSellerCouriers); 
 
 //@ts-ignore
 sellerRouter.delete("/", deleteSeller);
