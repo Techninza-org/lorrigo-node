@@ -18,7 +18,7 @@ import { isValidObjectId } from "mongoose";
 
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const sellerId = req.query?.sellerId! as string
+    const sellerId = req.seller._id;
 
     if (!sellerId || !isValidObjectId(sellerId)) {
       return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
