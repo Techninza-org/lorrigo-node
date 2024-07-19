@@ -61,25 +61,27 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
       return next(err);
     }
 
-    try{
-      const token = await generateAccessToken();
-        const data = {
-          contact_name: savedUser?.name,
-      }
+    // Errro : refersh Token Cron need to CREATE 
+    // try{
+    //   const token = await generateAccessToken();
+    //     const data = {
+    //       contact_name: savedUser?.name,
+    //   }
         
-      const dataJson = JSON.stringify(data);
-      const response = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, dataJson,{
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Zoho-oauthtoken ${token}`
-        }
-      });
-      savedUser.zoho_contact_id = response.data.contact.contact_id;
-      await savedUser.save();
+    //   const dataJson = JSON.stringify(data);
+    //   const response = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, dataJson,{
+    //     headers: {
+    //       "Content-Type": "application/json",
+    //       Authorization: `Zoho-oauthtoken ${token}`
+    //     }
+    //   });
+    //   savedUser.zoho_contact_id = response.data.contact.contact_id;
+    //   await savedUser.save();
       
-    }catch(err){
-      return next(err)
-    }
+    // }catch(err){
+    //   console.log(err)
+    //   return next(err)
+    // }
 
     return res.send({
       valid: true,

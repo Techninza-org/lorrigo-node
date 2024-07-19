@@ -819,7 +819,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
           bucket: NEW,
           channelName: "shopify",
           orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
-          order_reference_id: order.name,
+          order_reference_id: order.name || 'SHOPIFY-' + Math.round(Math.random() * 10000),
           order_invoice_date: order.created_at,
           order_invoice_number: order.name,
           orderWeight: order.line_items[0]?.grams / 1000,
@@ -831,7 +831,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
           orderBoxLength: 10,
           orderSizeUnit: "cm",
 
-          client_order_reference_id: order.name,
+          client_order_reference_id: order.name || 'SHOPIFY-' + Math.round(Math.random() * 10000),
           payment_mode: order?.financial_status === "pending" ? 1 : 0,  // 0 -> prepaid, 1 -> COD, Right now only prepaid, bcoz data not available
           amount2Collect: order?.financial_status === "pending" ? order?.total_price : 0,
           customerDetails: {
