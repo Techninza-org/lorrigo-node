@@ -854,7 +854,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         });
 
         const delhiveryShipmentResponse = response.data;
+        console.log(delhiveryShipmentResponse, "delhiveryShipmentResponse")
         const delhiveryRes = delhiveryShipmentResponse?.packages[0]
+
 
         if (!delhiveryRes?.status) {
           return res.status(200).send({ valid: false, message: "Must Select the Delhivery Registered Hub" });

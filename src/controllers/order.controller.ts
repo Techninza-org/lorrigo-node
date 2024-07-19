@@ -1010,6 +1010,7 @@ export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: Ne
         .find(query)
         .sort({ createdAt: -1 })
         .populate("customer")
+        .populate('sellerId')
         .populate("pickupAddress")
         .lean()).reverse();
 

@@ -24,7 +24,7 @@ import {
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
-import { AdminAuthMiddleware } from "../utils/middleware";
+import { AdminAuthMiddleware, AuthMiddleware } from "../utils/middleware";
 import { updateVendor4Seller } from "../utils/helpers";
 
 const storage = multer.memoryStorage();
@@ -63,7 +63,7 @@ adminRouter.get("/couriers", AdminAuthMiddleware, getAllCouriers);
 
 // B2C
 //@ts-ignore
-adminRouter.get("/seller-couriers", AdminAuthMiddleware, getSellerCouriers);
+adminRouter.get("/seller-couriers", AuthMiddleware, getSellerCouriers);
 
 //@ts-ignore
 adminRouter.post("/update-seller-courier", AdminAuthMiddleware, updateVendor4Seller);

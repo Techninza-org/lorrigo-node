@@ -324,7 +324,10 @@ export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: 
 // B2C
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const sellerId = req.query?.sellerId as string;
+    console.log(req.seller._id.toString(), " req.seller._id")
+    const sellerId = req.query?.sellerId! as string || req.seller._id.toString();
+
+    console.log(sellerId, "sellerId", (!sellerId , !isValidObjectId(sellerId)))
 
     if (!sellerId || !isValidObjectId(sellerId)) {
       return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
@@ -670,7 +673,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         throw new Error(`Order not found for Order Ref Id: ${bill.orderRefId}`);
       }
 
-      const vendor: any = await CourierModel.findOne({ carrierID: bill.carrierID }).populate("vendor_channel_id");
+      const vendor: any = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
       const pickupDetails = {
         District: bill.fromCity,
         StateName: order.pickupAddress.state,

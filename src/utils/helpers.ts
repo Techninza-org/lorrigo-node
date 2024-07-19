@@ -259,6 +259,7 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
     const data2send: {
       name: string;
       minWeight: number;
+      cod: number;
       rtoCharges: number;
       charge: number;
       type: string;
@@ -363,10 +364,11 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
       }
       const weightIncrementRatio = Math.ceil(orderWeight / cv.incrementWeight);
       totalCharge += increment_price.incrementPrice * weightIncrementRatio + cod;
-      let rtoCharges = (totalCharge - cod) * 2
+      let rtoCharges = (totalCharge - cod)
 
       data2send.push({
         name: cv.name,
+        cod, 
         rtoCharges,
         // @ts-ignore
         nickName: cv.vendor_channel_id.nickName,
@@ -763,6 +765,7 @@ export const rateCalculation = async (
 
     const data2send: {
       name: string;
+      cod: number
       minWeight: number;
       charge: number;
       isReversedCourier: boolean;
@@ -869,6 +872,7 @@ export const rateCalculation = async (
         nickName: cv.nickName,
         name: cv.name,
         minWeight,
+        cod,
         isReversedCourier: cv.isReversedCourier,
         rtoCharges,
         charge: totalCharge,
