@@ -12,6 +12,7 @@ import PaymentTransactionModal from "../models/payment.transaction.modal";
 import { rechargeWalletInfo } from "../utils/recharge-wallet-info";
 import { generateAccessToken } from "../utils/helpers";
 import InvoiceModel from "../models/invoice.model";
+import CustomPricingModel from "../models/custom_pricing.model";
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -427,4 +428,17 @@ export const getInvoices = async (req: ExtendedRequest, res: Response, next: Nex
   } catch (error) {
     return next(error)
   }
+}
+
+export const getCodPrice = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try{
+    const seller = await SellerModel.findById(req.seller._id);
+    if(!seller) return res.status(200).send({ valid: false, message: "No Seller found" });
+    const custom_pricing = await CustomPricingModel.findOne({ sellerId: req.seller._id });
+    const codPrice = custom_pricing?.codCharge.hard || '';
+    return res.status(200).send({ valid: true, codPrice: codPrice });
+  }
+  catch(error){
+    return next(error)
+  } 
 }

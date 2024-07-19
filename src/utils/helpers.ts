@@ -1374,7 +1374,7 @@ export const calculateSellerInvoiceAmount = async () => {
         //@ts-ignore
         totalAmount += Number(productId.taxable_value);
       });
-      const invoiceAmount = Number(totalAmount.toFixed(2)) / 1.18;
+      const invoiceAmount = Math.round(Number(totalAmount) / 1.18);
       const totalRecharge = await PaymentTransactionModal.find({ sellerId, code: 'PAYMENT_SUCCESS', createdAt: { $gte: startOfMonth, $lte: endOfMonth } }).select("amount");
       let totalRechargeAmount: number = 0;
       totalRecharge.forEach((recharge) => {
@@ -1469,13 +1469,12 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, rechargeAmou
 }
 }
 
-
-// export const updateSellerZohoId = async () => {
-//   const sellerId = "665eee76771a390e2c19aa89";
-//   const seller = await SellerModel.findById(sellerId);
-//   const zohoContactId = "852186000001605001";
-//   if(!seller) return;
-//   seller.zoho_contact_id = zohoContactId;
-//   await seller.save();
-//   console.log("Seller updated", seller);
-// }
+export const updateSellerZohoId = async () => {
+  const sellerId = "665eee76771a390e2c19aa89";
+  const seller = await SellerModel.findById(sellerId);
+  const zohoContactId = "852186000001669002";
+  if(!seller) return;
+  seller.zoho_contact_id = zohoContactId;
+  await seller.save();
+  console.log("Seller updated", seller);
+}

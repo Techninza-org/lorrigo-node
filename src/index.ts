@@ -16,6 +16,7 @@ import {
   getDelhiveryTokenPoint5,
   getSellers,
   ratecalculatorController,
+  updateSellerZohoId,
   // updateSellerZohoId,
   updateVendor4Seller,
 } from "./utils/helpers";
@@ -214,5 +215,6 @@ app.use("*", (req: Request, res: Response) => {
 runCron();
 
 // calculateSellerInvoiceAmount();
+// updateSellerZohoId();
 
 app.listen(config.PORT, () => Logger.plog("server running on port " + config.PORT));
