@@ -111,56 +111,67 @@ if (!config.MONGODB_URI) {
 //   console.log(result);
 // }
 
-async function hubRegDelhivery() {
-  try {
-    const allHub = await HubModel.find();
+// async function hubRegDelhivery() {
+//   try {
+//     const allHub = await HubModel.find();
 
-    const chunkSize = Math.ceil(allHub.length / 4); // Calculate chunk size to divide the array into 4 parts
-    const chunks = [];
+//     const chunkSize = Math.ceil(allHub.length / 4); // Calculate chunk size to divide the array into 4 parts
+//     const chunks = [];
 
-    for (let i = 0; i < allHub.length; i += chunkSize) {
-      chunks.push(allHub.slice(i, i + chunkSize));
+//     for (let i = 0; i < allHub.length; i += chunkSize) {
+//       chunks.push(allHub.slice(i, i + chunkSize));
+//     }
+
+//     for (const chunk of chunks) {
+//       await processChunk(chunk);
+//     }
+//   } catch (error) {
+//     console.error("Error fetching hubs:", error);
+//   }
+// }
+
+async function processChunk() {
+  const update = {
+    $set: {
+      'config.isD2C': true,
+      'config.isB2B': true,
+      'config.isPrepaid': true,
+      'config.isPostpaid': true
     }
+  };
 
-    for (const chunk of chunks) {
-      await processChunk(chunk);
-    }
-  } catch (error) {
-    console.error("Error fetching hubs:", error);
-  }
-}
+  const result = await SellerModel.updateMany({}, update);
 
-async function processChunk(chunk: any) {
-  for (const hub of chunk) {
-    const { name, phone, address1, city, pincode, rtoAddress, rtoPincode, rtoCity, rtoState } = hub;
-    const delhiveryHubPayload = {
-      name: name,
-      email: "noreply@lorrigo.com",
-      phone: phone.toString().slice(2, 12),
-      address: address1,
-      city: city,
-      country: "India",
-      pin: pincode?.toString(),
-      return_address: rtoAddress?.toString() || address1,
-      return_pin: rtoPincode?.toString() || pincode?.toString(),
-      return_city: rtoCity || city,
-      return_state: rtoState || "",
-      return_country: "India",
-    };
+  // for (const hub of chunk) {
+  //   const { name, phone, address1, city, pincode, rtoAddress, rtoPincode, rtoCity, rtoState } = hub;
+  //   const delhiveryHubPayload = {
+  //     name: name,
+  //     email: "noreply@lorrigo.com",
+  //     phone: phone.toString().slice(2, 12),
+  //     address: address1,
+  //     city: city,
+  //     country: "India",
+  //     pin: pincode?.toString(),
+  //     return_address: rtoAddress?.toString() || address1,
+  //     return_pin: rtoPincode?.toString() || pincode?.toString(),
+  //     return_city: rtoCity || city,
+  //     return_state: rtoState || "",
+  //     return_country: "India",
+  //   };
 
-    // console.log(delhiveryHubPayload);
+  //   // console.log(delhiveryHubPayload);
 
-    // Uncomment the following block to make the API call
-    // try {
-    //   const delhiveryToken = await getDelhiveryToken10();
-    //   const delhiveryResponse = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
-    //     headers: { Authorization: delhiveryToken }
-    //   });
-    //   console.log(delhiveryResponse.data, "delhivery response");
-    // } catch (error: any) {
-    //   console.log(error.response?.data, "error in delhivery");
-    // }
-  }
+  //   // Uncomment the following block to make the API call
+  //   // try {
+  //   //   const delhiveryToken = await getDelhiveryToken10();
+  //   //   const delhiveryResponse = await axios.post(config.DELHIVERY_API_BASEURL + APIs.DELHIVERY_PICKUP_LOCATION, delhiveryHubPayload, {
+  //   //     headers: { Authorization: delhiveryToken }
+  //   //   });
+  //   //   console.log(delhiveryResponse.data, "delhivery response");
+  //   // } catch (error: any) {
+  //   //   console.log(error.response?.data, "error in delhivery");
+  //   // }
+  // }
 }
 
 mongoose

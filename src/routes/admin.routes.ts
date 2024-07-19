@@ -53,7 +53,7 @@ adminRouter.get("/seller-remittance", AdminAuthMiddleware, getSellerRemittance);
 adminRouter.put("/seller", AdminAuthMiddleware, updateSellerAdmin);
 
 //@ts-ignore
-adminRouter.put("/seller/config/:sellerId", AdminAuthMiddleware, updateSellerConfig);
+adminRouter.put("/seller/config/:sellerId", updateSellerConfig);
 
 //@ts-ignore
 adminRouter.get("/seller", AdminAuthMiddleware, getSellerDetails);

@@ -316,6 +316,7 @@ export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, 
       sellerId: sellerId,
       merchantTransactionId: merchantTransactionId,
       amount: amount,
+      desc: "Wallet Recharge",
       code: rechargeWalletViaPhoenpeData.code,
       data: rechargeWalletViaPhoenpeData,
       stage: [{

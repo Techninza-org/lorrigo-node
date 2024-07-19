@@ -357,7 +357,7 @@ export function convertToISO(invoice_date?: string): string {
     throw new Error("Invalid date format");
   }
 
-  if (!timePart.includes('00:00') && timePart) {
+  if (timePart && !timePart?.includes('00:00')) {
     [hour, minute, second] = timePart.split(':').map(Number);
   } else {
     const now = new Date();
@@ -408,11 +408,11 @@ export const validateClientBillingFeilds = (value: any, fieldName: string, bill:
         return "AWB is required";
       }
       break;
-    case 'rtoAwb':
-      if (!value) {
-        return "RTO AWB is required";
-      }
-      break;
+    // case 'rtoAwb':
+    //   if (!value) {
+    //     return "RTO AWB is required";
+    //   }
+    //   break;
     case 'recipientName':
       if (!value) {
         return "Recipient name is required";
@@ -620,26 +620,25 @@ function calculateTotalCharge(
 }
 
 export async function updateSellerWalletBalance(sellerId: string, amount: number, isCredit: boolean, desc: string) {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  // Validate amount
+  if (typeof amount !== 'number' || isNaN(amount)) {
+    throw new Error('Invalid amount');
+  }
+
+  const update = {
+    $inc: {
+      walletBalance: isCredit ? amount : -amount,
+    },
+  };
+
+  const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
 
   try {
-    // Validate amount
-    if (typeof amount !== 'number' || isNaN(amount)) {
-      throw new Error('Invalid amount');
-    }
-
-    // Update seller's wallet balance
-    const update = {
-      $inc: {
-        walletBalance: isCredit ? amount : -amount,
-      },
-    };
-
-    const updatedSeller = await SellerModel.findByIdAndUpdate(
-      sellerId.toString(),
+    // Update seller's wallet balance atomically
+    const updatedSeller = await SellerModel.findOneAndUpdate(
+      { _id: sellerId.toString() },
       update,
-      { new: true, session }
+      { new: true }
     );
 
     if (!updatedSeller) {
@@ -647,36 +646,26 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
     }
 
     // Create payment transaction
-    const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
-    const paymentTransaction = await PaymentTransactionModal.create(
-      [
-        {
-          sellerId: sellerId.toString(),
-          amount,
-          merchantTransactionId,
-          code: isCredit ? 'CREDIT' : 'DEBIT',
-          desc,
-          stage: [{
-            action: rechargeWalletInfo.PAYMENT_SUCCESSFUL,
-            dateTime: new Date().toISOString()
-          }]
-        }
-      ],
-      { session }
+    await PaymentTransactionModal.create(
+      {
+        sellerId: sellerId.toString(),
+        amount,
+        merchantTransactionId,
+        code: isCredit ? 'CREDIT' : 'DEBIT',
+        desc,
+        stage: [{
+          action: 'PAYMENT_SUCCESSFUL',
+          dateTime: new Date().toISOString()
+        }]
+      }
     );
 
-    await session.commitTransaction();
-    session.endSession();
-
     return updatedSeller;
-  } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
+  } catch (err: any) {
     console.error('Error updating seller wallet balance:', err);
     throw new Error('Failed to update seller wallet balance');
   }
 }
-
 
 export async function shipmentAmtCalcToWalletDeduction(awb: string) {
   try {
