@@ -791,7 +791,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       }
 
     } else if (vendorName?.name === "DELHIVERY_10") {
-      const delhiveryToken = await await getDelhiveryToken10();
+      const deliveryCourier = await CourierModel.findOne({ carrierID: body.carrierId });
+      
+      const delhiveryToken = await getDelhiveryToken10();
       if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
       const delhiveryShipmentPayload = {
@@ -854,7 +856,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         });
 
         const delhiveryShipmentResponse = response.data;
-        console.log(delhiveryShipmentResponse, "delhiveryShipmentResponse")
         const delhiveryRes = delhiveryShipmentResponse?.packages[0]
 
 
@@ -863,7 +864,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         }
 
         order.awb = delhiveryRes?.waybill;
-        order.carrierName = courier?.name + " " + (vendorName?.nickName);
+        order.carrierName = deliveryCourier?.name + " " + (vendorName?.nickName);
         order.shipmentCharges = body.charge;
         order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
         order.orderStages.push({

@@ -20,7 +20,8 @@ import {
     getSellerB2BCouriers,
     manageB2BSellerCourier,
     updateB2BVendor4Seller,
-    updateSellerConfig
+    updateSellerConfig,
+    walletDeduction
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -60,6 +61,9 @@ adminRouter.get("/seller", AdminAuthMiddleware, getSellerDetails);
 
 //@ts-ignore
 adminRouter.get("/couriers", AdminAuthMiddleware, getAllCouriers);
+
+//@ts-ignore
+adminRouter.post("/wallet-deduction", AdminAuthMiddleware, walletDeduction);
 
 // B2C
 //@ts-ignore
