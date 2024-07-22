@@ -175,6 +175,9 @@ export const trackOrder_Smartship = async () => {
   const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } });
   // const orders = await B2COrderModel.find({awb: "77136476292"});
 
+
+  // http://api.smartship.in/v1/Trackorder?tracking_numbers=${order.awb} 
+  
   for (const orderWithOrderReferenceId of orders) {
 
     const smartshipToken = await getSmartShipToken();
@@ -186,12 +189,13 @@ export const trackOrder_Smartship = async () => {
     const shipmentAPIConfig = { headers: { Authorization: smartshipToken } };
 
     try {
-      const apiUrl = `${config.SMART_SHIP_API_BASEURL}${APIs.TRACK_SHIPMENT}=${orderWithOrderReferenceId.order_reference_id}`;
+      // const apiUrl = `${config.SMART_SHIP_API_BASEURL}${APIs.TRACK_SHIPMENT}=${orderWithOrderReferenceId.order_reference_id}`;
+      const apiUrl = `http://api.smartship.in/v1/Trackorder?tracking_numbers=${orderWithOrderReferenceId.awb}`;
       console.log(apiUrl, "apiUrl");
       const response = await axios.get(apiUrl, shipmentAPIConfig);
 
       const responseJSON: TrackResponse = response.data;
-      
+
       console.log(JSON.stringify(responseJSON), "responseJSON");
 
       if (responseJSON.message === "success") {
@@ -551,10 +555,10 @@ const processShiprocketOrders = async (orders) => {
         }
       });
 
-    
+
       if (response.data.tracking_data.shipment_status) {
         const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
-        
+
         if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {
 
           orderWithOrderReferenceId.orderStages.push({
