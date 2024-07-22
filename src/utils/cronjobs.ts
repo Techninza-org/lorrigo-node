@@ -173,6 +173,7 @@ export const trackOrder_Smartship = async () => {
 
   const vendorNickname = await EnvModel.findOne({ name: "SMARTSHIP" }).select("nickName")
   const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } });
+  // const orders = await B2COrderModel.find({awb: "77136476292"});
 
   for (const orderWithOrderReferenceId of orders) {
 
@@ -185,10 +186,14 @@ export const trackOrder_Smartship = async () => {
     const shipmentAPIConfig = { headers: { Authorization: smartshipToken } };
 
     try {
-      const apiUrl = `${config.SMART_SHIP_API_BASEURL}${APIs.TRACK_SHIPMENT}=${orderWithOrderReferenceId._id + "_" + orderWithOrderReferenceId.order_reference_id}`;
+      const apiUrl = `${config.SMART_SHIP_API_BASEURL}${APIs.TRACK_SHIPMENT}=${orderWithOrderReferenceId.order_reference_id}`;
+      console.log(apiUrl, "apiUrl");
       const response = await axios.get(apiUrl, shipmentAPIConfig);
 
       const responseJSON: TrackResponse = response.data;
+      
+      console.log(JSON.stringify(responseJSON), "responseJSON");
+
       if (responseJSON.message === "success") {
         const keys: string[] = Object.keys(responseJSON.data.scans);
         const requiredResponse: RequiredTrackResponse = responseJSON.data.scans[keys[0]][0];
@@ -256,16 +261,14 @@ export const trackOrder_Shiprocket = async () => {
         }
       } else {
         console.log("Finished processing all batches.");
-        clearInterval(intervalId); // Stop the interval when all batches are processed
+        clearInterval(intervalId);
       }
     };
 
-    // Start processing batches with a delay between each batch
     const intervalId = setInterval(async () => {
       await processBatch();
     }, API_DELAY);
 
-    // Process the first batch immediately
     await processBatch();
 
   } catch (error) {
@@ -548,14 +551,17 @@ const processShiprocketOrders = async (orders) => {
         }
       });
 
+    
       if (response.data.tracking_data.shipment_status) {
         const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
-
+        
         if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {
-          orderWithOrderReferenceId.bucket = bucketInfo.bucket;
+
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
             action: bucketInfo.description,
+            activity: response.data.tracking_data?.shipment_track_activities[0]?.activity,
+            location: response.data.tracking_data?.shipment_track_activities[0]?.location,
             stageDateTime: new Date(),
           });
 
@@ -572,8 +578,6 @@ const processShiprocketOrders = async (orders) => {
           }
         }
 
-        console.log("Order status updated successfully", orderWithOrderReferenceId.awb);
-        // Add the order to the set of tracked orders
         trackedOrders.add(orderWithOrderReferenceId.awb);
       }
     } catch (err: any) {
