@@ -616,8 +616,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "YES");
     return {
       billingDate: convertToISO(bill["Date"]),
-      awb: bill["Awb"],
-      rtoAwb: bill["RTO Awb"],
+      awb: Number(bill["Awb"]),
+      rtoAwb: Number(bill["RTO Awb"]),
       codValue: Number(bill["COD Value"] || 0),
       orderRefId: bill["Order id"],
       recipientName: bill["Recipient Name"],
@@ -626,7 +626,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       toCity: bill["Destination City"],
       chargedWeight: Number(bill["Charged Weight"]),
       zone: bill["Zone"],
-      carrierID: Number(bill["Carrier ID"]),
+      carrierID: bill["Carrier ID"],
       isForwardApplicable,
       isRTOApplicable,
     };
@@ -689,6 +689,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       if (!order) {
         throw new Error(`Order not found for Order Ref Id: ${bill.orderRefId}`);
       }
+
+      console.log("body.carrierId", bill.carrierID);
 
       const vendor: any = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
       const pickupDetails = {
