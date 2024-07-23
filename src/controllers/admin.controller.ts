@@ -711,14 +711,22 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       const incrementWeight = Number(order.orderWeight) - baseWeight;
 
       return {
-        ...bill,
-        sellerId: order.sellerId,
-        billingAmount: totalCharge,
-        incrementPrice: incrementPrice.incrementPrice,
-        basePrice: incrementPrice.basePrice,
-        incrementWeight: incrementWeight.toString(),
-        baseWeight: baseWeight.toString(),
-        vendorWNickName: `${vendor.name} ${vendor.vendor_channel_id.nickName}`,
+        updateOne: {
+          filter: { orderRefId: bill.orderRefId },
+          update: {
+            $set: {
+              ...bill,
+              sellerId: order.sellerId,
+              billingAmount: totalCharge,
+              incrementPrice: incrementPrice.incrementPrice,
+              basePrice: incrementPrice.basePrice,
+              incrementWeight: incrementWeight.toString(),
+              baseWeight: baseWeight.toString(),
+              vendorWNickName: `${vendor.name} ${vendor.vendor_channel_id.nickName}`,
+            }
+          },
+          upsert: true
+        }
       };
     }));
 
@@ -808,10 +816,10 @@ export const getInoviceById = async (req: ExtendedRequest, res: Response, next: 
 }
 
 export const generateInvoices = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  try{
+  try {
     await calculateSellerInvoiceAmount();
-    return res.status(200).send({valid: true, message: "Invoices generated successfully!"});
-  }catch(err){
+    return res.status(200).send({ valid: true, message: "Invoices generated successfully!" });
+  } catch (err) {
     return next(err);
   }
 }
