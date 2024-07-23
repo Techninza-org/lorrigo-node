@@ -542,7 +542,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               seller_add: hubDetails.address1,
               seller_name: hubDetails.name,
               seller_inv: order.order_invoice_number,
-              quantity: productDetails.quantity,
+              quantity: productDetails?.quantity,
               waybill: order.ewaybill || "",
               shipment_length: order.orderBoxLength,
               shipment_width: order.orderBoxWidth,
@@ -791,7 +791,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       }
 
     } else if (vendorName?.name === "DELHIVERY_10") {
-      const delhiveryToken = await await getDelhiveryToken10();
+      const deliveryCourier = await CourierModel.findOne({ carrierID: body.carrierId });
+
+      const delhiveryToken = await getDelhiveryToken10();
       if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
       const delhiveryShipmentPayload = {
@@ -856,12 +858,13 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         const delhiveryShipmentResponse = response.data;
         const delhiveryRes = delhiveryShipmentResponse?.packages[0]
 
+
         if (!delhiveryRes?.status) {
           return res.status(200).send({ valid: false, message: "Must Select the Delhivery Registered Hub" });
         }
 
         order.awb = delhiveryRes?.waybill;
-        order.carrierName = courier?.name + " " + (vendorName?.nickName);
+        order.carrierName = deliveryCourier?.name + " " + (vendorName?.nickName);
         order.shipmentCharges = body.charge;
         order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
         order.orderStages.push({
@@ -1086,6 +1089,9 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
         } else {
+          console.log(config.SMARTR_API_BASEURL + APIs.CANCEL_ORDER_SMARTR, {
+            awbs: [order.awb],
+          })
           const cancelOrder = await axios.post(config.SMARTR_API_BASEURL + APIs.CANCEL_ORDER_SMARTR, {
             awbs: [order.awb],
           }, {
@@ -1181,7 +1187,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
             }
             // @ts-ignore
-            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true,  `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           }
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
 
@@ -1248,12 +1254,14 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
       return res.status(200).send({ valid: false, message: "Invalid payload" });
     }
 
-    let order;
+    let order: any;
     try {
       order = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate(["productId", "pickupAddress"]);
     } catch (err) {
       return next(err);
     }
+
+    if (!order) order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate(["customer", "pickupAddress"]);
 
     if (!order) return res.status(200).send({ valid: false, message: "Order not found" });
 
@@ -1270,7 +1278,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
       const requestBody = {
         client_order_reference_ids: [order._id + "_" + order.order_reference_id],
         preferred_pickup_date: pickupDate.replaceAll(" ", "-"),
-        shipment_type: order.isReverseOrder ? 2 : 1,
+        shipment_type: (order.isReverseOrder ? 2 : 1),
       };
 
       order.bucket = READY_TO_SHIP;
@@ -1422,6 +1430,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
     }
 
   } catch (error) {
+    console.log(error)
     return next(error);
   }
 }

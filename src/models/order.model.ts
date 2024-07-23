@@ -16,6 +16,8 @@ const B2COrderSchema = new mongoose.Schema({
     {
       stage: { type: Number, required: true },
       action: { type: String, required: true },
+      activity: { type: String, required: false },
+      location: { type: String, required: false },
       stageDateTime: { type: Date, required: true },
     },
   ],
@@ -95,6 +97,8 @@ const B2BOrderSchema = new mongoose.Schema({
   total_weight: { type: Number, required: true },
   quantity: { type: Number, required: true },
   ewaybill: { type: String, required: false },
+  invoiceImage: { type: String, required: false },
+  supporting_document: { type: String, required: false },
   amount: { type: Number, required: true },
   invoiceNumber: { type: String, required: false },
   customer: { type: mongoose.Schema.Types.ObjectId, ref: "B2BCustomer" },

@@ -9,7 +9,6 @@ import { calculateShippingCharges, convertToISO, csvJSON, updateSellerWalletBala
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
 import CustomPricingModel, { CustomB2BPricingModel } from "../models/custom_pricing.model";
-import { nextFriday } from "../utils";
 import ClientBillingModal from "../models/client.billing.modal";
 import csvtojson from "csvtojson";
 import exceljs from "exceljs";
@@ -19,6 +18,27 @@ import { generateAccessToken } from "../utils/helpers";
 import axios from "axios";
 import B2BCalcModel from "../models/b2b.calc.model";
 import { isValidPayload } from "../utils/helpers";
+
+export const walletDeduction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { sellerId, amt, type, desc } = req.body;
+    if (!sellerId || !amt || !desc) {
+      return res.status(200).send({ valid: false, message: "Invalid payload" });
+    }
+    const seller = await SellerModel.findById(sellerId);
+    if (!seller) {
+      return res.status(200).send({ valid: false, message: "Seller not found" });
+    }
+    const updatedSeller = await updateSellerWalletBalance(sellerId, Number(amt), type === "Credit", desc);
+    return res.status(200).send({
+      valid: true,
+      message: "Wallet deduction successful",
+      updatedSeller,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
 
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -324,7 +344,7 @@ export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: 
 // B2C
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const sellerId = req.query?.sellerId as string;
+    const sellerId = req.query?.sellerId! as string
 
     if (!sellerId || !isValidObjectId(sellerId)) {
       return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
@@ -596,8 +616,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "YES");
     return {
       billingDate: convertToISO(bill["Date"]),
-      awb: bill["Awb"],
-      rtoAwb: bill["RTO Awb"],
+      awb: Number(bill["Awb"]),
+      rtoAwb: Number(bill["RTO Awb"]),
       codValue: Number(bill["COD Value"] || 0),
       orderRefId: bill["Order id"],
       recipientName: bill["Recipient Name"],
@@ -606,7 +626,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       toCity: bill["Destination City"],
       chargedWeight: Number(bill["Charged Weight"]),
       zone: bill["Zone"],
-      carrierID: Number(bill["Carrier ID"]),
+      carrierID: bill["Carrier ID"],
       isForwardApplicable,
       isRTOApplicable,
     };
@@ -670,7 +690,9 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         throw new Error(`Order not found for Order Ref Id: ${bill.orderRefId}`);
       }
 
-      const vendor: any = await CourierModel.findOne({ carrierID: bill.carrierID }).populate("vendor_channel_id");
+      console.log("body.carrierId", bill.carrierID);
+
+      const vendor: any = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
       const pickupDetails = {
         District: bill.fromCity,
         StateName: order.pickupAddress.state,

@@ -15,6 +15,7 @@ import {
     getSellerTransactionHistory,
     getInvoices,
     getCodPrice,
+    getSellerCouriers,
     getInoviceById
 } from "../controllers/seller.controller";
 
@@ -38,7 +39,10 @@ sellerRouter.put("/kyc", fileUpload.fields([
 ]), uploadKycDocs);
 
 //@ts-ignore
-sellerRouter.get("/", getSeller);
+sellerRouter.get("/", getSeller); 
+
+//@ts-ignore
+sellerRouter.get("/couriers", getSellerCouriers); 
 
 //@ts-ignore
 sellerRouter.delete("/", deleteSeller);

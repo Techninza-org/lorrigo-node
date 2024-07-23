@@ -21,6 +21,7 @@ import {
     manageB2BSellerCourier,
     updateB2BVendor4Seller,
     updateSellerConfig,
+    walletDeduction,
     getInoviceById
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
@@ -61,6 +62,9 @@ adminRouter.get("/seller", AdminAuthMiddleware, getSellerDetails);
 
 //@ts-ignore
 adminRouter.get("/couriers", AdminAuthMiddleware, getAllCouriers);
+
+//@ts-ignore
+adminRouter.post("/wallet-deduction", AdminAuthMiddleware, walletDeduction);
 
 // B2C
 //@ts-ignore
