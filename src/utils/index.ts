@@ -393,11 +393,6 @@ export function getNextToNextFriday() {
 
 export const validateClientBillingFeilds = (value: any, fieldName: string, bill: any, alreadyExistingBills: any): string | null => {
   switch (fieldName) {
-    case 'orderRefId':
-      if (!value || alreadyExistingBills.find((item: any) => item.orderRefId.includes(value))) {
-        return "Order ID / Order Reference ID must be unique and cannot be empty";
-      }
-      break;
     case 'billingDate':
       if (!value) {
         return "Billing date is required";
@@ -567,6 +562,7 @@ export async function calculateShippingCharges(
   const orderWeight = body.weight
 
   const increment_price = getIncrementPrice(pickupDetails, deliveryDetails, MetroCitys, NorthEastStates, vendor);
+  console.log(increment_price)
   if (!increment_price) {
     throw new Error("Invalid increment price");
   }
@@ -593,9 +589,9 @@ function getIncrementPrice(
   } else if (MetroCitys.includes(pickupDetails.District) && MetroCitys.includes(deliveryDetails.District)) {
     return vendor.withinMetro;
   } else if (NorthEastStates.includes(pickupDetails.StateName) || NorthEastStates.includes(deliveryDetails.StateName)) {
-    return vendor.northEast;
+    return vendor?.northEast;
   } else {
-    return vendor.withinRoi;
+    return vendor?.withinRoi;
   }
 }
 

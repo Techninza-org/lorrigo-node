@@ -689,9 +689,9 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       if (!order) {
         throw new Error(`Order not found for Order Ref Id: ${bill.orderRefId}`);
       }
-
+    
       console.log("body.carrierId", bill.carrierID);
-
+    
       const vendor: any = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
       const pickupDetails = {
         District: bill.fromCity,
@@ -709,7 +709,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       const { incrementPrice, totalCharge } = await calculateShippingCharges(pickupDetails, deliveryDetails, body, vendor);
       const baseWeight = vendor?.weightSlab || 0;
       const incrementWeight = Number(order.orderWeight) - baseWeight;
-
+    
       return {
         updateOne: {
           filter: { orderRefId: bill.orderRefId },
@@ -729,8 +729,9 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         }
       };
     }));
-
-    await ClientBillingModal.insertMany(billsWithCharges);
+    
+    // @ts-ignore
+    await ClientBillingModal.bulkWrite(billsWithCharges);
 
     await Promise.all(billsWithCharges.map(async (bill: any) => {
       if (bill.sellerId && bill.billingAmount) {
@@ -750,7 +751,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
 export const getVendorBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const data = await ClientBillingModal.find({}).populate("sellerId").lean();
+    const data = (await ClientBillingModal.find({}).populate("sellerId")).reverse();
     if (!data) return res.status(200).send({ valid: false, message: "No Client Billing found" });
     return res.status(200).send({
       valid: true,
@@ -762,7 +763,7 @@ export const getVendorBillingData = async (req: ExtendedRequest, res: Response, 
 }
 export const getClientBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const data = await ClientBillingModal.find({}).populate("sellerId").lean();
+    const data = (await ClientBillingModal.find({}).populate("sellerId")).reverse();
     if (!data) return res.status(200).send({ valid: false, message: "No Client Billing found" });
     return res.status(200).send({
       valid: true,
