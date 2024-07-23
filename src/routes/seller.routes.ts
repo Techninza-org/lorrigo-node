@@ -14,7 +14,8 @@ import {
     getSellerWalletBalance,
     getSellerTransactionHistory,
     getInvoices,
-    getCodPrice
+    getCodPrice,
+    getInoviceById
 } from "../controllers/seller.controller";
 
 import multer from 'multer';
@@ -71,6 +72,9 @@ sellerRouter.get("/transactions", getSellerTransactionHistory);
 
 //@ts-ignore
 sellerRouter.get("/invoice", getInvoices)
+
+//@ts-ignore
+sellerRouter.get("/invoice/:id", getInoviceById)
 
 //@ts-ignore
 sellerRouter.get('/cod-price', getCodPrice)

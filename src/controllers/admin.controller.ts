@@ -773,3 +773,14 @@ export const getInvoices = async (req: ExtendedRequest, res: Response, next: Nex
     return next(error)
   }
 }
+
+export const getInoviceById = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const invoice = await InvoiceModel.findById(req.params.id);
+    if (!invoice) return res.status(200).send({ valid: false, message: "No Invoice found" });
+
+    return res.status(200).send({ valid: true, invoice });
+  } catch (error) {
+    return next(error)
+  }
+}

@@ -9,6 +9,7 @@ import orderRouter from "./routes/order.routes";
 import { AuthMiddleware, ErrorHandler } from "./utils/middleware";
 import {
   B2BRatecalculatorController,
+  addAllToZoho,
   addVendors,
   calculateSellerInvoiceAmount,
   getDelhiveryToken,
@@ -16,8 +17,6 @@ import {
   getDelhiveryTokenPoint5,
   getSellers,
   ratecalculatorController,
-  updateSellerZohoId,
-  // updateSellerZohoId,
   updateVendor4Seller,
 } from "./utils/helpers";
 import hubRouter from "./routes/hub.routes";
@@ -226,6 +225,6 @@ app.use("*", (req: Request, res: Response) => {
 runCron();
 
 // calculateSellerInvoiceAmount();
-// updateSellerZohoId();
+// addAllToZoho();
 
 app.listen(config.PORT, () => Logger.plog("server running on port " + config.PORT));

@@ -1356,33 +1356,40 @@ export const generateAccessToken = async () => {
 export const calculateSellerInvoiceAmount = async () => {
   try {
     const sellers = await SellerModel.find({ zoho_contact_id: { $exists: true } });
+    sellers.map(async (seller) => {
+      console.log(seller.name, seller.zoho_contact_id, 'seller');
+    });
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    const today = new Date();
+    const lastInvoiceGenerationDate = await InvoiceModel.find({}).sort({ createdAt: -1 });
+    let lastInvoiceDate;
+    if(!lastInvoiceGenerationDate || lastInvoiceGenerationDate.length === 0) {
+      lastInvoiceDate = startOfMonth;
+    }else{
+      lastInvoiceDate = lastInvoiceGenerationDate[0].createdAt;
+    }
+    console.log(lastInvoiceDate, 'lastInvoiceDate', today, 'today');
+    
     sellers.forEach(async (seller) => {
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
 
-      const endOfMonth = new Date();
-      endOfMonth.setMonth(endOfMonth.getMonth() + 1, 0);
-      endOfMonth.setHours(23, 59, 59, 999);
       const sellerId = seller._id;
       const zoho_contact_id = seller.zoho_contact_id;
 
-      const orders = await B2COrderModel.find({ sellerId, bucket: 4, "orderStages.stageDateTime": { $gt: startOfMonth, $lt: endOfMonth }, "orderStages.stage": 4 }).select("productId").populate("productId");
+      const orders = await B2COrderModel.find({ sellerId, bucket: 4, "orderStages.stageDateTime": { $gt: lastInvoiceDate, $lt: today }, "orderStages.stage": 4 }).select("productId").populate("productId");
       let totalAmount: number = 0;
       orders.forEach((order) => {
         const { productId } = order;
         //@ts-ignore
         totalAmount += Number(productId.taxable_value);
       });
-      const invoiceAmount = Math.round(Number(totalAmount) / 1.18);
-      const totalRecharge = await PaymentTransactionModal.find({ sellerId, code: 'PAYMENT_SUCCESS', createdAt: { $gte: startOfMonth, $lte: endOfMonth } }).select("amount");
-      let totalRechargeAmount: number = 0;
-      totalRecharge.forEach((recharge) => {
-        totalRechargeAmount += Number(recharge.amount);
-      });
-      const rechargeAmount = Number(totalRechargeAmount)
+      const invoiceAmount = Math.round(Number(totalAmount / 1.18));
+      let walletAmount = seller.walletBalance;
+      const spentAmount = Number((invoiceAmount * 1.18));
+      walletAmount -= spentAmount;
+      await seller.updateOne({ walletBalance: walletAmount });
       if(invoiceAmount > 0){
-        await createAdvanceAndInvoice(zoho_contact_id, rechargeAmount, invoiceAmount);
+        await createAdvanceAndInvoice(zoho_contact_id, invoiceAmount);
       }
     });
   } catch (err) {
@@ -1390,13 +1397,13 @@ export const calculateSellerInvoiceAmount = async () => {
   }
 };
 
-export async function createAdvanceAndInvoice(zoho_contact_id: any, rechargeAmount: any, invoiceAmount: any){
+export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmount: any){
   try{
   const accessToken = await generateAccessToken();
   if(!accessToken) return;
   const rechargeBody = {
     "customer_id": zoho_contact_id,
-    "amount": rechargeAmount,
+    "amount": Number(invoiceAmount * 1.18),
   }
   const rechargeRes = await axios.post(`https://www.zohoapis.in/books/v3/customerpayments?organization_id=60014023368`, rechargeBody, {
     headers: {
@@ -1434,7 +1441,7 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, rechargeAmou
       "invoice_payments": [
         {
             "payment_id": paymentId,
-            "amount_applied": invoiceAmount * 1.18
+            "amount_applied": Number(invoiceAmount * 1.18)
         }
     ]
   }
@@ -1444,14 +1451,6 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, rechargeAmou
       Authorization: `Zoho-oauthtoken ${accessToken}`
     }
   })
-  const leftAmount = rechargeAmount - (invoiceAmount * 1.18);
-  if(seller.zoho_advance_amount){
-  const totalAdv = seller.zoho_advance_amount + leftAmount;
-  await seller.updateOne({ zoho_advance_amount: totalAdv });
-  }else{
-    seller.zoho_advance_amount = leftAmount;
-    await seller.save();
-  }
   const invoicePdf = await axios.get(`https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=60014023368&accept=pdf`, {
     headers: {
       "Content-Type": "application/json",
@@ -1460,7 +1459,7 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, rechargeAmou
     responseType: 'arraybuffer'
   })
   const pdfBase64 = Buffer.from(invoicePdf.data, 'binary').toString('base64');
-  const invoice = await InvoiceModel.create({ sellerId: seller._id, invoice_id: invoiceId, pdf: pdfBase64, date: invoiceRes.data.invoice.date });
+  const invoice = await InvoiceModel.create({ sellerId: seller._id, invoice_id: invoiceId, pdf: pdfBase64, date: invoiceRes.data.invoice.date, amount: (invoiceAmount * 1.18) });
   seller.invoices.push(invoice._id);
   await seller.save();
   console.log('Completed for seller', seller.name);
@@ -1469,12 +1468,28 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, rechargeAmou
 }
 }
 
-export const updateSellerZohoId = async () => {
-  const sellerId = "665eee76771a390e2c19aa89";
-  const seller = await SellerModel.findById(sellerId);
-  const zohoContactId = "852186000001669002";
-  if(!seller) return;
-  seller.zoho_contact_id = zohoContactId;
-  await seller.save();
-  console.log("Seller updated", seller);
+
+export async function addAllToZoho(){
+  try{
+    const access_token = await generateAccessToken();
+    const sellers = await SellerModel.find({});
+    sellers.forEach(async (seller) => {
+      if(!seller.zoho_contact_id){
+        const  creditsBody = {
+          "contact_name": seller.name,
+        }
+        const contact = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, creditsBody, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Zoho-oauthtoken ${access_token}`
+          }
+        })
+        seller.zoho_contact_id = contact.data.contact.contact_id;
+        await seller.save();
+        console.log('Seller added', seller.name, seller.zoho_contact_id);
+      }
+    });
+  }catch(err){
+    console.log(err);
+  }
 }

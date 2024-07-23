@@ -20,7 +20,8 @@ import {
     getSellerB2BCouriers,
     manageB2BSellerCourier,
     updateB2BVendor4Seller,
-    updateSellerConfig
+    updateSellerConfig,
+    getInoviceById
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -100,5 +101,8 @@ adminRouter.post("/manage-remittance", AdminAuthMiddleware, manageSellerRemittan
 
 //@ts-ignore
 adminRouter.get("/invoice", AdminAuthMiddleware, getInvoices);
+
+//@ts-ignore
+adminRouter.get("/invoice/:id", AdminAuthMiddleware, getInoviceById);
 
 export default adminRouter;
