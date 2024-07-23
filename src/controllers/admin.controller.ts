@@ -14,7 +14,7 @@ import csvtojson from "csvtojson";
 import exceljs from "exceljs";
 import { format } from "date-fns";
 import InvoiceModel from "../models/invoice.model";
-import { generateAccessToken } from "../utils/helpers";
+import { calculateSellerInvoiceAmount, generateAccessToken } from "../utils/helpers";
 import axios from "axios";
 import B2BCalcModel from "../models/b2b.calc.model";
 import { isValidPayload } from "../utils/helpers";
@@ -804,5 +804,14 @@ export const getInoviceById = async (req: ExtendedRequest, res: Response, next: 
     return res.status(200).send({ valid: true, invoice });
   } catch (error) {
     return next(error)
+  }
+}
+
+export const generateInvoices = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try{
+    await calculateSellerInvoiceAmount();
+    return res.status(200).send({valid: true, message: "Invoices generated successfully!"});
+  }catch(err){
+    return next(err);
   }
 }

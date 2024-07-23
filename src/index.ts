@@ -224,7 +224,6 @@ app.use("*", (req: Request, res: Response) => {
 
 runCron();
 
-// calculateSellerInvoiceAmount();
 // addAllToZoho();
 
 app.listen(config.PORT, () => Logger.plog("server running on port " + config.PORT));

@@ -22,7 +22,8 @@ import {
     updateB2BVendor4Seller,
     updateSellerConfig,
     walletDeduction,
-    getInoviceById
+    getInoviceById,
+    generateInvoices
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -108,5 +109,8 @@ adminRouter.get("/invoice", AdminAuthMiddleware, getInvoices);
 
 //@ts-ignore
 adminRouter.get("/invoice/:id", AdminAuthMiddleware, getInoviceById);
+
+// @ts-ignore
+adminRouter.get('/generate-invoice', AdminAuthMiddleware, generateInvoices);
 
 export default adminRouter;
