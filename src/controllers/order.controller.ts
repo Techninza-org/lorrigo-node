@@ -687,6 +687,40 @@ export const updateBulkPickupOrder = async (req: ExtendedRequest, res: Response,
   }
 }
 
+export const B2BUpdateBulkPickupOrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { pickupAddress, orderIds } = req.body;
+
+    if (!pickupAddress || !orderIds || !Array.isArray(orderIds)) {
+      return res.status(200).send({ valid: false, message: "Invalid payload" });
+    }
+
+    if (!isValidObjectId(pickupAddress)) {
+      return res.status(200).send({ valid: false, message: "Invalid pickupAddress" });
+    }
+
+    const hubDetails = await HubModel.findById(pickupAddress);
+    if (!hubDetails) {
+      return res.status(200).send({ valid: false, message: "Pickup address doesn't exist" });
+    }
+
+    const result = await B2BOrderModel.updateMany(
+      { _id: { $in: orderIds } },
+      { $set: { pickupAddress } },
+      { new: true, multi: true }
+    );
+
+    // Check if the update was successful
+    if (result.modifiedCount === 0) {
+      return res.status(200).send({ valid: false, message: "No orders were updated" });
+    }
+
+    return res.status(200).send({ valid: true, message: "Orders updated successfully", modifiedCount: result.modifiedCount });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const updateB2CBulkShopifyOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
 
   try {
@@ -870,44 +904,52 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
 export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const body: B2BOrderPayload = req.body;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    const invoice = files?.invoice?.[0];
+    const supporting_document = files?.supporting_document?.[0];
+
+    const boxes = JSON.parse(body?.boxes);
+
     if (
       !isValidPayload(body, [
-        "order_reference_id",
-        "client_name",
-        "pickupAddress",
-        "product_description",
-        "total_weight",
-        "quantity",
-        "ewaybill",
-        "amount",
-        "invoiceNumber",
-        "customerDetails",
-        "boxes",
+        'order_reference_id',
+        'client_name',
+        'pickupAddress',
+        'product_description',
+        'total_weight',
+        'quantity',
+        'ewaybill',
+        'amount',
+        'invoiceNumber',
+        'customerDetails',
+        'boxes',
       ])
     ) {
-      return res.status(200).send({ valid: false, message: "Invalid Payload" });
+      return res.status(400).send({ valid: false, message: 'Invalid Payload' });
     }
     if (!isValidObjectId(body?.pickupAddress)) {
-      return res.status(200).send({ valid: "Invalid pickupAddress." });
+      return res.status(400).send({ valid: false, message: 'Invalid pickupAddress.' });
     }
     if (!isValidObjectId(body?.customerDetails)) {
-      return res.status(200).send({ valid: "Invalid customerDetails." });
+      return res.status(400).send({ valid: false, message: 'Invalid customerDetails.' });
     }
-    if (!Array.isArray(body?.boxes)) {
-      return res.status(200).send({ valid: false, message: "boxes should be array" });
+    if (!Array.isArray(boxes)) {
+      return res.status(400).send({ valid: false, message: 'boxes should be array' });
     }
 
     const isAlreadyExists = (await B2BOrderModel.findOne({ order_reference_id: body.order_reference_id }).lean()) !== null;
-    if (isAlreadyExists) return res.status(200).send({ valid: false, message: "Order reference id already exists" });
+    if (isAlreadyExists) {
+      return res.status(400).send({ valid: false, message: 'Order reference id already exists' });
+    }
 
     const data2save = {
       order_reference_id: body?.order_reference_id,
       bucket: NEW,
       client_name: body?.client_name,
       sellerId: req.seller._id,
-      freightType: 0, //body?.freightType, // 0 -> paid, 1 -> toPay
-      pickupType: 0, //body?.pickupType, // 0 -> FM-Pickup, 1 -> SelfDrop
-      InsuranceType: 0, //body?.InsuranceType, // 0-> OwnerRisk, 1-> Carrier Risk
+      freightType: 0,
+      pickupType: 0,
+      InsuranceType: 0,
       pickupAddress: body?.pickupAddress,
       total_weight: Number(body?.total_weight),
       quantity: Number(body?.quantity),
@@ -916,23 +958,22 @@ export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: 
       invoiceNumber: body?.invoiceNumber,
       orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
       product_description: body?.product_description,
-      packageDetails: [
-        ...body.boxes,
-      ],
+      packageDetails: boxes,
       customer: body?.customerDetails,
+      invoiceImage: invoice ? invoice.buffer.toString('base64') : undefined,
+      supporting_document: supporting_document ? supporting_document.buffer.toString('base64') : undefined,
     };
-    console.log(data2save, 'data2save');
 
     try {
       const B2BOrder2Save = new B2BOrderModel(data2save);
       const savedOrder = await B2BOrder2Save.save();
 
-      return res.status(200).send({ valid: true, order: savedOrder });
+      return res.status(201).send({ valid: true, order: savedOrder });
     } catch (err) {
       return next(err);
     }
-    return res.status(500).send({ valid: true, message: "Incomplete route", data2save });
   } catch (error) {
+    console.log(error, 'error');
     return next(error);
   }
 };
@@ -965,7 +1006,7 @@ export const updateB2BOrder = async (req: ExtendedRequest, res: Response, next: 
       invoiceNumber: body?.order.invoiceNumber,
       orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
       product_description: body?.order.product_description,
-      packageDetails: body.boxes,
+      packageDetails: body?.order?.boxes,
       customer: body?.order.customerDetails,
     };
 
@@ -1008,7 +1049,6 @@ export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: Ne
 
       orders = (await B2BOrderModel
         .find(query)
-        .sort({ createdAt: -1 })
         .populate("customer")
         .populate('sellerId')
         .populate("pickupAddress")
@@ -1211,25 +1251,56 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
 export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const awb = req.params?.awb;
-    let order;
+    const orderId = req.params?.awb;
+
+    // Define search queries based on the presence of awb or orderId
+    const queries: Promise<any>[] = [];
 
     if (awb) {
-      order = await B2COrderModel.findOne({ awb }).populate(["pickupAddress", "productId"]).lean();
+      queries.push(
+        B2COrderModel.findOne({ awb }).populate(["pickupAddress", "productId"]).lean(),
+        B2BOrderModel.findOne({ awb }).populate(["pickupAddress", "customer"]).lean()
+      );
     }
 
-    if (!order) {
-      const orderId = req.params?.orderId;
-      order = await B2COrderModel.findById(awb).populate(["pickupAddress", "productId"]).lean() || await B2BOrderModel.findById(awb).populate(["pickupAddress"]).lean();
+    if (orderId) {
+      queries.push(
+        B2COrderModel.findById(orderId).populate(["pickupAddress", "productId"]).lean(),
+        B2BOrderModel.findById(orderId).populate(["pickupAddress", "customer"]).lean()
+      );
     }
 
-    return !order
-      ? res.status(200).send({ valid: false, message: "No such order found." })
-      : res.status(200).send({ valid: true, order: order });
+    if (queries.length === 0) {
+      return res.status(400).send({ valid: false, message: "Missing order identifier." });
+    }
+
+    // Execute all queries concurrently
+    const [b2cOrderByAwb, b2bOrderByAwb, b2cOrderById, b2bOrderById] = await Promise.all(queries);
+
+    // Check the results
+    if (b2cOrderByAwb) {
+      return res.status(200).send({ valid: true, order: b2cOrderByAwb });
+    }
+
+    if (b2bOrderByAwb) {
+      return res.status(200).send({ valid: true, order: b2bOrderByAwb });
+    }
+
+    if (b2cOrderById) {
+      return res.status(200).send({ valid: true, order: b2cOrderById });
+    }
+
+    if (b2bOrderById) {
+      return res.status(200).send({ valid: true, order: b2bOrderById });
+    }
+
+    // If no order is found in any table
+    return res.status(404).send({ valid: false, message: "No such order found." });
+
   } catch (error) {
     return next(error);
   }
 };
-
 type PickupAddress = {
   name: string;
   pincode: string;

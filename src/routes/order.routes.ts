@@ -12,6 +12,7 @@ import {
   getB2BOrders,
   getB2BCourier,
   updateB2BOrder,
+  B2BUpdateBulkPickupOrder,
 } from "../controllers/order.controller";
 import multer from "multer";
 
@@ -37,13 +38,16 @@ orderRouter.put("/b2c/bulk", upload.single("file"), createBulkB2COrder);
 orderRouter.put("/b2c/bulk-pickup", updateBulkPickupOrder);
 
 // @ts-ignore
+orderRouter.put("/b2b/bulk-pickup", B2BUpdateBulkPickupOrder);
+
+// @ts-ignore
 orderRouter.patch("/update/b2c", updateB2COrder);
 
 // @ts-ignore
 orderRouter.patch("/update/b2c/shopify", updateB2CBulkShopifyOrders);
 
 // @ts-ignore
-orderRouter.post("/b2b", createB2BOrder);
+orderRouter.post("/b2b", upload.fields([{ name: 'invoice', maxCount: 1 },{ name: 'supporting_document', maxCount: 1 }]), createB2BOrder);
 
 // @ts-ignore
 orderRouter.patch("/update/b2b", updateB2BOrder);

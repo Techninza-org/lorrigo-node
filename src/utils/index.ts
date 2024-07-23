@@ -501,14 +501,14 @@ export async function sendMailToScheduleShipment({ orders, pickupDate }: { order
                   </tr>
               </thead>
               <tbody>
-                  ${orders.map((order) => {
+                  ${orders?.map((order) => {
     return `
                       <tr>
-                          <td>${order.awb}</td>
-                          <td>${format(pickupDate.replaceAll(" ", "-"), "dd/MM/yyyy")}</td>
-                          <td>${order.productId.quantity}</td>
-                          <td>${order.orderWeight}</td>
-                          <td>${order.pickupAddress.address1}</td>
+                          <td>${order?.awb}</td>
+                          <td>${format(pickupDate?.replaceAll(" ", "-"), "dd/MM/yyyy")}</td>
+                          <td>${order?.productId?.quantity || order.quantity}</td>
+                          <td>${order?.orderWeight || order?.total_weight}</td>
+                          <td>${order?.pickupAddress?.address1}</td>
                       </tr>
                       `;
   })

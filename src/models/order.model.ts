@@ -97,6 +97,8 @@ const B2BOrderSchema = new mongoose.Schema({
   total_weight: { type: Number, required: true },
   quantity: { type: Number, required: true },
   ewaybill: { type: String, required: false },
+  invoiceImage: { type: String, required: false },
+  supporting_document: { type: String, required: false },
   amount: { type: Number, required: true },
   invoiceNumber: { type: String, required: false },
   customer: { type: mongoose.Schema.Types.ObjectId, ref: "B2BCustomer" },
