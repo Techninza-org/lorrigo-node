@@ -44,7 +44,12 @@ import SellerModel from "../models/seller.model";
 export async function createShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {
     const body = req.body;
+    const seller = req.seller;
     const sellerId = req.seller._id;
+
+    if (seller.config.isPrepaid && (body.charge >= seller.walletBalance || seller.walletBalance < 0)) {
+      return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
+    }
 
     if (!isValidPayload(body, ["orderId", "orderType", "carrierId", "carrierNickName", "charge"])) {
       return res.status(200).send({ valid: false, message: "Invalid payload" });
@@ -1089,9 +1094,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
         } else {
-          console.log(config.SMARTR_API_BASEURL + APIs.CANCEL_ORDER_SMARTR, {
-            awbs: [order.awb],
-          })
+
           const cancelOrder = await axios.post(config.SMARTR_API_BASEURL + APIs.CANCEL_ORDER_SMARTR, {
             awbs: [order.awb],
           }, {
@@ -1664,7 +1667,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
       console.log(orderAWB, "orderAWB")
 
       if (orderAWB) {
-        order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : IN_TRANSIT;
+        order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
         order.orderStages.push({
           stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,  // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
           action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,

@@ -50,7 +50,7 @@ orderRouter.patch("/update/b2c/shopify", updateB2CBulkShopifyOrders);
 orderRouter.post("/b2b", upload.fields([{ name: 'invoice', maxCount: 1 },{ name: 'supporting_document', maxCount: 1 }]), createB2BOrder);
 
 // @ts-ignore
-orderRouter.patch("/update/b2b", updateB2BOrder);
+orderRouter.patch("/update/b2b",  upload.fields([{ name: 'invoice', maxCount: 1 },{ name: 'supporting_document', maxCount: 1 }]),updateB2BOrder);
 
 //@ts-ignore
 orderRouter.get("/all/b2b", getB2BOrders);

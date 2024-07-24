@@ -907,6 +907,7 @@ export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: 
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const invoice = files?.invoice?.[0];
     const supporting_document = files?.supporting_document?.[0];
+    console.log(invoice, supporting_document, 'invoice, supporting_document')
 
     const boxes = JSON.parse(body?.boxes);
 
@@ -981,42 +982,82 @@ export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: 
 export const updateB2BOrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const body = req.body;
-    if (!body) return res.status(200).send({ valid: false, message: "Invalid payload" });
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    const invoice = files?.invoice?.[0];
+    const supporting_document = files?.supporting_document?.[0];
+    console.log(invoice, supporting_document, 'invoice, supporting_document');
 
-    const { orderId } = body;
-    if (!orderId)
-      return res.status(200).send({ valid: false, message: "Invalid orderId" });
+    if (
+      !isValidPayload(body, [
+        'orderId',
+        'order_reference_id',
+        'client_name',
+        'pickupAddress',
+        'product_description',
+        'total_weight',
+        'quantity',
+        'ewaybill',
+        'amount',
+        'invoiceNumber',
+        'customerDetails',
+        'boxes',
+      ])
+    ) {
+      return res.status(400).send({ valid: false, message: 'Invalid Payload' });
+    }
 
-    const orderDetails = await B2BOrderModel.findById(orderId);
-    if (!orderDetails) return res.status(200).send({ valid: false, message: "Order not found" });
+    if (!isValidObjectId(body?.pickupAddress)) {
+      return res.status(400).send({ valid: false, message: 'Invalid pickupAddress.' });
+    }
+    if (!isValidObjectId(body?.customerDetails)) {
+      return res.status(400).send({ valid: false, message: 'Invalid customerDetails.' });
+    }
 
-    const data = {
-      order_reference_id: body?.order.order_reference_id,
+    const boxes = JSON.parse(body?.boxes);
+
+    if (!Array.isArray(boxes)) {
+      return res.status(400).send({ valid: false, message: 'boxes should be array' });
+    }
+
+    const orderDetails = await B2BOrderModel.findById(body.orderId);
+    if (!orderDetails) {
+      return res.status(404).send({ valid: false, message: 'Order not found' });
+    }
+
+    const dataToUpdate = {
+      order_reference_id: body?.order_reference_id,
       bucket: NEW,
-      client_name: body?.order.client_name,
+      client_name: body?.client_name,
       sellerId: req.seller._id,
-      freightType: body?.order.freightType, // 0 -> paid, 1 -> toPay
-      pickupType: body?.order.pickupType, // 0 -> FM-Pickup, 1 -> SelfDrop
-      InsuranceType: body?.order.InsuranceType, // 0-> OwnerRisk, 1-> Carrier Risk
-      pickupAddress: body?.order.pickupAddress,
-      total_weight: body?.order.total_weight,
-      quantity: body?.order.quantity,
-      ewaybill: body?.order.ewaybill,
-      amount: body?.order.amount,
-      invoiceNumber: body?.order.invoiceNumber,
+      freightType: 0,
+      pickupType: 0,
+      InsuranceType: 0,
+      pickupAddress: body?.pickupAddress,
+      total_weight: Number(body?.total_weight),
+      quantity: Number(body?.quantity),
+      ewaybill: body?.ewaybill,
+      amount: Number(body?.amount),
+      invoiceNumber: body?.invoiceNumber,
       orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
-      product_description: body?.order.product_description,
-      packageDetails: body?.order?.boxes,
-      customer: body?.order.customerDetails,
+      product_description: body?.product_description,
+      packageDetails: boxes,
+      customer: body?.customerDetails,
+      invoiceImage: invoice ? invoice.buffer.toString('base64') : orderDetails.invoiceImage,
+      supporting_document: supporting_document ? supporting_document.buffer.toString('base64') : orderDetails.supporting_document,
     };
 
-    const savedOrder = await B2BOrderModel.findByIdAndUpdate(orderId, data);
+    try {
+      const updatedOrder = await B2BOrderModel.findByIdAndUpdate(body.orderId, dataToUpdate, { new: true });
 
-    return res.status(200).send({ valid: true, order: savedOrder });
+      return res.status(200).send({ valid: true, order: updatedOrder });
+    } catch (err) {
+      return next(err);
+    }
   } catch (error) {
+    console.log(error, 'error');
     return next(error);
   }
-}
+};
 
 export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {

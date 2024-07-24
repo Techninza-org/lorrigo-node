@@ -393,6 +393,11 @@ export function getNextToNextFriday() {
 
 export const validateClientBillingFeilds = (value: any, fieldName: string, bill: any, alreadyExistingBills: any): string | null => {
   switch (fieldName) {
+    case 'orderRefId':
+      if (!value || alreadyExistingBills.find((item: any) => item.orderRefId.includes(value))) {
+        return "Order ID / Order Reference ID must be unique and cannot be empty";
+      }
+      break;
     case 'billingDate':
       if (!value) {
         return "Billing date is required";

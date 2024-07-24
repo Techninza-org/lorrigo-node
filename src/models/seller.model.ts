@@ -70,7 +70,7 @@ const sellerSchema = new mongoose.Schema({
     isD2C: { type: Boolean, required: false, default: true },
     isB2B: { type: Boolean, required: false, default: true },
     isPrepaid: { type: Boolean, required: false, default: true },
-    isPostpaid: { type: Boolean, required: false, default: true },
+    isPostpaid: { type: Boolean, required: false, default: false },
   },
   channelPartners: [{ type: mongoose.Schema.Types.ObjectId, ref: "Channel" }],
   createdAt: { type: Date, default: Date.now },

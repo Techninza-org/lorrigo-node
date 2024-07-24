@@ -15,7 +15,10 @@ import SellerModel from "../models/seller.model";
 import { CANCELED, CANCELLATION_REQUESTED_ORDER_STATUS, CANCELLED_ORDER_DESCRIPTION, DELIVERED, ORDER_TO_TRACK, RTO } from "./lorrigo-bucketing-info";
 import { addDays, format, parseISO } from "date-fns";
 import { getNextToNextFriday } from ".";
+import fs from "fs"
+import path from "path"
 import { setTimeout } from 'timers/promises';
+
 
 /**
  * Update order with statusCode (2) to cancelled order(3)
@@ -211,7 +214,7 @@ export const trackOrder_Smartship = async () => {
         }
 
 
-        if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {
+        if ((bucketInfo.bucket !== -1)) {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
@@ -308,7 +311,7 @@ export const trackOrder_Smartr = async () => {
             if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
           }
 
-          if ((bucketInfo.bucket !== -1) && (ordersReferenceIdOrders.bucket !== bucketInfo.bucket)) {
+          if ((bucketInfo.bucket !== -1)) {
             console.log("SmartR bucktinng", bucketInfo);
             ordersReferenceIdOrders.bucket = bucketInfo.bucket;
             ordersReferenceIdOrders.orderStages.push({ stage: bucketInfo.bucket, action: bucketInfo.description, stageDateTime: new Date(), });
@@ -508,12 +511,38 @@ export const track_delivery = async () => {
   }
 }
 
+function ensureDirectoryExistence(filePath) {
+  const dirname = path.dirname(filePath);
+  if (!fs.existsSync(dirname)) {
+      fs.mkdirSync(dirname, { recursive: true });
+  }
+}
+
+async function fetchAndSaveData() {
+  try {
+      // Make the API request
+      const delhiveryToken = await getDelhiveryTokenPoint5();
+
+      const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}9145210460073`;
+      const response = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
+
+      const data = response.data;
+
+      ensureDirectoryExistence('delhivery-0.5-tracking.json');
+      fs.writeFileSync("delhivery-0.5-tracking.json", JSON.stringify(data, null, 2), 'utf8');
+  } catch (error: any) {
+      console.error('Error fetching data:', error.message);
+  }
+}
+
 export default async function runCron() {
   console.log("Running cron scheduler");
+  
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
     cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
+    cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every2Minutes, trackOrder_Smartr);
 
@@ -522,6 +551,7 @@ export default async function runCron() {
     const expression4every9_59Hr = "59 9 * * *";
     const expression4everyFriday = "0 0 * * 5";
 
+    cron.schedule(expression4every9_59Hr, fetchAndSaveData);
     cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
     cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
     cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
@@ -559,7 +589,7 @@ const processShiprocketOrders = async (orders) => {
       if (response.data.tracking_data.shipment_status) {
         const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
 
-        if ((bucketInfo.bucket !== -1) && (orderWithOrderReferenceId.bucket !== bucketInfo.bucket)) {
+        if ((bucketInfo.bucket !== -1)) {
 
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
