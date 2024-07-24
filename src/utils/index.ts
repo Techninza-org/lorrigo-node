@@ -367,7 +367,7 @@ export function convertToISO(invoice_date?: string): string {
   }
 
   // Validate the date
-  const date = new Date(year, month - 1, day, hour, minute, second);
+  const date = new Date(year, month - 1, day, hour, minute, 0);
   if (isNaN(date.getTime())) {
     throw new Error("Invalid date components");
   }

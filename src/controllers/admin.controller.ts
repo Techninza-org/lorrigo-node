@@ -616,7 +616,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "YES");
     return {
       billingDate: convertToISO(bill["Date"]),
-      awb: Number(bill["Awb"]),
+      awb: bill["Awb"],
       rtoAwb: Number(bill["RTO Awb"]),
       codValue: Number(bill["COD Value"] || 0),
       orderRefId: bill["Order id"],
