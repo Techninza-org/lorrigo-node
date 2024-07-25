@@ -132,10 +132,7 @@ if (!config.MONGODB_URI) {
 async function processChunk() {
   const update = {
     $set: {
-      'config.isD2C': true,
-      'config.isB2B': true,
-      'config.isPrepaid': true,
-      'config.isPostpaid': true
+      walletBalance: 0
     }
   };
 

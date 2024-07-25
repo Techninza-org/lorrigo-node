@@ -230,7 +230,7 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
 
 export const updateSellerConfig = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const { isD2C, isB2B, isPrepaid, isPostpaid } = req.body;
+    const { isD2C, isB2B, isPrepaid } = req.body;
     const { sellerId } = req.params;
 
     if (!sellerId) {
@@ -242,7 +242,6 @@ export const updateSellerConfig = async (req: ExtendedRequest, res: Response, ne
         'config.isD2C': isD2C,
         'config.isB2B': isB2B,
         'config.isPrepaid': isPrepaid,
-        'config.isPostpaid': isPostpaid
       }
     };
 
@@ -279,15 +278,22 @@ export const uploadPincodes = async (req: ExtendedRequest, res: Response, next: 
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
-    const fileData = req.file.buffer.toString();
-    var data = fileData.replace(/,\s+/g, ",");
-    const pincodes = csvJSON(data);
+    const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
 
-    const bulkOperations = pincodes.map(object => ({
-      updateOne: {
-        filter: { pincode: object.pincode },
-        update: { $set: object },
-        upsert: true
+    const pincodes = json.map((bill: any) => {
+      return {
+        Pincode: Number(bill["Pincode"]),
+        StateName: bill["StateName"],
+        District: bill["District"],
+        City: bill["City"],
+      };
+    });
+
+    const bulkOperations = pincodes.map(pincodeObj => ({
+      updateMany: {
+        filter: { Pincode: pincodeObj.Pincode },
+        update: { $set: pincodeObj },
+        upsert: true,
       }
     }));
 
@@ -689,9 +695,9 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       if (!order) {
         throw new Error(`Order not found for Order Ref Id: ${bill.orderRefId}`);
       }
-    
+
       console.log("body.carrierId", bill.carrierID);
-    
+
       const vendor: any = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
       const pickupDetails = {
         District: bill.fromCity,
@@ -709,7 +715,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       const { incrementPrice, totalCharge } = await calculateShippingCharges(pickupDetails, deliveryDetails, body, vendor);
       const baseWeight = vendor?.weightSlab || 0;
       const incrementWeight = Number(order.orderWeight) - baseWeight;
-    
+
       return {
         updateOne: {
           filter: { orderRefId: bill.orderRefId },
@@ -729,7 +735,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         }
       };
     }));
-    
+
     // @ts-ignore
     await ClientBillingModal.bulkWrite(billsWithCharges);
 

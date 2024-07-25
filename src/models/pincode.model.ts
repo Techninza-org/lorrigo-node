@@ -10,6 +10,7 @@ const pinCodeSchema = new mongoose.Schema({
   Delivery: { type: String, required: true },
   District: { type: String, required: true },
   StateName: { type: String, required: true },
+  City: { type: String, required: true },
 });
 
 const PincodeModel = mongoose.model("Pincodes", pinCodeSchema);
