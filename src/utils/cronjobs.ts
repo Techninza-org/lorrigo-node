@@ -176,11 +176,11 @@ export const trackOrder_Smartship = async () => {
 
   const vendorNickname = await EnvModel.findOne({ name: "SMARTSHIP" }).select("nickName")
   const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } });
-  // const orders = await B2COrderModel.find({awb: "77136476292"});
+  // const orders = await B2COrderModel.find({ awb: "77142142571" });
 
 
   // http://api.smartship.in/v1/Trackorder?tracking_numbers=${order.awb} 
-  
+
   for (const orderWithOrderReferenceId of orders) {
 
     const smartshipToken = await getSmartShipToken();
@@ -194,12 +194,8 @@ export const trackOrder_Smartship = async () => {
     try {
       // const apiUrl = `${config.SMART_SHIP_API_BASEURL}${APIs.TRACK_SHIPMENT}=${orderWithOrderReferenceId.order_reference_id}`;
       const apiUrl = `http://api.smartship.in/v1/Trackorder?tracking_numbers=${orderWithOrderReferenceId.awb}`;
-      console.log(apiUrl, "apiUrl");
       const response = await axios.get(apiUrl, shipmentAPIConfig);
-
       const responseJSON: TrackResponse = response.data;
-
-      console.log(JSON.stringify(responseJSON), "responseJSON");
 
       if (responseJSON.message === "success") {
         const keys: string[] = Object.keys(responseJSON.data.scans);
@@ -213,13 +209,16 @@ export const trackOrder_Smartship = async () => {
           if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
         }
 
+        const orderStages = orderWithOrderReferenceId.orderStages;
 
-        if ((bucketInfo.bucket !== -1)) {
+        if ((bucketInfo.bucket !== -1) && !orderStages[orderStages?.length - 1].action?.includes(bucketInfo?.description)) {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
             action: bucketInfo.description,
-            stageDateTime: new Date(),
+            stageDateTime: requiredResponse.date_time,
+            activity: requiredResponse.action,
+            location: requiredResponse.location,
           });
           try {
             await orderWithOrderReferenceId.save();
@@ -296,13 +295,13 @@ export const trackOrder_Smartr = async () => {
         return;
       }
       const apiUrl = `${config.SMARTR_API_BASEURL}${APIs.SMARTR_TRACKING}${ordersReferenceIdOrders.awb}`;
-      console.log(apiUrl);
       try {
         const res = await axios.get(apiUrl, { headers: { authorization: smartRToken } });
         if (!res.data?.success) return;
         if (res.data.data[0]) {
-
+          
           const shipment_status = res.data.data[0].shipmentStatus[0]
+          console.log(shipment_status)
           const bucketInfo = getSmartRBucketing(shipment_status.statusCode, shipment_status.reasonCode);
 
           if (bucketInfo.bucket === RTO) {
@@ -314,7 +313,13 @@ export const trackOrder_Smartr = async () => {
           if ((bucketInfo.bucket !== -1)) {
             console.log("SmartR bucktinng", bucketInfo);
             ordersReferenceIdOrders.bucket = bucketInfo.bucket;
-            ordersReferenceIdOrders.orderStages.push({ stage: bucketInfo.bucket, action: bucketInfo.description, stageDateTime: new Date(), });
+            ordersReferenceIdOrders.orderStages.push({
+              stage: bucketInfo.bucket,
+              action: bucketInfo.description,
+              stageDateTime: new Date(),
+              activity: shipment_status.remarks,
+              location: shipment_status.state,
+            });
             try {
               await ordersReferenceIdOrders.save();
             } catch (error) {
@@ -514,37 +519,37 @@ export const track_delivery = async () => {
 function ensureDirectoryExistence(filePath) {
   const dirname = path.dirname(filePath);
   if (!fs.existsSync(dirname)) {
-      fs.mkdirSync(dirname, { recursive: true });
+    fs.mkdirSync(dirname, { recursive: true });
   }
 }
 
 async function fetchAndSaveData() {
   try {
-      // Make the API request
-      const delhiveryToken = await getDelhiveryTokenPoint5();
+    // Make the API request
+    const delhiveryToken = await getDelhiveryTokenPoint5();
 
-      const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}9145210460073`;
-      const response = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
+    const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}9145210460073`;
+    const response = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
 
-      const data = response.data;
+    const data = response.data;
 
-      ensureDirectoryExistence('delhivery-0.5-tracking.json');
-      fs.writeFileSync("delhivery-0.5-tracking.json", JSON.stringify(data, null, 2), 'utf8');
+    ensureDirectoryExistence('delhivery-0.5-tracking.json');
+    fs.writeFileSync("delhivery-0.5-tracking.json", JSON.stringify(data, null, 2), 'utf8');
   } catch (error: any) {
-      console.error('Error fetching data:', error.message);
+    console.error('Error fetching data:', error.message);
   }
 }
 
 export default async function runCron() {
   console.log("Running cron scheduler");
-  
+  trackOrder_Smartr()
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
-    // cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
-    // cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
-    // cron.schedule(expression4every2Minutes, trackOrder_Smartship);
-    // cron.schedule(expression4every2Minutes, trackOrder_Smartr);
+    cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
+    cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
+    cron.schedule(expression4every2Minutes, trackOrder_Smartship);
+    cron.schedule(expression4every2Minutes, trackOrder_Smartr);
 
     const expression4every5Minutes = "*/5 * * * *";
     const expression4every59Minutes = "59 * * * *";
