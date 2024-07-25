@@ -541,10 +541,10 @@ export default async function runCron() {
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
-    cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
-    cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
-    cron.schedule(expression4every2Minutes, trackOrder_Smartship);
-    cron.schedule(expression4every2Minutes, trackOrder_Smartr);
+    // cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
+    // cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
+    // cron.schedule(expression4every2Minutes, trackOrder_Smartship);
+    // cron.schedule(expression4every2Minutes, trackOrder_Smartr);
 
     const expression4every5Minutes = "*/5 * * * *";
     const expression4every59Minutes = "59 * * * *";
