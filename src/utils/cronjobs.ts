@@ -211,7 +211,7 @@ export const trackOrder_Smartship = async () => {
 
         const orderStages = orderWithOrderReferenceId.orderStages;
 
-        if ((bucketInfo.bucket !== -1) && !orderStages[orderStages?.length - 1].action?.includes(bucketInfo?.description)) {
+        if ((bucketInfo.bucket !== -1) && !orderStages[orderStages?.length - 1].activity?.includes(requiredResponse.action)) {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
@@ -299,7 +299,7 @@ export const trackOrder_Smartr = async () => {
         const res = await axios.get(apiUrl, { headers: { authorization: smartRToken } });
         if (!res.data?.success) return;
         if (res.data.data[0]) {
-          
+
           const shipment_status = res.data.data[0].shipmentStatus[0]
           console.log(shipment_status)
           const bucketInfo = getSmartRBucketing(shipment_status.statusCode, shipment_status.reasonCode);
@@ -309,9 +309,10 @@ export const trackOrder_Smartr = async () => {
             await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
             if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
           }
+          const orderStages = ordersReferenceIdOrders.orderStages;
 
-          if ((bucketInfo.bucket !== -1)) {
-            console.log("SmartR bucktinng", bucketInfo);
+          if ((bucketInfo.bucket !== -1 && !orderStages[orderStages?.length - 1].activity?.includes(shipment_status?.remarks))) {
+            console.log("updating...", bucketInfo);
             ordersReferenceIdOrders.bucket = bucketInfo.bucket;
             ordersReferenceIdOrders.orderStages.push({
               stage: bucketInfo.bucket,
@@ -542,7 +543,6 @@ async function fetchAndSaveData() {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
-  trackOrder_Smartr()
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
@@ -594,7 +594,7 @@ const processShiprocketOrders = async (orders) => {
       if (response.data.tracking_data.shipment_status) {
         const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
 
-        if ((bucketInfo.bucket !== -1)) {
+        if ((bucketInfo.bucket !== -1) && !orderStages[orderStages?.length - 1].activity?.includes(response.data.tracking_data?.shipment_track_activities[0]?.activity)) {
 
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
