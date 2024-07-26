@@ -684,29 +684,30 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
     //   }
     // });
 
-
-    console.log(order.carrierName, order.carrierName.split(' ').slice(0, 3), "order.carrierName")
-    let regexPattern = order.carrierName.split(' ').slice(0, 3).join(' ') + '[ -](SS|SR|SMR|DEL(_\\d+(\\.\\d+)?|)|.*)?';
+    let regexPattern = order.carrierName.split(' ').slice(0, 3).join(' ') + '(\\s+(SS|SR|SMR|DEL(_\\d+(\\.\\d+)?|)|.*)?)?';
     let courier = await CourierModel.findOne({
       name: {
         $regex: new RegExp(regexPattern, 'i')
       }
     });
-
-    console.log("\n\n")
-
+    console.log("\n\n");
+    console.log(order.carrierName, order.carrierName.split(' ').slice(0, 3), "order.carrierName")
+    
     if (!courier) {
-      regexPattern = order.carrierName.split(' ').slice(0, 3).join(' ') + '/(SR)/g';
+      regexPattern = order.carrierName.split(' ').slice(0, 3).join(' ') + '(\\s+SR)?';
       courier = await CourierModel.findOne({
         name: {
           $regex: new RegExp(regexPattern, 'i')
         }
       });
     }
+
     // Bluedart surface 0.5kg SR [ 'Bluedart', 'surface', '0.5kg' ] order.carrierName
     if (!courier) {
       throw new Error('Courier not found');
     }
+
+    console.log("courier found RTO")
 
     const pickupDetails = {
       StateName: order.pickupAddress.state,

@@ -172,7 +172,7 @@ export const CONNECT_SMARTR = async (): Promise<void> => {
  * @returns void
  */
 
-export const trackOrder_Smartship = async () => {
+export const  trackOrder_Smartship = async () => {
 
   const vendorNickname = await EnvModel.findOne({ name: "SMARTSHIP" }).select("nickName")
   const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } });
@@ -211,7 +211,11 @@ export const trackOrder_Smartship = async () => {
 
         const orderStages = orderWithOrderReferenceId.orderStages;
 
-        if ((bucketInfo.bucket !== -1) && !orderStages[orderStages?.length - 1].activity?.includes(requiredResponse.action)) {
+        if (
+          bucketInfo.bucket !== -1 &&
+          orderStages.length > 0 &&
+          !(orderStages[orderStages.length - 1].activity?.includes(requiredResponse.action))
+        ) {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
@@ -309,10 +313,15 @@ export const trackOrder_Smartr = async () => {
             await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
             if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
           }
-          const orderStages = ordersReferenceIdOrders.orderStages;
 
-          if ((bucketInfo.bucket !== -1 && !orderStages[orderStages?.length - 1].activity?.includes(shipment_status?.remarks))) {
-            console.log("updating...", bucketInfo);
+          const orderStages = ordersReferenceIdOrders.orderStages || [];
+
+          if (
+            bucketInfo.bucket !== -1 &&
+            orderStages.length > 0 &&
+            !(orderStages[orderStages.length - 1].activity?.includes(shipment_status.remarks))
+          ) {
+            console.log("Updating order with bucket info:", bucketInfo);
             ordersReferenceIdOrders.bucket = bucketInfo.bucket;
             ordersReferenceIdOrders.orderStages.push({
               stage: bucketInfo.bucket,
@@ -594,8 +603,11 @@ const processShiprocketOrders = async (orders) => {
       if (response.data.tracking_data.shipment_status) {
         const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
 
-        if ((bucketInfo.bucket !== -1) && !orderStages[orderStages?.length - 1].activity?.includes(response.data.tracking_data?.shipment_track_activities[0]?.activity)) {
-
+        if (
+          bucketInfo.bucket !== -1 &&
+          orderStages.length > 0 &&
+          !(orderStages[orderStages.length - 1].activity?.includes(response.data.tracking_data?.shipment_track_activities[0]?.activity))
+        ) {
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
             action: bucketInfo.description,
@@ -604,6 +616,7 @@ const processShiprocketOrders = async (orders) => {
             stageDateTime: new Date(),
           });
 
+          console.log(bucketInfo.bucket === RTO, orderWithOrderReferenceId.awb, "RTO");
           if (bucketInfo.bucket === RTO) {
             const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb);
             await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges?.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`);
