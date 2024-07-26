@@ -166,13 +166,43 @@ export const CONNECT_SMARTR = async (): Promise<void> => {
   }
 };
 
+export const CONNECT_MARUTI = async (): Promise<void> => {
+  const requestBody = {
+    email: config.MARUTI_USERNAME,
+    password: config.MARUTI_PASSWORD,
+    vendorType: "SELLER"
+  };
+
+  try {
+    const response = await axios.post("https://qaapis.delcaper.com/auth/login", requestBody);
+    const responseJSON = response.data;
+
+    if (responseJSON.success === true && responseJSON.message === "Logged In!") {
+      // Update existing document or create a new one
+      await EnvModel.findOneAndUpdate(
+        { name: "MARUTI" },
+        { $set: { nickName: "MRT", token: responseJSON.accessToken } },
+        { upsert: true, new: true }
+      );
+
+      const token = `${responseJSON.token_type} ${responseJSON.access_token}`;
+      Logger.plog("MARUTI LOGGEDIN: " + JSON.stringify(responseJSON));
+    } else {
+      Logger.log("ERROR, smartr: " + JSON.stringify(responseJSON));
+    }
+  } catch (err) {
+    Logger.err("SOMETHING WENT WRONG:");
+    Logger.err(err);
+  }
+};
+
 /**
  * function to run CronJobs currrently one cron is scheduled to update the status of order which are cancelled to "Already Cancelled".
  * @emits CANCEL_REQUESTED_ORDER
  * @returns void
  */
 
-export const  trackOrder_Smartship = async () => {
+export const trackOrder_Smartship = async () => {
 
   const vendorNickname = await EnvModel.findOne({ name: "SMARTSHIP" }).select("nickName")
   const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } });
@@ -202,13 +232,6 @@ export const  trackOrder_Smartship = async () => {
         const requiredResponse: RequiredTrackResponse = responseJSON.data.scans[keys[0]][0];
 
         const bucketInfo = getSmartshipBucketing(Number(requiredResponse?.status_code) ?? -1);
-
-        if (bucketInfo.bucket === RTO) {
-          const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-          await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
-          if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
-        }
-
         const orderStages = orderWithOrderReferenceId.orderStages;
 
         if (
@@ -224,6 +247,11 @@ export const  trackOrder_Smartship = async () => {
             activity: requiredResponse.action,
             location: requiredResponse.location,
           });
+          if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.bucket !== RTO) {
+            const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
+            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
+            if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
+          }
           try {
             await orderWithOrderReferenceId.save();
           } catch (error) {
@@ -305,15 +333,7 @@ export const trackOrder_Smartr = async () => {
         if (res.data.data[0]) {
 
           const shipment_status = res.data.data[0].shipmentStatus[0]
-          console.log(shipment_status)
           const bucketInfo = getSmartRBucketing(shipment_status.statusCode, shipment_status.reasonCode);
-
-          if (bucketInfo.bucket === RTO) {
-            const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
-            if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
-          }
-
           const orderStages = ordersReferenceIdOrders.orderStages || [];
 
           if (
@@ -330,6 +350,11 @@ export const trackOrder_Smartr = async () => {
               activity: shipment_status.remarks,
               location: shipment_status.state,
             });
+            if (bucketInfo.bucket === RTO && ordersReferenceIdOrders.bucket !== RTO) {
+              const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
+              await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
+              if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
+            }
             try {
               await ordersReferenceIdOrders.save();
             } catch (error) {
@@ -555,10 +580,10 @@ export default async function runCron() {
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
-    cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
-    cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
-    cron.schedule(expression4every2Minutes, trackOrder_Smartship);
-    cron.schedule(expression4every2Minutes, trackOrder_Smartr);
+    // cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
+    // cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
+    // cron.schedule(expression4every2Minutes, trackOrder_Smartship);
+    // cron.schedule(expression4every2Minutes, trackOrder_Smartr);
 
     const expression4every5Minutes = "*/5 * * * *";
     const expression4every59Minutes = "59 * * * *";
@@ -616,8 +641,7 @@ const processShiprocketOrders = async (orders) => {
             stageDateTime: new Date(),
           });
 
-          console.log(bucketInfo.bucket === RTO, orderWithOrderReferenceId.awb, "RTO");
-          if (bucketInfo.bucket === RTO) {
+          if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.bucket !== RTO) {
             const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb);
             await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges?.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`);
             if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`);

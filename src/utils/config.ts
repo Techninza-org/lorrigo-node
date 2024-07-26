@@ -70,6 +70,11 @@ const DELHIVERY_API_TOKEN = process.env.DELHIVERY_API_TOKEN;
 const ZOHO_API_BASEURL = process.env.ZOHO_API_BASEURL;
 const ZOHO_ORG_ID = process.env.ZOHO_ORG_ID;
 
+/* MARUTI */
+const MARUTI_BASEURL = process.env.MARUTI_BASEURL;
+const MARUTI_USERNAME = process.env.MARUTI_USERNAME;
+const MARUTI_PASSWORD = process.env.MARUTI_PASSWORD;
+
 const envConfig = {
   NODE_ENV,
   MONGODB_URI,
@@ -105,7 +110,11 @@ const envConfig = {
   DELHIVERY_API_TOKEN,
 
   ZOHO_API_BASEURL,
-  ZOHO_ORG_ID
+  ZOHO_ORG_ID,
+
+  MARUTI_BASEURL,
+  MARUTI_USERNAME,
+  MARUTI_PASSWORD,
 
 };
 
