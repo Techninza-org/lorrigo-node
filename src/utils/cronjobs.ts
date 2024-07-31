@@ -175,24 +175,16 @@ export const CONNECT_MARUTI = async (): Promise<void> => {
 
   try {
     const response = await axios.post("https://qaapis.delcaper.com/auth/login", requestBody);
-    const responseJSON = response.data;
+    const responseJSON = response.data.data;
+    await EnvModel.findOneAndUpdate(
+      { name: "MARUTI" },
+      { $set: { nickName: "MRT", token: responseJSON.accessToken, refreshToken: responseJSON.refreshToken } },
+      { upsert: true, new: true }
+    );
 
-    if (responseJSON.success === true && responseJSON.message === "Logged In!") {
-      // Update existing document or create a new one
-      await EnvModel.findOneAndUpdate(
-        { name: "MARUTI" },
-        { $set: { nickName: "MRT", token: responseJSON.accessToken } },
-        { upsert: true, new: true }
-      );
-
-      const token = `${responseJSON.token_type} ${responseJSON.access_token}`;
-      Logger.plog("MARUTI LOGGEDIN: " + JSON.stringify(responseJSON));
-    } else {
-      Logger.log("ERROR, smartr: " + JSON.stringify(responseJSON));
-    }
+    console.log("MARUTI LOGGEDIN: " + responseJSON.accessToken);
   } catch (err) {
-    Logger.err("SOMETHING WENT WRONG:");
-    Logger.err(err);
+    console.log(err);
   }
 };
 
@@ -505,18 +497,18 @@ export const track_delivery = async () => {
         carrierName: { $regex: vendor?.nickName }
       })).reverse();
 
-      console.log(orders[0].carrierName, "orders")
+      console.log(orders.length, "orders")
 
       // for (let ordersReferenceIdOrders of orders) {
       try {
-        const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}${orders[0].awb}`;
+        const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}9144810027801`;
         console.log(apiUrl, "apiurl")
         const res = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
 
-        console.log((JSON.stringify(res.data)), "DELIVERY RESPONSE");
-        if (!res.data?.success) return;
-        if (res.data.ShipmentData[0]) {
-
+        console.log((JSON.stringify(res.data.ShipmentData[0].Shipment.Scans[0].ScanDetail)), "DELIVERY RESPONSE");
+        // if (!res.data?.success) return;
+        if (res.data.ShipmentData[0].Shipment.Scans[0]) {
+          
           const shipmentData = res.data.ShipmentData[0];
           const shipment_status = shipmentData.Shipment.Status
 
@@ -630,8 +622,8 @@ const processShiprocketOrders = async (orders) => {
 
         if (
           bucketInfo.bucket !== -1 &&
-          orderStages.length > 0 &&
-          !(orderStages[orderStages.length - 1].activity?.includes(response.data.tracking_data?.shipment_track_activities[0]?.activity))
+          orderWithOrderReferenceId.orderStages.length > 0 &&
+          !(orderWithOrderReferenceId.orderStages[orderWithOrderReferenceId.orderStages.length - 1].activity?.includes(response.data.tracking_data?.shipment_track_activities[0]?.activity))
         ) {
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
@@ -657,8 +649,8 @@ const processShiprocketOrders = async (orders) => {
         trackedOrders.add(orderWithOrderReferenceId.awb);
       }
     } catch (err: any) {
-      // console.log(err, "SHIPROCKET ERROR TRACKING ORDER");
-      Logger.err(err);
+      console.log(err, "SHIPROCKET ERROR TRACKING ORDER");
+      // Logger.err(err);
     }
   }
 };
