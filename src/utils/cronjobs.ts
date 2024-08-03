@@ -480,72 +480,73 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
   }
 };
 
-// export const track_delivery = async () => {
-//   const vendorNicknames = await EnvModel.find({ name: { $regex: "DEL" } }).select("nickName")
+export const track_delivery = async () => {
+  const vendorNicknames = await EnvModel.find({ name: { $regex: "DEL" } }).select("nickName")
 
 
-//   for (let vendor of vendorNicknames) {
-//     try {
-//       console.log(vendor)
-//       let delhiveryToken = await getDelhiveryToken();
+  for (let vendor of vendorNicknames) {
+    try {
+      console.log(vendor)
+      let delhiveryToken = await getDelhiveryToken();
 
-//       if (vendor.nickName === 'DEL.0.5') {
-//         delhiveryToken = await getDelhiveryTokenPoint5();
-//       } else if (vendor.nickName === 'DEL.10') {
-//         delhiveryToken = await getDelhiveryToken10();
-//       }
+      if (vendor.nickName === 'DEL.0.5') {
+        delhiveryToken = await getDelhiveryTokenPoint5();
+      } else if (vendor.nickName === 'DEL.10') {
+        delhiveryToken = await getDelhiveryToken10();
+      }
 
-//       console.log(delhiveryToken)
+      console.log(delhiveryToken)
 
-//       const orders = (await B2COrderModel.find({
-//         bucket: { $in: ORDER_TO_TRACK },
-//         carrierName: { $regex: vendor?.nickName }
-//       })).reverse();
+      const orders = (await B2COrderModel.find({
+        // bucket: { $in: ORDER_TO_TRACK },
+        // carrierName: { $regex: vendor?.nickName }
+        awb: "9145210460633"
+      })).reverse();
 
-//       console.log(orders.length, "orders")
+      console.log(orders.length, "orders")
 
-//       // for (let ordersReferenceIdOrders of orders) {
-//       try {
-//         const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}9144810027801`;
-//         const res = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
+      // for (let ordersReferenceIdOrders of orders) {
+      try {
+        const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}9145210460633`;
+        const res = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
 
-//         console.log((JSON.stringify(res.data.ShipmentData[0].Shipment.Scans[0].ScanDetail)), "DELIVERY RESPONSE");
-//         // if (!res.data?.success) return;
-//         if (res.data.ShipmentData[0].Shipment.Scans[0]) {
+        console.log((JSON.stringify(res.data.ShipmentData)), "DELIVERY RESPONSE");
+        // if (!res.data?.success) return;
+        // if (res.data.ShipmentData[0].Shipment.Scans[0]) {
 
-//           const shipmentData = res.data.ShipmentData[0];
-//           const shipment_status = shipmentData.Shipment.Status
+          // const shipmentData = res.data.ShipmentData[0];
+          // const shipment_status = shipmentData.Shipment.Status
 
-//           const shipment_status = res.data.data[0].shipmentStatus[0]
-//           // const bucketInfo = getDelhiveryBucketing();
+          // const shipment_status = res.data.data[0].shipmentStatus[0]
+          // const bucketInfo = getDelhiveryBucketing();
 
-//           // if (bucketInfo.bucket === RTO) {
-//           //   const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-//           //   await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
-//           //   if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
-//           // }
+          // if (bucketInfo.bucket === RTO) {
+          //   const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
+          //   await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
+          //   if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
+          // }
 
-//           // if ((bucketInfo.bucket !== -1) && (ordersReferenceIdOrders.bucket !== bucketInfo.bucket)) {
-//           //   console.log("SmartR bucktinng", bucketInfo);
-//           //   ordersReferenceIdOrders.bucket = bucketInfo.bucket;
-//           //   ordersReferenceIdOrders.orderStages.push({ stage: bucketInfo.bucket, action: bucketInfo.description, stageDateTime: new Date(), });
-//           //   try {
-//           //     await ordersReferenceIdOrders.save();
-//           //   } catch (error) {
-//           //     console.log("Error occurred while saving order status:", error);
-//           //   }
-//           // }
-//         }
-//       } catch (err) {
-//         console.log(err);
-//       }
-//       // }
+          // if ((bucketInfo.bucket !== -1) && (ordersReferenceIdOrders.bucket !== bucketInfo.bucket)) {
+          //   console.log("SmartR bucktinng", bucketInfo);
+          //   ordersReferenceIdOrders.bucket = bucketInfo.bucket;
+          //   ordersReferenceIdOrders.orderStages.push({ stage: bucketInfo.bucket, action: bucketInfo.description, stageDateTime: new Date(), });
+          //   try {
+          //     await ordersReferenceIdOrders.save();
+          //   } catch (error) {
+          //     console.log("Error occurred while saving order status:", error);
+          //   }
+          // }
+        // }
+      } catch (err) {
+        console.log(err);
+      }
+      // }
 
-//     } catch (err) {
-//       console.log("err", err);
-//     }
-//   }
-// }
+    } catch (err) {
+      console.log("err", err);
+    }
+  }
+}
 
 function ensureDirectoryExistence(filePath) {
   const dirname = path.dirname(filePath);
@@ -573,13 +574,14 @@ async function fetchAndSaveData() {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
+  // track_delivery()
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
-    // cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
-    // cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
-    // cron.schedule(expression4every2Minutes, trackOrder_Smartship);
-    // cron.schedule(expression4every2Minutes, trackOrder_Smartr);
+    cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
+    cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
+    cron.schedule(expression4every2Minutes, trackOrder_Smartship);
+    cron.schedule(expression4every2Minutes, trackOrder_Smartr);
 
     const expression4every5Minutes = "*/5 * * * *";
     const expression4every59Minutes = "59 * * * *";
