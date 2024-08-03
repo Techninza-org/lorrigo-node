@@ -56,6 +56,8 @@ const ECOMM_PINCODE_SERVICEABILITY = "/services/expp/expppincode/";
 
 const ZOHO_CREATE_USER = `/books/v3/users?organization_id=${envConfig.ZOHO_ORG_ID}`
 
+const MARUTI_SERVICEABILITY = "/fulfillment/public/seller/order/check-ecomm-order-serviceability";
+
 const APIs = {
   HUB_REGISTRATION,
   HUB_UPDATE,
@@ -107,7 +109,9 @@ const APIs = {
 
   ECOMM_PINCODE_SERVICEABILITY,
 
-  ZOHO_CREATE_USER
+  ZOHO_CREATE_USER,
+
+  MARUTI_SERVICEABILITY
 
 };
 export default APIs;

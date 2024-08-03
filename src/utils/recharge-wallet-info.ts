@@ -1,4 +1,4 @@
-const PAYMENT_INITIATED = 'Initiated';
+const PAYMENT_INITIATED = 'Failed';
 const PAYMENT_SUCCESSFUL = 'Completed';
 const PAYMENT_FAILED = 'Failed';
 const PAYMENT_PENDING = 'In Progress';

@@ -185,12 +185,13 @@ export const getSellers = async (req: Request, res: Response, next: NextFunction
     limit = limit < 1 ? 1 : limit;
 
     const skip = (page - 1) * limit;
-    const sellers = await SellerModel.find().sort({ createdAt: -1 });
-    res.status(200).send({
+    const sellers = (await SellerModel.find()).reverse();
+    return res.status(200).send({
       valid: true,
       sellers: sellers,
     });
   } catch (err) {
+    console.log(err)
     return next(err);
   }
 };
@@ -368,7 +369,7 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
 
       data2send.push({
         name: cv.name,
-        cod, 
+        cod,
         rtoCharges,
         // @ts-ignore
         nickName: cv.vendor_channel_id.nickName,
@@ -763,6 +764,51 @@ export const rateCalculation = async (
       console.log("error", error);
     }
 
+    try {
+      // const marutiToken = await getMarutiToken();
+      // if (!marutiToken) {
+      //   throw new Error("Failed to retrieve Maruti token");
+      // }
+
+      // TODO: check order is for AIR or SURFACE
+      const marutiRequestBody = {
+        "fromPincode": pickupPincode,
+        "toPincode": deliveryPincode,
+        "isCodOrder": paymentType === 1,
+        "deliveryMode": "AIR"
+      }
+
+      // const isMarutiServicable = await axios.post(
+      //   `${config.DELHIVERY_API_BASEURL}${APIs.MARUTI_SERVICEABILITY}`,
+
+      //   {
+      //     headers: {
+      //       Authorization: `${marutiToken}`,
+      //     },
+      //   }
+      // );
+
+
+      // if (!isMarutiServicable.data.serviceability) {
+      //   const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
+      //   if (marutiNiceName) {
+      //     const marutiVendors = vendors.filter((vendor) => {
+      //       return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString()
+      //     });
+      //     if (marutiVendors.length > 0) {
+      //       marutiVendors.forEach((vendor) => {
+      //         commonCouriers.push({
+      //           ...vendor.toObject(),
+      //           nickName: marutiNiceName.nickName
+      //         });
+      //       });
+      //     }
+      //   }
+      // }
+    } catch (error) {
+      console.log("error", error);
+    }
+
     const data2send: {
       name: string;
       cod: number
@@ -1037,6 +1083,14 @@ export async function getShiprocketToken(): Promise<string | false> {
   }
 }
 
+export async function getMarutiToken() {
+  const env = await EnvModel.findOne({ name: "MARUTI" }).lean();
+  if (!env) return false;
+  //@ts-ignore
+  const token = "Bearer" + " " + env?.token;
+  return token;
+}
+
 export async function getZohoConfig() {
   try {
     const env = await EnvModel.findOne({ name: "ZOHO" }).lean();
@@ -1259,6 +1313,26 @@ export function getSmartRBucketing(status: string, desc: string, reasonCode: str
   return smarRPossibleResponse ? { bucket: smarRPossibleResponse.bucket, description: smarRPossibleResponse.description } : { bucket: -1, description: "Status code not found" }
 }
 
+export function getDelhiveryBucketing(status: string) {
+  const delhiveryStatusMapping = {
+    "Delivered": DELIVERED,
+    "RTO": RTO,
+    "DTO": RETURN_DELIVERED,
+    "LOST": LOST_DAMAGED,
+    "Open": "Open",
+    "Dispatched": RETURN_OUT_FOR_PICKUP,
+    "In Transit": IN_TRANSIT,
+    "Pending": IN_TRANSIT,
+    "Returned": RETURN_DELIVERED,
+  }
+  return (
+    delhiveryStatusMapping[status as keyof typeof delhiveryStatusMapping] || {
+      bucket: -1,
+      description: "Status code not found",
+    }
+  );
+}
+
 export async function isSmartr_surface_servicable(pincode: number): Promise<boolean> {
   /*
   let config = {
@@ -1339,20 +1413,20 @@ type PINCODE_RESPONSE = {
 };
 
 export const generateAccessToken = async () => {
-  try{
+  try {
     const data = {
       client_id: process.env.ZOHO_CLIENT_ID,
       client_secret: process.env.ZOHO_CLIENT_SECRET,
       grant_type: "refresh_token",
       refresh_token: process.env.ZOHO_REFRESH_TOKEN,
     }
-    const response = await axios.post("https://accounts.zoho.in/oauth/v2/token", data,{
+    const response = await axios.post("https://accounts.zoho.in/oauth/v2/token", data, {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded"
       }
     });
     return response.data.access_token
-  }catch(err){
+  } catch (err) {
     console.log(err, 'err')
   }
 }
@@ -1368,13 +1442,13 @@ export const calculateSellerInvoiceAmount = async () => {
     const today = new Date();
     const lastInvoiceGenerationDate = await InvoiceModel.find({}).sort({ createdAt: -1 });
     let lastInvoiceDate;
-    if(!lastInvoiceGenerationDate || lastInvoiceGenerationDate.length === 0) {
+    if (!lastInvoiceGenerationDate || lastInvoiceGenerationDate.length === 0) {
       lastInvoiceDate = startOfMonth;
-    }else{
+    } else {
       lastInvoiceDate = lastInvoiceGenerationDate[0].createdAt;
     }
     console.log(lastInvoiceDate, 'lastInvoiceDate', today, 'today');
-    
+
     sellers.forEach(async (seller) => {
 
       const sellerId = seller._id;
@@ -1392,7 +1466,7 @@ export const calculateSellerInvoiceAmount = async () => {
       const spentAmount = Number((invoiceAmount * 1.18));
       walletAmount -= spentAmount;
       await seller.updateOne({ walletBalance: walletAmount });
-      if(invoiceAmount > 0){
+      if (invoiceAmount > 0) {
         await createAdvanceAndInvoice(zoho_contact_id, invoiceAmount);
       }
     });
@@ -1401,85 +1475,85 @@ export const calculateSellerInvoiceAmount = async () => {
   }
 };
 
-export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmount: any){
-  try{
-  const accessToken = await generateAccessToken();
-  if(!accessToken) return;
-  const rechargeBody = {
-    "customer_id": zoho_contact_id,
-    "amount": Number(invoiceAmount * 1.18),
-  }
-  const rechargeRes = await axios.post(`https://www.zohoapis.in/books/v3/customerpayments?organization_id=60014023368`, rechargeBody, {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Zoho-oauthtoken ${accessToken}`
+export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmount: any) {
+  try {
+    const accessToken = await generateAccessToken();
+    if (!accessToken) return;
+    const rechargeBody = {
+      "customer_id": zoho_contact_id,
+      "amount": Number(invoiceAmount * 1.18),
     }
-  })
-  const paymentId = rechargeRes.data.payment.payment_id;
-  const date = new Date().toISOString().split('T')[0];
-  const dueDate = new Date();
-  dueDate.setDate(dueDate.getDate() + 15);
-  const invoiceBody = {
-    "customer_id": zoho_contact_id,
-    "allow_partial_payments": true,
-    "date": date,
-    "due_date": dueDate.toISOString().split('T')[0],
-    "line_items": [
-      {
-        "item_id": "852186000000016945",
-        "rate": invoiceAmount,
-        "quantity": 1,
+    const rechargeRes = await axios.post(`https://www.zohoapis.in/books/v3/customerpayments?organization_id=60014023368`, rechargeBody, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Zoho-oauthtoken ${accessToken}`
       }
-    ],
-  }
-  const invoiceRes = await axios.post(`https://www.zohoapis.in/books/v3/invoices?organization_id=60014023368`, invoiceBody, {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Zoho-oauthtoken ${accessToken}`
+    })
+    const paymentId = rechargeRes.data.payment.payment_id;
+    const date = new Date().toISOString().split('T')[0];
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 15);
+    const invoiceBody = {
+      "customer_id": zoho_contact_id,
+      "allow_partial_payments": true,
+      "date": date,
+      "due_date": dueDate.toISOString().split('T')[0],
+      "line_items": [
+        {
+          "item_id": "852186000000016945",
+          "rate": invoiceAmount,
+          "quantity": 1,
+        }
+      ],
     }
-  })
-  const invoiceId = invoiceRes.data.invoice.invoice_id;
-  const seller = await SellerModel.findOne({ zoho_contact_id });
-  if(!seller) return;
-   const  creditsBody = {
+    const invoiceRes = await axios.post(`https://www.zohoapis.in/books/v3/invoices?organization_id=60014023368`, invoiceBody, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Zoho-oauthtoken ${accessToken}`
+      }
+    })
+    const invoiceId = invoiceRes.data.invoice.invoice_id;
+    const seller = await SellerModel.findOne({ zoho_contact_id });
+    if (!seller) return;
+    const creditsBody = {
       "invoice_payments": [
         {
-            "payment_id": paymentId,
-            "amount_applied": Number(invoiceAmount * 1.18)
+          "payment_id": paymentId,
+          "amount_applied": Number(invoiceAmount * 1.18)
         }
-    ]
-  }
-  const applyCredits = await axios.post(`https://www.zohoapis.in/books/v3/invoices/${invoiceId}/credits?organization_id=60014023368`, creditsBody, {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Zoho-oauthtoken ${accessToken}`
+      ]
     }
-  })
-  const invoicePdf = await axios.get(`https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=60014023368&accept=pdf`, {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Zoho-oauthtoken ${accessToken}`
-    },
-    responseType: 'arraybuffer'
-  })
-  const pdfBase64 = Buffer.from(invoicePdf.data, 'binary').toString('base64');
-  const invoice = await InvoiceModel.create({ sellerId: seller._id, invoice_id: invoiceId, pdf: pdfBase64, date: invoiceRes.data.invoice.date, amount: (invoiceAmount * 1.18) });
-  seller.invoices.push(invoice._id);
-  await seller.save();
-  console.log('Completed for seller', seller.name);
-}catch(err){
-  console.log(err);
-}
+    const applyCredits = await axios.post(`https://www.zohoapis.in/books/v3/invoices/${invoiceId}/credits?organization_id=60014023368`, creditsBody, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Zoho-oauthtoken ${accessToken}`
+      }
+    })
+    const invoicePdf = await axios.get(`https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=60014023368&accept=pdf`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Zoho-oauthtoken ${accessToken}`
+      },
+      responseType: 'arraybuffer'
+    })
+    const pdfBase64 = Buffer.from(invoicePdf.data, 'binary').toString('base64');
+    const invoice = await InvoiceModel.create({ sellerId: seller._id, invoice_id: invoiceId, pdf: pdfBase64, date: invoiceRes.data.invoice.date, amount: (invoiceAmount * 1.18) });
+    seller.invoices.push(invoice._id);
+    await seller.save();
+    console.log('Completed for seller', seller.name);
+  } catch (err) {
+    console.log(err);
+  }
 }
 
 
-export async function addAllToZoho(){
-  try{
+export async function addAllToZoho() {
+  try {
     const access_token = await generateAccessToken();
     const sellers = await SellerModel.find({});
     sellers.forEach(async (seller) => {
-      if(!seller.zoho_contact_id){
-        const  creditsBody = {
+      if (!seller.zoho_contact_id) {
+        const creditsBody = {
           "contact_name": seller.name,
         }
         const contact = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, creditsBody, {
@@ -1493,7 +1567,7 @@ export async function addAllToZoho(){
         console.log('Seller added', seller.name, seller.zoho_contact_id);
       }
     });
-  }catch(err){
+  } catch (err) {
     console.log(err);
   }
 }

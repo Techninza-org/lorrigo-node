@@ -187,7 +187,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       if (!externalAPIResponse?.data?.total_success_orders) {
         return res
           .status(200)
-          .send({ valid: false, message: "SmartShip is not servicable for the order!", smartship: externalAPIResponse });
+          .send({ valid: false, message: "Courier Not Serviceable!", smartship: externalAPIResponse });
       } else {
         const shipmentResponseToSave = new ShipmentResponseModel({ order: order._id, response: externalAPIResponse });
         try {

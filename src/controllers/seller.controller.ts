@@ -427,17 +427,20 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
       },
       $push: {
         stage: {
-          action: rechargeWalletInfo.PAYMENT_SUCCESSFUL,
+          action: rechargeWalletViaPhoenpeData.success ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletInfo.PAYMENT_FAILED,
           dateTime: new Date().toISOString()
         }
       }
     });
 
-    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
-      $set: {
-        walletBalance: Number(req.seller.walletBalance) + (Number(rechargeWalletViaPhoenpeData.data.amount) / 100)
-      }
-    })
+    let updatedSeller;
+    if (rechargeWalletViaPhoenpeData.success) {
+       updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
+        $set: {
+          walletBalance: Number(req.seller.walletBalance) + (Number(rechargeWalletViaPhoenpeData.data.amount) / 100)
+        }
+      });
+    }
 
     return res.status(200).send({
       valid: true,
@@ -501,14 +504,14 @@ export const getInoviceById = async (req: ExtendedRequest, res: Response, next: 
 }
 
 export const getCodPrice = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  try{
+  try {
     const seller = await SellerModel.findById(req.seller._id);
-    if(!seller) return res.status(200).send({ valid: false, message: "No Seller found" });
+    if (!seller) return res.status(200).send({ valid: false, message: "No Seller found" });
     const custom_pricing = await CustomPricingModel.findOne({ sellerId: req.seller._id });
     const codPrice = custom_pricing?.codCharge.hard || '';
     return res.status(200).send({ valid: true, codPrice: codPrice });
   }
-  catch(error){
+  catch (error) {
     return next(error)
-  } 
+  }
 }
