@@ -765,10 +765,11 @@ export const rateCalculation = async (
     }
 
     try {
-      // const marutiToken = await getMarutiToken();
-      // if (!marutiToken) {
-      //   throw new Error("Failed to retrieve Maruti token");
-      // }
+      const marutiToken = await getMarutiToken();
+      
+      if (!marutiToken) {
+        throw new Error("Failed to retrieve Maruti token");
+      }
 
       // TODO: check order is for AIR or SURFACE
       const marutiRequestBody = {
@@ -778,33 +779,27 @@ export const rateCalculation = async (
         "deliveryMode": "AIR"
       }
 
-      // const isMarutiServicable = await axios.post(
-      //   `${config.DELHIVERY_API_BASEURL}${APIs.MARUTI_SERVICEABILITY}`,
-
-      //   {
-      //     headers: {
-      //       Authorization: `${marutiToken}`,
-      //     },
-      //   }
-      // );
-
-
-      // if (!isMarutiServicable.data.serviceability) {
-      //   const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
-      //   if (marutiNiceName) {
-      //     const marutiVendors = vendors.filter((vendor) => {
-      //       return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString()
-      //     });
-      //     if (marutiVendors.length > 0) {
-      //       marutiVendors.forEach((vendor) => {
-      //         commonCouriers.push({
-      //           ...vendor.toObject(),
-      //           nickName: marutiNiceName.nickName
-      //         });
-      //       });
-      //     }
-      //   }
-      // }
+      const isMarutiServicable = await axios.post(
+        'https://qaapis.delcaper.com/fulfillment/public/seller/order/check-ecomm-order-serviceability', marutiRequestBody
+      );
+      const isMS = isMarutiServicable.data.data.serviceability
+      
+      if (isMS) {
+        const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
+        if (marutiNiceName) {
+          const marutiVendors = vendors.filter((vendor) => {
+            return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString()
+          });
+          if (marutiVendors.length > 0) {
+            marutiVendors.forEach((vendor) => {
+              commonCouriers.push({
+                ...vendor.toObject(),
+                nickName: marutiNiceName.nickName
+              });
+            });
+          }
+        }
+      }
     } catch (error) {
       console.log("error", error);
     }

@@ -3,6 +3,7 @@ import {
   getDelhiveryToken,
   getDelhiveryToken10,
   getDelhiveryTokenPoint5,
+  getMarutiToken,
   getSMARTRToken,
   getSellerChannelConfig,
   getShiprocketToken,
@@ -938,8 +939,101 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         return next(error);
       }
 
-    } else if (vendorName?.name === "ECOMM") {
+    } else if (vendorName?.name === "MARUTI") {
+      const marutiToken = await getMarutiToken();
+      if (!marutiToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
+      const marutiShipmentPayload = {
+        orderId: order.client_order_reference_id,
+        orderSubtype: "FORWARD",
+        orderCreatedAt: new Date(),
+        currency: "INR",
+        amount: productDetails.taxable_value,
+        weight: order.orderWeight * 1000,
+        lineItems: [
+            {
+                name: "Item",
+                price: productDetails.taxable_value,
+                weight: order.orderWeight * 1000,
+                quantity: 1,
+                sku: "PA1475",  ///////////
+                unitPrice: 255 ///////
+            },
+        ],
+        paymentType: order?.isReverseOrder ? "Pickup" : order.payment_mode ? "COD" : "Prepaid",
+        paymentStatus: "PENDING",
+        subTotal: 255, //////
+        "shippingAddress": {
+            "name": "Piyush",
+            // "email": "piyush@yopmail.com",
+            "phone": "6313131313",
+            "address1": "WTC Tower 1",
+            "address2": "",
+            "city": "Pune",
+            "state": "Maharashtra",
+            "country": "India",
+            "zip": "411032",
+            // "latitude": 27.745435,
+            // "longitude": 77.7543543
+        },
+        "billingAddress": {
+            "name": "Piyush",
+            "email": "piyush@yopmail.com",
+            "phone": "6313131313",
+            "address1": "Sainath nagar ",
+            "address2": "",
+            "city": "Pune",
+            "state": "Maharashtra",
+            "country": "India",
+            "zip": "411032",
+            // "latitude": 27.768768,
+            // "longitude": 77.67876
+        },
+        pickupAddress: {
+            name: hubDetails.name,
+            // email: "rohan@yopmail.com",
+            phone: hubDetails.phone,
+            address1: hubDetails.address1,
+            address2: "",
+            city: hubDetails.city,
+            state:hubDetails.state,
+            country: "India",
+            zip: hubDetails.pincode,
+            // "latitude": 27.745435,
+            // "longitude": 77.7543543
+        },
+        returnAddress: {
+          name: hubDetails.name,
+          // email: "rohan@yopmail.com",
+          phone: hubDetails.phone,
+          address1: hubDetails.rtoAddress,
+          address2: "",
+          city: hubDetails.rtoCity,
+          state:hubDetails.rtoState,
+          country: "India",
+          zip: hubDetails.rtoPincode,
+            // "latitude": 27.768768,
+            // "longitude": 77.67876
+        },
+        gst: 5,
+        deliveryPromise: "AIR",
+        discountUnit: "RUPEES",
+        // "discount": 10,
+        length: order.orderBoxLength,
+        height: order.orderBoxHeight,
+        width: order.orderBoxWidth
+      }
+      try{
+        const res = await axios.post(`https://qaapis.delcaper.com/fulfillment/public/seller/order/ecomm/push-order`, marutiShipmentPayload, {
+          headers: {
+            'Authorization': `Bearer ${marutiToken}`,
+          }
+        }
+      )
+      }catch(err){
+        console.log(err)
+      }
+      
     }
   } catch (error) {
     return next(error);
