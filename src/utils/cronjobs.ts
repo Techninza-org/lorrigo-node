@@ -188,6 +188,30 @@ export const CONNECT_MARUTI = async (): Promise<void> => {
   }
 };
 
+// export const REFRESH_ZOHO_TOKEN = async (): Promise<void> => {
+//   const requestBody = {
+//     refresh_token: config.ZOHO_REFRESH_TOKEN,
+//     client_id: config.ZOHO_CLIENT_ID,
+//     client_secret: config.ZOHO_CLIENT_SECRET,
+//     grant_type: "refresh_token",
+//   };
+
+//   try {
+//     // const response = await axios.post(`https://accounts.zoho.com/oauth/v2/token?refresh_token=${requestBody.refresh_token}&client_id=${requestBody.client_id}&client_secret=${requestBody.client_secret}f&redirect_uri=http://www.lorrigo.in/books&grant_type=refresh_token`, requestBody);
+//     // const responseJSON = response.data;
+//     // console.log(responseJSON);
+//     // await EnvModel.findOneAndUpdate(
+//     //   { name: "ZOHO" },
+//     //   { $set: { nickName: "ZH", token: responseJSON.access_token } },
+//     //   { upsert: true, new: true }
+//     // );
+
+//     // console.log("ZOHO LOGGEDIN: " + responseJSON.access_token);
+//   } catch (err) {
+//     console.log(err);
+//   }
+// }
+
 /**
  * function to run CronJobs currrently one cron is scheduled to update the status of order which are cancelled to "Already Cancelled".
  * @emits CANCEL_REQUESTED_ORDER
@@ -514,28 +538,28 @@ export const track_delivery = async () => {
         // if (!res.data?.success) return;
         // if (res.data.ShipmentData[0].Shipment.Scans[0]) {
 
-          // const shipmentData = res.data.ShipmentData[0];
-          // const shipment_status = shipmentData.Shipment.Status
+        // const shipmentData = res.data.ShipmentData[0];
+        // const shipment_status = shipmentData.Shipment.Status
 
-          // const shipment_status = res.data.data[0].shipmentStatus[0]
-          // const bucketInfo = getDelhiveryBucketing();
+        // const shipment_status = res.data.data[0].shipmentStatus[0]
+        // const bucketInfo = getDelhiveryBucketing();
 
-          // if (bucketInfo.bucket === RTO) {
-          //   const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-          //   await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
-          //   if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
-          // }
+        // if (bucketInfo.bucket === RTO) {
+        //   const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
+        //   await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
+        //   if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
+        // }
 
-          // if ((bucketInfo.bucket !== -1) && (ordersReferenceIdOrders.bucket !== bucketInfo.bucket)) {
-          //   console.log("SmartR bucktinng", bucketInfo);
-          //   ordersReferenceIdOrders.bucket = bucketInfo.bucket;
-          //   ordersReferenceIdOrders.orderStages.push({ stage: bucketInfo.bucket, action: bucketInfo.description, stageDateTime: new Date(), });
-          //   try {
-          //     await ordersReferenceIdOrders.save();
-          //   } catch (error) {
-          //     console.log("Error occurred while saving order status:", error);
-          //   }
-          // }
+        // if ((bucketInfo.bucket !== -1) && (ordersReferenceIdOrders.bucket !== bucketInfo.bucket)) {
+        //   console.log("SmartR bucktinng", bucketInfo);
+        //   ordersReferenceIdOrders.bucket = bucketInfo.bucket;
+        //   ordersReferenceIdOrders.orderStages.push({ stage: bucketInfo.bucket, action: bucketInfo.description, stageDateTime: new Date(), });
+        //   try {
+        //     await ordersReferenceIdOrders.save();
+        //   } catch (error) {
+        //     console.log("Error occurred while saving order status:", error);
+        //   }
+        // }
         // }
       } catch (err) {
         console.log(err);
@@ -574,7 +598,6 @@ async function fetchAndSaveData() {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
-  // track_delivery()
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
@@ -620,7 +643,6 @@ const processShiprocketOrders = async (orders) => {
           Authorization: shiprocketToken
         }
       });
-
 
       if (response.data.tracking_data.shipment_status) {
         const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));

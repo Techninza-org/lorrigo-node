@@ -75,12 +75,13 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
     //       Authorization: `Zoho-oauthtoken ${token}`
     //     }
     //   });
+
+    //   console.log(response.data)
     //   savedUser.zoho_contact_id = response.data.contact.contact_id;
     //   await savedUser.save();
       
     // }catch(err){
     //   console.log(err)
-    //   return next(err)
     // }
 
     return res.send({

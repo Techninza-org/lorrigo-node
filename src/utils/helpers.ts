@@ -21,6 +21,7 @@ import B2BCalcModel from "../models/b2b.calc.model";
 import { B2COrderModel } from "../models/order.model";
 import PaymentTransactionModal from "../models/payment.transaction.modal";
 import InvoiceModel from "../models/invoice.model";
+import ClientBillingModal from "../models/client.billing.modal";
 
 export const validateEmail = (email: string): boolean => {
   return /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)*[a-zA-Z]{2,}))$/.test(
@@ -1447,14 +1448,24 @@ export const calculateSellerInvoiceAmount = async () => {
     } else {
       lastInvoiceDate = lastInvoiceGenerationDate[0].createdAt;
     }
-    console.log(lastInvoiceDate, 'lastInvoiceDate', today, 'today');
-
     sellers.forEach(async (seller) => {
 
       const sellerId = seller._id;
       const zoho_contact_id = seller.zoho_contact_id;
 
-      const orders = await B2COrderModel.find({ sellerId, bucket: 4, "orderStages.stageDateTime": { $gt: lastInvoiceDate, $lt: today }, "orderStages.stage": 4 }).select("productId").populate("productId");
+      // find all orders of the seller which are in bucket 4 and stage 4
+      const allOrders = await B2COrderModel.find({ sellerId, bucket: 4, "orderStages.stageDateTime": { $gt: lastInvoiceDate, $lt: today }, "orderStages.stage": 4 }).select("productId").populate("productId");
+
+      // find All order which are billed
+      const billedAwb = await ClientBillingModal.find({ sellerId, awb: { $in: allOrders.map(item => item.awb) } }).select("awb");
+
+      //  find all orders which are billed
+      const orders = allOrders.filter((order: any) => {
+        return billedAwb.includes(order?.awb);
+      });
+
+      const awbToBeInvoiced = orders.map((order: any) => order.awb);
+
       let totalAmount: number = 0;
       orders.forEach((order) => {
         const { productId } = order;
@@ -1462,12 +1473,14 @@ export const calculateSellerInvoiceAmount = async () => {
         totalAmount += Number(productId.taxable_value);
       });
       const invoiceAmount = Math.round(Number(totalAmount / 1.18));
-      let walletAmount = seller.walletBalance;
-      const spentAmount = Number((invoiceAmount * 1.18));
-      walletAmount -= spentAmount;
-      await seller.updateOne({ walletBalance: walletAmount });
+      if (seller.config?.isPrepaid) {
+        let walletAmount = seller.walletBalance;
+        const spentAmount = Number((invoiceAmount * 1.18));
+        walletAmount -= spentAmount;
+        await seller.updateOne({ walletBalance: walletAmount });
+      }
       if (invoiceAmount > 0) {
-        await createAdvanceAndInvoice(zoho_contact_id, invoiceAmount);
+        await createAdvanceAndInvoice(zoho_contact_id, invoiceAmount, awbToBeInvoiced);
       }
     });
   } catch (err) {
@@ -1475,7 +1488,7 @@ export const calculateSellerInvoiceAmount = async () => {
   }
 };
 
-export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmount: any) {
+export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmount: any, awbToBeInvoiced: any) {
   try {
     const accessToken = await generateAccessToken();
     if (!accessToken) return;
@@ -1537,7 +1550,7 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmoun
       responseType: 'arraybuffer'
     })
     const pdfBase64 = Buffer.from(invoicePdf.data, 'binary').toString('base64');
-    const invoice = await InvoiceModel.create({ sellerId: seller._id, invoice_id: invoiceId, pdf: pdfBase64, date: invoiceRes.data.invoice.date, amount: (invoiceAmount * 1.18) });
+    const invoice = await InvoiceModel.create({ invoicedAwbs: awbToBeInvoiced, isPrepaidInvoice: seller.config?.isPrepaid, sellerId: seller._id, invoice_id: invoiceId, pdf: pdfBase64, date: invoiceRes.data.invoice.date, amount: (invoiceAmount * 1.18) });
     seller.invoices.push(invoice._id);
     await seller.save();
     console.log('Completed for seller', seller.name);

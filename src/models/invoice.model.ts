@@ -6,7 +6,9 @@ const InvoiceSchema = new mongoose.Schema({
     pdf: { type: String, required: false },
     date: { type: String, required: true },
     sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },
-}, {timestamps: true});
+    invoicedAwbs: { type: Array, required: false },
+    isPrepaidInvoice: { type: Boolean, required: true },
+}, { timestamps: true });
 
 const InvoiceModel = mongoose.model("Invoice", InvoiceSchema);
 export default InvoiceModel;
