@@ -188,6 +188,30 @@ export const CONNECT_MARUTI = async (): Promise<void> => {
   }
 };
 
+// export const REFRESH_ZOHO_TOKEN = async (): Promise<void> => {
+//   const requestBody = {
+//     refresh_token: config.ZOHO_REFRESH_TOKEN,
+//     client_id: config.ZOHO_CLIENT_ID,
+//     client_secret: config.ZOHO_CLIENT_SECRET,
+//     grant_type: "refresh_token",
+//   };
+
+//   try {
+//     // const response = await axios.post(`https://accounts.zoho.com/oauth/v2/token?refresh_token=${requestBody.refresh_token}&client_id=${requestBody.client_id}&client_secret=${requestBody.client_secret}f&redirect_uri=http://www.lorrigo.in/books&grant_type=refresh_token`, requestBody);
+//     // const responseJSON = response.data;
+//     // console.log(responseJSON);
+//     // await EnvModel.findOneAndUpdate(
+//     //   { name: "ZOHO" },
+//     //   { $set: { nickName: "ZH", token: responseJSON.access_token } },
+//     //   { upsert: true, new: true }
+//     // );
+
+//     // console.log("ZOHO LOGGEDIN: " + responseJSON.access_token);
+//   } catch (err) {
+//     console.log(err);
+//   }
+// }
+
 /**
  * function to run CronJobs currrently one cron is scheduled to update the status of order which are cancelled to "Already Cancelled".
  * @emits CANCEL_REQUESTED_ORDER
@@ -273,7 +297,7 @@ export const trackOrder_Shiprocket = async () => {
 
     // const orders = (
     //   await B2COrderModel.find({
-    //     awb: "660219077"
+    //     awb: "78068454774"
     //   })
     // ).reverse();
 
@@ -483,64 +507,74 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
 export const track_delivery = async () => {
   const vendorNicknames = await EnvModel.find({ name: { $regex: "DEL" } }).select("nickName")
 
-
   for (let vendor of vendorNicknames) {
     try {
-      console.log(vendor)
-      let delhiveryToken = await getDelhiveryToken();
-
-      if (vendor.nickName === 'DEL.0.5') {
-        delhiveryToken = await getDelhiveryTokenPoint5();
-      } else if (vendor.nickName === 'DEL.10') {
-        delhiveryToken = await getDelhiveryToken10();
-      }
-
-      console.log(delhiveryToken)
-
       const orders = (await B2COrderModel.find({
-        // bucket: { $in: ORDER_TO_TRACK },
-        // carrierName: { $regex: vendor?.nickName }
-        awb: "9145210460633"
+        bucket: { $in: ORDER_TO_TRACK },
+        carrierName: { $regex: vendor?.nickName }
       })).reverse();
 
-      console.log(orders.length, "orders")
+      for (let ordersReferenceIdOrders of orders) {
+        try {
 
-      // for (let ordersReferenceIdOrders of orders) {
-      try {
-        const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}9145210460633`;
-        const res = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
+          let delhiveryToken = await getDelhiveryToken();
+          if (vendor.nickName === 'DEL.0.5') {
+            delhiveryToken = await getDelhiveryTokenPoint5();
+          } else if (vendor.nickName === 'DEL.10') {
+            delhiveryToken = await getDelhiveryToken10();
+          }
 
-        console.log((JSON.stringify(res.data.ShipmentData)), "DELIVERY RESPONSE");
-        // if (!res.data?.success) return;
-        // if (res.data.ShipmentData[0].Shipment.Scans[0]) {
 
-          // const shipmentData = res.data.ShipmentData[0];
-          // const shipment_status = shipmentData.Shipment.Status
+          const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}${ordersReferenceIdOrders?.awb}`;
+          const res = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
 
-          // const shipment_status = res.data.data[0].shipmentStatus[0]
-          // const bucketInfo = getDelhiveryBucketing();
+          if (!res?.data?.ShipmentData?.[0]?.Shipment?.Status) return;
+          if (res?.data?.ShipmentData?.[0]?.Shipment?.Status) {
 
-          // if (bucketInfo.bucket === RTO) {
-          //   const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-          //   await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
-          //   if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
-          // }
+            const shipmentData = res.data.ShipmentData[0];
+            const shipment_status = shipmentData.Shipment.Status
 
-          // if ((bucketInfo.bucket !== -1) && (ordersReferenceIdOrders.bucket !== bucketInfo.bucket)) {
-          //   console.log("SmartR bucktinng", bucketInfo);
-          //   ordersReferenceIdOrders.bucket = bucketInfo.bucket;
-          //   ordersReferenceIdOrders.orderStages.push({ stage: bucketInfo.bucket, action: bucketInfo.description, stageDateTime: new Date(), });
-          //   try {
-          //     await ordersReferenceIdOrders.save();
-          //   } catch (error) {
-          //     console.log("Error occurred while saving order status:", error);
-          //   }
-          // }
-        // }
-      } catch (err) {
-        console.log(err);
+            const bucketInfo = getDelhiveryBucketing(shipment_status.Status);
+
+
+            // Need to update bucketing for below stautus
+            // "Not Picked"
+            // "Cancelled"
+
+            const orderStages = ordersReferenceIdOrders?.orderStages;
+            const lastStageActivity = orderStages?.[orderStages.length - 1]?.activity;
+
+            if (
+              bucketInfo.bucket !== -1 &&
+              orderStages?.length > 0 &&
+              !lastStageActivity?.includes(shipment_status.Instructions)
+            ) {
+              ordersReferenceIdOrders.bucket = bucketInfo;
+              ordersReferenceIdOrders.orderStages.push({
+                stage: bucketInfo,
+                action: shipment_status.Status,
+                stageDateTime: new Date(),
+                activity: shipment_status.Instructions,
+                location: shipment_status.ScannedLocation,
+              });
+              try {
+                await ordersReferenceIdOrders.save();
+              } catch (error) {
+                console.log("Error occurred while saving order status:", error);
+              }
+
+              // if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.bucket !== RTO) {
+              //   const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
+              //   await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
+              //   if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
+              // }
+
+            }
+          }
+        } catch (err) {
+          console.log(err);
+        }
       }
-      // }
 
     } catch (err) {
       console.log("err", err);
@@ -574,11 +608,11 @@ async function fetchAndSaveData() {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
-  // track_delivery()
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
     cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
+    cron.schedule(expression4every30Minutes, track_delivery);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every2Minutes, trackOrder_Smartr);
@@ -621,7 +655,6 @@ const processShiprocketOrders = async (orders) => {
         }
       });
 
-
       if (response.data.tracking_data.shipment_status) {
         const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
         if (
@@ -629,12 +662,13 @@ const processShiprocketOrders = async (orders) => {
           orderWithOrderReferenceId.orderStages.length > 0 &&
           !(orderWithOrderReferenceId.orderStages[orderWithOrderReferenceId.orderStages.length - 1].activity?.includes(response.data.tracking_data?.shipment_track_activities[0]?.activity))
         ) {
+          orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
             action: bucketInfo.description,
             activity: response.data.tracking_data?.shipment_track_activities[0]?.activity,
             location: response.data.tracking_data?.shipment_track_activities[0]?.location,
-            stageDateTime: new Date(),
+            stageDateTime: formatISO(parse(response?.data?.tracking_data?.shipment_track_activities?.[0]?.date, 'yyyy-MM-dd HH:mm:ss', new Date())),
           });
           try {
             await orderWithOrderReferenceId.save();
@@ -642,7 +676,6 @@ const processShiprocketOrders = async (orders) => {
             console.log("Error occurred while saving order status:", error);
           }
 
-          // console.log(orderWithOrderReferenceId.orderStages[orderWithOrderReferenceId.orderStages.length - 1].stage, orderWithOrderReferenceId.orderStages[orderWithOrderReferenceId.orderStages.length - 1].stage !== RTO, "SHIPROCKET BUCKETING");
 
           if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.bucket !== RTO) {
             const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb);

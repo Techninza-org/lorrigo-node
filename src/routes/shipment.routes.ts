@@ -7,13 +7,14 @@ import {
   createShipment,
   getShipemntDetails,
   orderManifest,
-  orderReattempt
+  orderReattempt,
+  createBulkShipment
 } from "../controllers/shipment.controller";
 
 const shipmentRouter = Router();
 
 //@ts-ignore
-shipmentRouter.post("/", createShipment);
+shipmentRouter.post("/", createBulkShipment);
 
 //@ts-ignore
 shipmentRouter.post("/b2b", createB2BShipment);

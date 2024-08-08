@@ -13,6 +13,7 @@ import {
   getB2BCourier,
   updateB2BOrder,
   B2BUpdateBulkPickupOrder,
+  getBulkOrdersCourier,
 } from "../controllers/order.controller";
 import multer from "multer";
 
@@ -60,5 +61,8 @@ orderRouter.get("/courier/b2b/:id", getB2BCourier);
 
 // @ts-ignore
 orderRouter.get("/courier/:type/:vendorType/:id", getCourier);
+
+// @ts-ignore
+orderRouter.post("/courier/:type/:vendorType", getBulkOrdersCourier);
 
 export default orderRouter;

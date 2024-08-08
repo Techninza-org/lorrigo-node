@@ -435,7 +435,7 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
 
     let updatedSeller;
     if (rechargeWalletViaPhoenpeData.success) {
-       updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
+      updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
         $set: {
           walletBalance: Number(req.seller.walletBalance) + (Number(rechargeWalletViaPhoenpeData.data.amount) / 100)
         }
@@ -447,6 +447,102 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
       message: "Wallet recharged successfully",
       rechargeWalletViaPhoenpeData,
       updatedSeller
+    });
+
+  } catch (error) {
+    console.log(error, "error [confirmRechargeWallet]")
+    return next(error)
+  }
+}
+
+export const payInvoiceIntent = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  const sellerId = req.seller._id;
+  const { amount, origin, invoiceId } = req.body;
+  // Phonepe Integration
+
+  try {
+    const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
+    const payload = {
+      "merchantId": envConfig.PHONEPE_MERCHENT_ID,
+      "merchantTransactionId": merchantTransactionId,
+      "merchantUserId": sellerId._id.toString(),
+      "amount": amount * 100, // 100 paise = 1 rupee
+      "redirectUrl": `${origin}/pay/invoice/${invoiceId}/${merchantTransactionId}`,
+      "redirectMode": "REDIRECT",
+      "callbackUrl": `${origin}/pay/invoice/${invoiceId}/${merchantTransactionId}`,
+      "mobileNumber": "9999999999",
+      "paymentInstrument": {
+        "type": "PAY_PAGE"
+      }
+    }
+
+    const bufferObj = Buffer.from(JSON.stringify(payload));
+    const base64Payload = bufferObj.toString('base64');
+    const xVerify = crypto.createHash('sha256').update(base64Payload + APIs.PHONEPE_PAY_API + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
+
+    const options = {
+      method: 'post',
+      url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_PAY_API}`,
+      headers: {
+        'accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-VERIFY': xVerify,
+      },
+      data: {
+        request: base64Payload
+      }
+    };
+
+    const rechargeWalletViaPhoenpe = await axios.request(options);
+    const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
+
+    return res.status(200).send({
+      valid: true,
+      rechargeWalletViaPhoenpeData,
+      url: rechargeWalletViaPhoenpeData.data.instrumentResponse.redirectInfo.url
+    });
+  } catch (error) {
+    console.log(error, "error [rechargeWallet]")
+    return next(error)
+  }
+}
+
+export const confirmInvoicePayment = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = req.seller._id;
+    const { merchantTransactionId, invoiceId } = req.query;
+
+    const xVerify = crypto.createHash('sha256').update(`${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}` + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
+
+    const options = {
+      method: 'get',
+      url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}`,
+      headers: {
+        'accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-VERIFY': xVerify,
+        'X-MERCHANT-ID': envConfig.PHONEPE_MERCHENT_ID,
+      },
+    };
+
+    const rechargeWalletViaPhoenpe = await axios.request(options);
+    const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
+
+
+    let updateSellerInvoice;
+    if (rechargeWalletViaPhoenpeData.success) {
+      updateSellerInvoice = await InvoiceModel.findByIdAndUpdate(invoiceId, {
+        $set: {
+          status: "PAID"
+        }
+      });
+    }
+
+    return res.status(200).send({
+      valid: true,
+      message: "Invoice Paid Successfully",
+      rechargeWalletViaPhoenpeData,
+      updateSellerInvoice
     });
 
   } catch (error) {
@@ -485,7 +581,7 @@ export const getSellerTransactionHistory = async (req: ExtendedRequest, res: Res
 
 export const getInvoices = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const invoices = await InvoiceModel.find({ sellerId: req.seller._id });
+    const invoices = (await InvoiceModel.find({ sellerId: req.seller._id })).reverse();
     return res.status(200).send({ valid: true, invoices });
   } catch (error) {
     return next(error)
