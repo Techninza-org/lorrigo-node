@@ -640,32 +640,32 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
 
   try {
     // Update seller's wallet balance atomically
-    // const updatedSeller = await SellerModel.findOneAndUpdate(
-    //   { _id: sellerId.toString() },
-    //   update,
-    //   { new: true }
-    // );
+    const updatedSeller = await SellerModel.findOneAndUpdate(
+      { _id: sellerId.toString() },
+      update,
+      { new: true }
+    );
 
-    // if (!updatedSeller) {
-    //   throw new Error('Seller not found');
-    // }
+    if (!updatedSeller) {
+      throw new Error('Seller not found');
+    }
 
     // Create payment transaction
-    // await PaymentTransactionModal.create(
-    //   {
-    //     sellerId: sellerId.toString(),
-    //     amount,
-    //     merchantTransactionId,
-    //     code: isCredit ? 'CREDIT' : 'DEBIT',
-    //     desc,
-    //     stage: [{
-    //       action: 'PAYMENT_SUCCESSFUL',
-    //       dateTime: new Date().toISOString()
-    //     }]
-    //   }
-    // );
+    await PaymentTransactionModal.create(
+      {
+        sellerId: sellerId.toString(),
+        amount,
+        merchantTransactionId,
+        code: isCredit ? 'CREDIT' : 'DEBIT',
+        desc,
+        stage: [{
+          action: 'PAYMENT_SUCCESSFUL',
+          dateTime: new Date().toISOString()
+        }]
+      }
+    );
 
-    // return updatedSeller;
+    return updatedSeller;
   } catch (err: any) {
     console.error('Error updating seller wallet balance:', err);
     throw new Error('Failed to update seller wallet balance');
