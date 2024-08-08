@@ -5,6 +5,7 @@ const InvoiceSchema = new mongoose.Schema({
     amount: { type: String, required: false },
     pdf: { type: String, required: false },
     date: { type: String, required: true },
+    status: { type: String, required: false, default: "pending" },
     sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },
     invoicedAwbs: { type: Array, required: false },
     isPrepaidInvoice: { type: Boolean, required: true },

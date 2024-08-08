@@ -1295,7 +1295,7 @@ export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next
       );
     }
 
-    if (orderId) {
+    if (orderId && isValidObjectId(orderId)) {
       queries.push(
         B2COrderModel.findById(orderId).populate(["pickupAddress", "productId"]).lean(),
         B2BOrderModel.findById(orderId).populate(["pickupAddress", "customer"]).lean()
@@ -1333,6 +1333,7 @@ export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next
     return next(error);
   }
 };
+
 type PickupAddress = {
   name: string;
   pincode: string;
