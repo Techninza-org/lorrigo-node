@@ -31,6 +31,7 @@ import {
   calculateRevenue,
   calculateShipmentDetails,
   createDelhiveryShipment,
+  handleMarutiShipment,
   handleSmartShipShipment,
   sendMailToScheduleShipment,
   shipmentAmtCalcToWalletDeduction,
@@ -90,7 +91,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
     const vendorName = await EnvModel.findOne({ nickName: body.carrierNickName });
 
-    const courier = await CourierModel.findOne({ vendor_channel_id: vendorName?._id.toString() });
+    const courier = await CourierModel.findOne({ vendor_channel_id: vendorName?._id.toString(), type: body.type });
 
     if (vendorName?.name === "SMARTSHIP") {
       const smartshipShipment = await handleSmartShipShipment({
@@ -144,12 +145,25 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         hubDetails,
         productDetails,
         sellerGST: req.seller.gstno,
-
+        
       })
       console.log(delhiveryOrderShipment, "delhiveryOrderShipment")
       return res.status(200).send({ valid: true, order: delhiveryOrderShipment });
+    } else if (vendorName?.name === "MARUTI") {
+      const marutiOrderShipment = await handleMarutiShipment({
+        sellerId: req.seller._id,
+        vendorName,
+        type: body.type,
+        body,
+        order,
+        hubDetails,
+        productDetails,
+        sellerGST: req.seller.gstno,
+        carrierId: body.carrierId, 
+        charge: body.charge,
+      });
+      return res.status(200).send({ valid: true, order: marutiOrderShipment });
     }
-
   } catch (error) {
     return next(error);
   }
@@ -244,6 +258,19 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
             hubDetails,
             productDetails,
             sellerGST: req.seller.gstno,
+          });
+        } else if (vendorName?.name === "MARUTI") {
+          shipmentResponse = await handleMarutiShipment({
+            sellerId: req.seller._id,
+            vendorName,
+            type: body.type,
+            body,
+            order,
+            hubDetails,
+            productDetails,
+            sellerGST: req.seller.gstno,
+            carrierId: body.carrierId, 
+            charge: body.charge,
           });
         } else {
           // results.push({ orderId, valid: false, message: "Unsupported vendor" });
@@ -554,6 +581,45 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
         } catch (error) {
           console.error("Error creating Delhivery shipment:", error);
+          return next(error);
+        }
+      }else if(vendorName?.name === "MARUTI"){
+        const marutiToken = await getMarutiToken();
+        if (!marutiToken) return res.status(200).send({ valid: false, message: "Invalid token" });
+
+        const cancelShipmentPayload = {
+          orderId: order.order_reference_id,
+          cancelReason: "Order Cancelled",
+        };
+
+        try {
+          const response = await axios.post(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_CANCEL_ORDER}`, cancelShipmentPayload, {
+            headers: {
+              Authorization: marutiToken,
+            },
+          });
+
+          const marutiShipmentResponse = response.data;
+
+          if (marutiShipmentResponse.status) {
+            if (type === "order") {
+              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+            } else {
+              order.awb = null;
+              order.carrierName = null
+              order.save();
+
+              await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
+              await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
+
+            }
+            // @ts-ignore
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+          }
+          return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
+
+        } catch (error) {
+          console.error("Error canceling Maruti shipment:", error);
           return next(error);
         }
       }

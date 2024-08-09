@@ -13,7 +13,7 @@ import { isValidObjectId } from "mongoose";
 import CustomPricingModel from "../models/custom_pricing.model";
 import envConfig from "./config";
 import { Types } from "mongoose";
-import { CANCELED, DELIVERED, IN_TRANSIT, LOST_DAMAGED, NDR, READY_TO_SHIP, RTO, RETURN_CANCELLATION, RETURN_CANCELLED_BY_CLIENT, RETURN_CANCELLED_BY_SMARTSHIP, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_ORDER_MANIFESTED, RETURN_OUT_FOR_PICKUP, RETURN_PICKED, RETURN_SHIPMENT_LOST } from "./lorrigo-bucketing-info";
+import { CANCELED, DELIVERED, IN_TRANSIT, LOST_DAMAGED, NDR, READY_TO_SHIP, RTO, RETURN_CANCELLATION, RETURN_CANCELLED_BY_CLIENT, RETURN_CANCELLED_BY_SMARTSHIP, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_ORDER_MANIFESTED, RETURN_OUT_FOR_PICKUP, RETURN_PICKED, RETURN_SHIPMENT_LOST, DISPOSED } from "./lorrigo-bucketing-info";
 import ChannelModel from "../models/channel.model";
 import HubModel from "../models/hub.model";
 import { calculateRateAndPrice, regionToZoneMappingLowercase } from "./B2B-helper";
@@ -774,23 +774,51 @@ export const rateCalculation = async (
       }
 
       // TODO: check order is for AIR or SURFACE
-      const marutiRequestBody = {
+
+      const marutiRequestBodySurface = {
+        "fromPincode": pickupPincode,
+        "toPincode": deliveryPincode,
+        "isCodOrder": paymentType === 1,
+        "deliveryMode": "SURFACE"
+      }
+
+      const isMarutiServicableSurface = await axios.post(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_SERVICEABILITY}`, marutiRequestBodySurface);
+      const isMSSurface = isMarutiServicableSurface.data.data.serviceability
+      
+      if (isMSSurface) {
+        const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
+        if (marutiNiceName) {
+          
+          const marutiVendors = vendors.filter((vendor) => {
+            return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString() && vendor?.type === 'surface';
+          });
+          if (marutiVendors.length > 0) {
+            marutiVendors.forEach((vendor) => {
+              commonCouriers.push({
+                ...vendor.toObject(),
+                nickName: marutiNiceName.nickName
+              });
+            });
+          }
+        }
+      }
+
+      const marutiRequestBodyAir = {
         "fromPincode": pickupPincode,
         "toPincode": deliveryPincode,
         "isCodOrder": paymentType === 1,
         "deliveryMode": "AIR"
       }
 
-      const isMarutiServicable = await axios.post(
-        'https://qaapis.delcaper.com/fulfillment/public/seller/order/check-ecomm-order-serviceability', marutiRequestBody
-      );
-      const isMS = isMarutiServicable.data.data.serviceability
+      const isMarutiServicableAir = await axios.post(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_SERVICEABILITY}`, marutiRequestBodyAir);
+      const isMSAir = isMarutiServicableAir.data.data.serviceability
       
-      if (isMS) {
+      if (isMSAir) {
         const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
         if (marutiNiceName) {
           const marutiVendors = vendors.filter((vendor) => {
-            return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString()
+            
+            return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString() && vendor?.type === 'air';
           });
           if (marutiVendors.length > 0) {
             marutiVendors.forEach((vendor) => {
@@ -1098,6 +1126,60 @@ export async function getZohoConfig() {
     return false;
   }
 
+}
+
+export function getMarutiBucketing(status: number){
+  const marutiStatusMapping = {
+    6: { bucket: IN_TRANSIT, description: "Shipped" },
+    7: { bucket: DELIVERED, description: "Delivered" },
+    8: { bucket: CANCELED, description: "Canceled" },
+    9: { bucket: RTO, description: "RTO Initiated" },
+    10: { bucket: RTO, description: "RTO Delivered" },
+    12: { bucket: LOST_DAMAGED, description: "Lost" },
+    13: { bucket: READY_TO_SHIP, description: "Pickup Error"},
+    14: { bucket: RTO, description: "RTO Acknowledged" },
+    15: { bucket: READY_TO_SHIP, description: "Pickup Rescheduled" },
+    16: { bucket: CANCELED, description: "Cancellation Requested" },
+    17: { bucket: IN_TRANSIT, description: "Out For Delivery" },
+    18: { bucket: IN_TRANSIT, description: "In Transit" },
+    19: { bucket: READY_TO_SHIP, description: "Out For Pickup" },
+    20: { bucket: READY_TO_SHIP, description: "Pickup Exception" },
+    21: { bucket: NDR, description: "Undelivered" },
+    22: { bucket: IN_TRANSIT, description: "Delayed" },
+    23: { bucket: DELIVERED, description: "Partial Delivered" },
+    24: { bucket: LOST_DAMAGED, description: "Destroyed" },
+    25: { bucket: LOST_DAMAGED, description: "Damaged" },
+    26: { bucket: DELIVERED, description: "Fulfilled" },
+    27: { bucket: READY_TO_SHIP, description: "Pickup Booked" },
+    38: { bucket: IN_TRANSIT, description: "Reached At Destination Hub" },
+    39: { bucket: IN_TRANSIT, description: "Misrouted" },
+    40: { bucket: RTO, description: "RTO_NDR" },
+    41: { bucket: RTO, description: "RTO_OFD" },
+    42: { bucket: IN_TRANSIT, description: "Picked Up" },
+    43: { bucket: DELIVERED, description: "Self Fulfilled" },
+    44: { bucket: DISPOSED, description: "Disposed Off" },
+    45: { bucket: CANCELED, description: "Cancelled Before Dispatched" },
+    46: { bucket: RTO, description: "RTO In Intransit" },
+    48: { bucket: IN_TRANSIT, description: "Reached Warehouse" },
+    50: { bucket: IN_TRANSIT, description: "In Flight" },
+    51: { bucket: IN_TRANSIT, description: "Handover To Courier" },
+    52: { bucket: READY_TO_SHIP, description: "Shipment Booked" },
+    54: { bucket: IN_TRANSIT, description: "In Transit Overseas" },
+    55: { bucket: IN_TRANSIT, description: "Connection Aligned" },
+    56: { bucket: IN_TRANSIT, description: "REACHED WAREHOUSE OVERSEAS" },
+    57: { bucket: IN_TRANSIT, description: "Custom Cleared Overseas" },
+    67: { bucket: READY_TO_SHIP, description: "FC MANIFEST GENERATED" },
+    75: { bucket: RTO, description: "RTO_LOCK" },
+    76: { bucket: IN_TRANSIT, description: "UNTRACEABLE" },
+    77: { bucket: NDR, description: "ISSUE_RELATED_TO_THE_RECIPIENT" },
+    78: { bucket: RTO, description: "REACHED_BACK_AT_SELLER_CITY" },
+  };
+  return (
+    marutiStatusMapping[status as keyof typeof marutiStatusMapping] || {
+      bucket: -1,
+      description: "Status code not found",
+    }
+  );
 }
 
 export function getShiprocketBucketing(status: number) {
