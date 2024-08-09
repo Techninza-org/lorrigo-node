@@ -77,6 +77,7 @@ const ZOHO_REFRESH_TOKEN = process.env.ZOHO_REFRESH_TOKEN;
 const MARUTI_BASEURL = process.env.MARUTI_BASEURL;
 const MARUTI_USERNAME = process.env.MARUTI_USERNAME;
 const MARUTI_PASSWORD = process.env.MARUTI_PASSWORD;
+const MARUTI_REFRESH_TOKEN = process.env.MARUTI_REFRESH_TOKEN;
 
 const envConfig = {
   NODE_ENV,
@@ -121,6 +122,7 @@ const envConfig = {
   MARUTI_BASEURL,
   MARUTI_USERNAME,
   MARUTI_PASSWORD,
+  MARUTI_REFRESH_TOKEN,
 
 };
 

@@ -18,6 +18,7 @@ import { getNextToNextFriday } from ".";
 import fs from "fs"
 import path from "path"
 import { setTimeout } from 'timers/promises';
+import envConfig from "../utils/config";
 
 
 /**
@@ -167,26 +168,23 @@ export const CONNECT_SMARTR = async (): Promise<void> => {
 };
 
 export const CONNECT_MARUTI = async (): Promise<void> => {
-  const requestBody = {
-    email: config.MARUTI_USERNAME,
-    password: config.MARUTI_PASSWORD,
-    vendorType: "SELLER"
-  };
-
-  try {
-    const response = await axios.post("https://qaapis.delcaper.com/auth/login", requestBody);
-    const responseJSON = response.data.data;
-    await EnvModel.findOneAndUpdate(
-      { name: "MARUTI" },
-      { $set: { nickName: "MRT", token: responseJSON.accessToken, refreshToken: responseJSON.refreshToken } },
-      { upsert: true, new: true }
-    );
-
-    console.log("MARUTI LOGGEDIN: " + responseJSON.accessToken);
-  } catch (err) {
-    console.log(err);
-  }
-};
+    try{
+      const response = await axios.get(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_ACCESS}`, {
+        headers: {
+          Authorization: `Bearer ${config.MARUTI_REFRESH_TOKEN}`,
+        },
+      });
+      const accessToken = response.data.data.accessToken;
+      await EnvModel.findOneAndUpdate(
+        { name: "MARUTI" },
+        { $set: { nickName: "MRT", token: accessToken } },
+        { upsert: true, new: true }
+      );
+      console.log("MARUTI LOGGEDIN: " + accessToken);
+    }catch(err){
+      console.log(err);
+    }
+}
 
 // export const REFRESH_ZOHO_TOKEN = async (): Promise<void> => {
 //   const requestBody = {
@@ -621,6 +619,7 @@ export default async function runCron() {
     const expression4every59Minutes = "59 * * * *";
     const expression4every9_59Hr = "59 9 * * *";
     const expression4everyFriday = "0 0 * * 5";
+    const expression4every12Hrs = "0 0,12 * * *";
 
     cron.schedule(expression4every9_59Hr, fetchAndSaveData);
     cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
@@ -628,6 +627,7 @@ export default async function runCron() {
     cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
     cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
     cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);
+    cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
 
     Logger.log("Cron jobs scheduled successfully");
   } else {
