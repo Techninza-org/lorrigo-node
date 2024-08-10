@@ -991,7 +991,7 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
       Object.assign(orderPayload, {
         shipping_is_billing: true,
         shipping_customer_name: orderDetails?.sellerDetails.get("sellerName") || "",
-        shipping_last_name: orderDetails?.sellerDetails.get("sellerName") || "",
+        shipping_last_name: " ",
         shipping_address: orderDetails?.sellerDetails.get("sellerAddress"),
         shipping_address_2: "",
         shipping_city: orderDetails?.sellerDetails.get("sellerCity"),

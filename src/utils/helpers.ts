@@ -539,6 +539,7 @@ export const rateCalculation = async (
     }
 
     const vendors = await CourierModel.find(query);
+
     let commonCouriers: any[] = [];
 
     try {
@@ -546,8 +547,6 @@ export const rateCalculation = async (
       if (!token) return [{ message: "Invalid Shiprocket token" }];
 
       const url = envConfig.SHIPROCKET_API_BASEURL + APIs.SHIPROCKET_ORDER_COURIER + `/?pickup_postcode=${pickupPincode}&delivery_postcode=${deliveryPincode}&weight=${weight}&cod=0&order_id=${shiprocketOrderID}`;
-
-      console.log(url, "url")
 
       const config = {
         headers: {
@@ -564,7 +563,9 @@ export const rateCalculation = async (
 
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
       vendors?.forEach((vendor: any) => {
+
         const courier = courierCompanies?.find((company: { courier_company_id: number; }) => company.courier_company_id === vendor.carrierID);
+
         if (courier && shiprocketNiceName) {
           const shiprocketVendors = vendors.filter((vendor) => {
             return courier.courier_company_id === vendor.carrierID;

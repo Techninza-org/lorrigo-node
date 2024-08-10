@@ -136,7 +136,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             // "is_return_qc": "1",
             // "return_reason_id": "0",
             order_meta: {
-              preferred_carriers: [body.carrierId],
+              preferred_carriers: [smartShipCourier?.carrierID || ""],
             },
             product_details: [
               {
