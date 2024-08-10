@@ -804,7 +804,7 @@ export async function handleSmartShipShipment(
         // "is_return_qc": "1",
         // "return_reason_id": "0",
         order_meta: {
-          preferred_carriers: [carrierId],
+          preferred_carriers: [smartShipCourier?.carrierID],
         },
         product_details: [
           {
@@ -1036,7 +1036,7 @@ export async function shiprocketShipment({ sellerId, carrierId, order, charge, v
 
     const genAWBPayload = {
       shipment_id: order.shiprocket_shipment_id,
-      courier_id: carrierId.toString(),
+      courier_id: shiprocketCourier?.carrierID?.toString(),
       is_return: order.isReverseOrder ? 1 : 0,
     }
     try {

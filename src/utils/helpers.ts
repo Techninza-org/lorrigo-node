@@ -564,7 +564,10 @@ export const rateCalculation = async (
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
       vendors?.forEach((vendor: any) => {
 
-        const courier = courierCompanies?.find((company: { courier_company_id: number; }) => company.courier_company_id === vendor.carrierID);
+        const courier = courierCompanies?.find((company: { courier_company_id: number; }) => {
+          if (company.courier_company_id === 369) return false;
+          return company.courier_company_id === vendor.carrierID
+        });
 
         if (courier && shiprocketNiceName) {
           const shiprocketVendors = vendors.filter((vendor) => {
@@ -597,7 +600,6 @@ export const rateCalculation = async (
         []
       );
 
-      // console.log(smartShipCouriers[0], "smartShipCouriers")
       console.log(smartShipCouriers.map((item: any) => {
         return [item.carrier_id, item.carrier_name]
       }), "smartShipCouriers")
@@ -606,7 +608,9 @@ export const rateCalculation = async (
 
 
       vendors?.forEach((vendor: any) => {
-        const courier = smartShipCouriers?.find((company: { carrier_id: string; }) => Number(company.carrier_id) === vendor.carrierID);
+        const courier = smartShipCouriers?.find((company: { carrier_id: string; }) => {
+          return Number(company.carrier_id) === vendor.carrierID
+        });
         if (courier && smartShipNiceName) {
           const smartShipVendors = vendors.filter((vendor) => {
             return vendor.carrierID === Number(courier.carrier_id);
