@@ -277,7 +277,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         const genAWBPayload = {
           shipment_id: order.shiprocket_shipment_id,
-          courier_id: body?.carrierId.toString(),
+          courier_id: shiprocketCourier?.carrierID.toString(),
           is_return: order.isReverseOrder ? 1 : 0,
         }
         try {
