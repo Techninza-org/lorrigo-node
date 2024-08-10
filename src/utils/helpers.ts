@@ -820,7 +820,7 @@ export const rateCalculation = async (
       rtoCharges: number;
       type: string;
       expectedPickup: string;
-      carrierID: number;
+      carrierID: string;
       order_zone: string;
       nickName?: string;
 
@@ -926,7 +926,7 @@ export const rateCalculation = async (
         charge: totalCharge,
         type: cv.type,
         expectedPickup,
-        carrierID: cv.carrierID,
+        carrierID: cv._id,
         order_zone,
       });
     }

@@ -760,7 +760,7 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
 export async function handleSmartShipShipment(
   { productDetails, sellerId, sellerGST, hubDetails, carrierId, order, charge, vendorName }:
     { productDetails: any, sellerId: string, sellerGST: string, hubDetails: any, carrierId: string, order: any, charge: number, vendorName: any }) {
-  const smartShipCourier = await CourierModel.findOne({ carrierID: carrierId });
+  const smartShipCourier = await CourierModel.findById(carrierId);
   const productValueWithTax =
     Number(productDetails.taxable_value) +
     (Number(productDetails.tax_rate) / 100) * Number(productDetails.taxable_value);
@@ -1030,7 +1030,7 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
 
 export async function shiprocketShipment({ sellerId, carrierId, order, charge, vendorName }: { sellerId: string, carrierId: string, order: any, charge: number, vendorName: any }) {
   try {
-    const shiprocketCourier = await CourierModel.findOne({ carrierID: carrierId });
+    const shiprocketCourier = await CourierModel.findById(carrierId)
 
     const shiprocketToken = await getShiprocketToken();
 
