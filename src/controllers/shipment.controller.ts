@@ -113,6 +113,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
       let orderWeight = order?.orderWeight * 1000;
 
+      console.log(smartShipCourier?.carrierID)
+
+
       const shipmentAPIBody = {
         request_info: {
           run_type: "create",
@@ -356,7 +359,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           order.channelFulfillmentId = fulfillmentOrderId;
           await order.save();
-          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           return res.status(200).send({ valid: true, order });
         } catch (error: any) {
           console.log(error, "error");
