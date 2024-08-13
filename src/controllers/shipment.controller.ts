@@ -523,7 +523,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         return next(error);
       }
     } else if (vendorName?.name === "DELHIVERY") {
-      const delhiveryToken = await await getDelhiveryToken();
+      const delhiveryToken = await getDelhiveryToken();
       if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
       const delhiveryShipmentPayload = {
@@ -566,7 +566,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             },
           ],
           pickup_location: {
-            name: hubDetails.name,
+            name: hubDetails.name?.trim(),
             add: hubDetails.address1,
             city: hubDetails.city,
             pin_code: hubDetails.pincode,
@@ -706,7 +706,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             },
           ],
           pickup_location: {
-            name: hubDetails.name,
+            name: hubDetails.name?.trim(),
             add: hubDetails.address1,
             city: hubDetails.city,
             pin_code: hubDetails.pincode,
@@ -848,7 +848,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             },
           ],
           pickup_location: {
-            name: hubDetails.name,
+            name: hubDetails.name?.trim(),
             add: hubDetails.address1,
             city: hubDetails.city,
             pin_code: hubDetails.pincode,
@@ -1155,6 +1155,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
               await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
               await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
             } else {
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
               order.awb = null;
               order.carrierName = null;
               order.save();
@@ -1162,7 +1163,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
               await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
               await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
               // @ts-ignore
-              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
             }
 
             return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
@@ -1185,6 +1185,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
               },
             }
           );
+          await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           if (type === "order") {
             await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
           } else {
@@ -1196,7 +1197,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
             await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
           }
           // @ts-ignore
-          await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
         } catch (error) {
           return next(error);
@@ -1223,12 +1223,11 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           console.log(response, "response")
           const isCancelled = response.data[0].success;
           if (isCancelled) {
+            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
             order.awb = null;
             order.carrierName = null
             await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
             await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
-            // @ts-ignore
-            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
             order.save();
           }
         }
@@ -1256,7 +1255,9 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           if (delhiveryShipmentResponse.status) {
             if (type === "order") {
               await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
             } else {
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
               order.awb = null;
               order.carrierName = null
               order.save();
@@ -1266,7 +1267,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
             }
             // @ts-ignore
-            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           }
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
 
@@ -1296,7 +1296,9 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           if (delhiveryShipmentResponse.status) {
             if (type === "order") {
               await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
             } else {
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
               order.awb = null;
               order.carrierName = null
               order.save();
@@ -1306,7 +1308,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
             }
             // @ts-ignore
-            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           }
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
 
@@ -1336,7 +1337,9 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           if (delhiveryShipmentResponse.status) {
             if (type === "order") {
               await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
             } else {
+              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
               order.awb = null;
               order.carrierName = null
               order.save();
@@ -1346,7 +1349,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
             }
             // @ts-ignore
-            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           }
           return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
 
