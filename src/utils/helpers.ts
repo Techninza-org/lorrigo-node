@@ -496,7 +496,8 @@ export const rateCalculation = async (
   seller_id: any,
   collectableAmount?: any,
   hubId?: number,
-  isReversedOrder?: boolean
+  isReversedOrder?: boolean,
+  orderRefId?: string,
 ) => {
   try {
     const numPaymentType = Number(paymentType);
@@ -557,7 +558,7 @@ export const rateCalculation = async (
       const response = await axios.get(url, config);
       const courierCompanies = response?.data?.data?.available_courier_companies;
 
-      console.log("[Shiprocket Heavy weight Couries]", courierCompanies.map((item: any) => {
+      console.log("[Shiprocket Heavy weight Couries]", courierCompanies?.map((item: any) => {
         return [item.courier_company_id, item.courier_name]
       }))
 
@@ -828,6 +829,7 @@ export const rateCalculation = async (
       carrierID: string;
       order_zone: string;
       nickName?: string;
+      orderRefId?: string;
 
     }[] = [];
 
@@ -933,6 +935,7 @@ export const rateCalculation = async (
         expectedPickup,
         carrierID: cv._id,
         order_zone,
+        orderRefId: orderRefId
       });
     }
 

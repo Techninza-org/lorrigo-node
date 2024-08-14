@@ -626,6 +626,7 @@ function calculateTotalCharge(
 
 export async function updateSellerWalletBalance(sellerId: string, amount: number, isCredit: boolean, desc: string) {
   // Validate amount
+  if (amount <= 0) return
   if (typeof amount !== 'number' || isNaN(amount)) {
     throw new Error('Invalid amount');
   }
@@ -1284,8 +1285,8 @@ export async function smartRShipment(
 }
 
 export async function createDelhiveryShipment(
-  { vendorName, order, sellerGST, hubDetails, productDetails, courier, body, sellerId }:
-    { vendorName: any, order: any, sellerGST: string, hubDetails: any, productDetails: any, courier: any, body: any, sellerId: any }
+  { vendorName, order, sellerGST, hubDetails, productDetails, courier, sellerId, charge }:
+    { vendorName: any, order: any, sellerGST: string, hubDetails: any, productDetails: any, courier: any, charge: any, sellerId: any }
 ) {
   const getDelhiveryTkn = async (type: any) => {
     switch (type) {
@@ -1438,7 +1439,7 @@ export async function createDelhiveryShipment(
 
       order.awb = delhiveryRes?.waybill;
       order.carrierName = courier?.name + " " + (vendorName?.nickName);
-      order.shipmentCharges = body.charge;
+      order.shipmentCharges = charge;
       order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
 
       updateOrderStages(order);
@@ -1452,7 +1453,7 @@ export async function createDelhiveryShipment(
       }
 
       await order.save();
-      await updateSellerWalletBalance(sellerId, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+      await updateSellerWalletBalance(sellerId, Number(charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
       return order
     } catch (error: any) {
       console.error("Error creating Delhivery shipment:", error);

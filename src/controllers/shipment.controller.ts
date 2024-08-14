@@ -963,12 +963,12 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
       return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
     }
 
-    if (!isValidPayload(body, ["orderIds", "orderType", "carrierId", "carrierNickName", "charge"])) {
+    if (!isValidPayload(body, ["orderIdWCharges", "orderType", "carrierId", "carrierNickName"])) {
       return res.status(200).send({ valid: false, message: "Invalid payload" });
     }
-    if (!Array.isArray(body.orderIds) || body.orderIds.some((orderId: string) => !isValidObjectId(orderId))) {
-      return res.status(200).send({ valid: false, message: "Invalid orderIds" });
-    }
+    // if (!Array.isArray(body.orderIds) || body.orderIdWCharges.some((orderIdWCharge: any) => !isValidObjectId(orderIdWCharge.orderRefId))) {
+    //   return res.status(200).send({ valid: false, message: "Invalid orderIds" });
+    // }
     if (body.orderType !== 0) return res.status(200).send({ valid: false, message: "Invalid orderType" });
 
     // if (!req.seller?.gstno) return res.status(200).send({ valid: false, message: "KYC required. (GST number) " });
@@ -979,24 +979,26 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
     const courier = await CourierModel.findOne({ vendor_channel_id: vendorName?._id.toString() });
     if (!courier) return res.status(200).send({ valid: false, message: "Courier not found" });
 
+    console.log(body.orderIdWCharges, "body.orderIdWCharges")
+
     const results = [];
-    for (const orderId of body.orderIds) {
+    for (const orderWChargees of body.orderIdWCharges) {
       try {
-        const order = await B2COrderModel.findOne({ _id: orderId, sellerId });
+        const order = await B2COrderModel.findOne({ order_reference_id: orderWChargees.orderRefId, sellerId });
         if (!order) {
-          results.push({ orderId, valid: false, message: "Order not found" });
+          results.push({ orderRefId: orderWChargees.orderRefId, valid: false, message: "Order not found" });
           continue;
         }
 
         const hubDetails = await HubModel.findById(order.pickupAddress);
         if (!hubDetails) {
-          results.push({ orderId, valid: false, message: "Hub details not found" });
+          results.push({ orderRefId: orderWChargees.orderRefId, valid: false, message: "Hub details not found" });
           continue;
         }
 
         const productDetails = await ProductModel.findById(order.productId);
         if (!productDetails) {
-          results.push({ orderId, valid: false, message: "Product details not found" });
+          results.push({ orderRefId: orderWChargees.orderRefId, valid: false, message: "Product details not found" });
           continue;
         }
 
@@ -1006,7 +1008,7 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
             sellerId,
             sellerGST: req.seller.gstno,
             vendorName,
-            charge: body.charge,
+            charge: orderWChargees.charges,
             order,
             carrierId: body.carrierId,
             hubDetails,
@@ -1016,7 +1018,7 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
           shipmentResponse = await shiprocketShipment({
             sellerId,
             vendorName,
-            charge: body.charge,
+            charge: orderWChargees.charges,
             order,
             carrierId: body.carrierId,
           });
@@ -1026,7 +1028,7 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
             sellerGST: req.seller.gstno,
             vendorName,
             courier,
-            charge: body.charge,
+            charge: orderWChargees.charges,
             order,
             carrierId: body.carrierId,
             hubDetails,
@@ -1037,7 +1039,7 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
             sellerId,
             vendorName,
             courier,
-            body,
+            charge: orderWChargees.charges,
             order,
             hubDetails,
             productDetails,
@@ -1048,9 +1050,9 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
           continue;
         }
 
-        results.push({ orderId, valid: true, shipmentResponse });
+        results.push({ orderWChargees, valid: true, shipmentResponse });
       } catch (error) {
-        results.push({ orderId, valid: false, message: "Error creating shipment", error });
+        results.push({ orderWChargees, valid: false, message: "Error creating shipment", error });
       }
     }
 
@@ -1158,6 +1160,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
               await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
               order.awb = null;
               order.carrierName = null;
+              order.shipmentCharges = null;
               order.save();
 
               await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
@@ -1191,6 +1194,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           } else {
             order.awb = null;
             order.carrierName = null;
+            order.shipmentCharges = null;
             order.save();
 
             await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
@@ -1220,12 +1224,12 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           }
           )
           const response = cancelOrder?.data
-          console.log(response, "response")
           const isCancelled = response.data[0].success;
           if (isCancelled) {
             await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
             order.awb = null;
             order.carrierName = null
+            order.shipmentCharges = null;
             await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
             await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
             order.save();
@@ -1260,6 +1264,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
               await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
               order.awb = null;
               order.carrierName = null
+              order.shipmentCharges = null;
               order.save();
 
               await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
@@ -1301,6 +1306,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
               await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
               order.awb = null;
               order.carrierName = null
+              order.shipmentCharges = null;
               order.save();
 
               await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
@@ -1342,6 +1348,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
               await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
               order.awb = null;
               order.carrierName = null
+              order.shipmentCharges = null;
               order.save();
 
               await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
