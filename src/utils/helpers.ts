@@ -496,7 +496,8 @@ export const rateCalculation = async (
   seller_id: any,
   collectableAmount?: any,
   hubId?: number,
-  isReversedOrder?: boolean
+  isReversedOrder?: boolean,
+  orderRefId?: string,
 ) => {
   try {
     const numPaymentType = Number(paymentType);
@@ -539,6 +540,7 @@ export const rateCalculation = async (
     }
 
     const vendors = await CourierModel.find(query);
+
     let commonCouriers: any[] = [];
 
     try {
@@ -546,8 +548,6 @@ export const rateCalculation = async (
       if (!token) return [{ message: "Invalid Shiprocket token" }];
 
       const url = envConfig.SHIPROCKET_API_BASEURL + APIs.SHIPROCKET_ORDER_COURIER + `/?pickup_postcode=${pickupPincode}&delivery_postcode=${deliveryPincode}&weight=${weight}&cod=0&order_id=${shiprocketOrderID}`;
-
-      console.log(url, "url")
 
       const config = {
         headers: {
@@ -558,13 +558,18 @@ export const rateCalculation = async (
       const response = await axios.get(url, config);
       const courierCompanies = response?.data?.data?.available_courier_companies;
 
-      console.log("[Shiprocket Heavy weight Couries]", courierCompanies.map((item: any) => {
+      console.log("[Shiprocket Heavy weight Couries]", courierCompanies?.map((item: any) => {
         return [item.courier_company_id, item.courier_name]
       }))
 
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
       vendors?.forEach((vendor: any) => {
-        const courier = courierCompanies?.find((company: { courier_company_id: number; }) => company.courier_company_id === vendor.carrierID);
+
+        const courier = courierCompanies?.find((company: { courier_company_id: number; }) => {
+          if (company.courier_company_id === 369) return false;
+          return company.courier_company_id === vendor.carrierID
+        });
+
         if (courier && shiprocketNiceName) {
           const shiprocketVendors = vendors.filter((vendor) => {
             return courier.courier_company_id === vendor.carrierID;
@@ -596,7 +601,6 @@ export const rateCalculation = async (
         []
       );
 
-      // console.log(smartShipCouriers[0], "smartShipCouriers")
       console.log(smartShipCouriers.map((item: any) => {
         return [item.carrier_id, item.carrier_name]
       }), "smartShipCouriers")
@@ -605,7 +609,9 @@ export const rateCalculation = async (
 
 
       vendors?.forEach((vendor: any) => {
-        const courier = smartShipCouriers?.find((company: { carrier_id: string; }) => Number(company.carrier_id) === vendor.carrierID);
+        const courier = smartShipCouriers?.find((company: { carrier_id: string; }) => {
+          return Number(company.carrier_id) === vendor.carrierID
+        });
         if (courier && smartShipNiceName) {
           const smartShipVendors = vendors.filter((vendor) => {
             return vendor.carrierID === Number(courier.carrier_id);
@@ -815,9 +821,10 @@ export const rateCalculation = async (
       rtoCharges: number;
       type: string;
       expectedPickup: string;
-      carrierID: number;
+      carrierID: string;
       order_zone: string;
       nickName?: string;
+      orderRefId?: string;
 
     }[] = [];
 
@@ -921,8 +928,9 @@ export const rateCalculation = async (
         charge: totalCharge,
         type: cv.type,
         expectedPickup,
-        carrierID: cv.carrierID,
+        carrierID: cv._id,
         order_zone,
+        orderRefId: orderRefId
       });
     }
 

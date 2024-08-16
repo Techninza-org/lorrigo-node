@@ -626,6 +626,7 @@ function calculateTotalCharge(
 
 export async function updateSellerWalletBalance(sellerId: string, amount: number, isCredit: boolean, desc: string) {
   // Validate amount
+  if (amount <= 0) return
   if (typeof amount !== 'number' || isNaN(amount)) {
     throw new Error('Invalid amount');
   }
@@ -760,7 +761,7 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
 export async function handleSmartShipShipment(
   { productDetails, sellerId, sellerGST, hubDetails, carrierId, order, charge, vendorName }:
     { productDetails: any, sellerId: string, sellerGST: string, hubDetails: any, carrierId: string, order: any, charge: number, vendorName: any }) {
-  const smartShipCourier = await CourierModel.findOne({ carrierID: carrierId });
+  const smartShipCourier = await CourierModel.findById(carrierId);
   const productValueWithTax =
     Number(productDetails.taxable_value) +
     (Number(productDetails.tax_rate) / 100) * Number(productDetails.taxable_value);
@@ -804,7 +805,7 @@ export async function handleSmartShipShipment(
         // "is_return_qc": "1",
         // "return_reason_id": "0",
         order_meta: {
-          preferred_carriers: [carrierId],
+          preferred_carriers: [smartShipCourier?.carrierID],
         },
         product_details: [
           {
@@ -991,7 +992,7 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
       Object.assign(orderPayload, {
         shipping_is_billing: true,
         shipping_customer_name: orderDetails?.sellerDetails.get("sellerName") || "",
-        shipping_last_name: orderDetails?.sellerDetails.get("sellerName") || "",
+        shipping_last_name: " ",
         shipping_address: orderDetails?.sellerDetails.get("sellerAddress"),
         shipping_address_2: "",
         shipping_city: orderDetails?.sellerDetails.get("sellerCity"),
@@ -1030,13 +1031,13 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
 
 export async function shiprocketShipment({ sellerId, carrierId, order, charge, vendorName }: { sellerId: string, carrierId: string, order: any, charge: number, vendorName: any }) {
   try {
-    const shiprocketCourier = await CourierModel.findOne({ carrierID: carrierId });
+    const shiprocketCourier = await CourierModel.findById(carrierId)
 
     const shiprocketToken = await getShiprocketToken();
 
     const genAWBPayload = {
       shipment_id: order.shiprocket_shipment_id,
-      courier_id: carrierId.toString(),
+      courier_id: shiprocketCourier?.carrierID?.toString(),
       is_return: order.isReverseOrder ? 1 : 0,
     }
     try {
@@ -1284,8 +1285,8 @@ export async function smartRShipment(
 }
 
 export async function createDelhiveryShipment(
-  { vendorName, order, sellerGST, hubDetails, productDetails, courier, body, sellerId }:
-    { vendorName: any, order: any, sellerGST: string, hubDetails: any, productDetails: any, courier: any, body: any, sellerId: any }
+  { vendorName, order, sellerGST, hubDetails, productDetails, courier, sellerId, charge }:
+    { vendorName: any, order: any, sellerGST: string, hubDetails: any, productDetails: any, courier: any, charge: any, sellerId: any }
 ) {
   const getDelhiveryTkn = async (type: any) => {
     switch (type) {
@@ -1438,7 +1439,7 @@ export async function createDelhiveryShipment(
 
       order.awb = delhiveryRes?.waybill;
       order.carrierName = courier?.name + " " + (vendorName?.nickName);
-      order.shipmentCharges = body.charge;
+      order.shipmentCharges = charge;
       order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
 
       updateOrderStages(order);
@@ -1452,7 +1453,7 @@ export async function createDelhiveryShipment(
       }
 
       await order.save();
-      await updateSellerWalletBalance(sellerId, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+      await updateSellerWalletBalance(sellerId, Number(charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
       return order
     } catch (error: any) {
       console.error("Error creating Delhivery shipment:", error);

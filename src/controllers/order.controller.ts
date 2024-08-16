@@ -1258,15 +1258,17 @@ export const getBulkOrdersCourier = async (req: ExtendedRequest, res: Response, 
           collectableAmount,
           hubId,
           order.isReverseOrder,
+          order.order_reference_id
         );
 
+        uniqueCourierPartners.push(...courierPartners);
         // Filter to get unique courier partners based on carrierID
-        uniqueCourierPartners = [...uniqueCourierPartners, ...courierPartners].reduce((unique, partner) => {
-          if (!unique.some((item: any) => item?.name === partner?.name)) {
-            unique.push(partner);
-          }
-          return unique;
-        }, []);
+        // uniqueCourierPartners = [...uniqueCourierPartners, ...courierPartners].reduce((unique, partner) => {
+        //   if (!unique.some((item: any) => item?.name === partner?.name)) {
+        //     unique.push(partner);
+        //   }
+        //   return unique;
+        // }, []);
 
       } catch (error) {
         console.error(`Error processing order ${order._id}:`, error);

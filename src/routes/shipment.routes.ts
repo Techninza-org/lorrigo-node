@@ -14,7 +14,10 @@ import {
 const shipmentRouter = Router();
 
 //@ts-ignore
-shipmentRouter.post("/", createBulkShipment);
+shipmentRouter.post("/", createShipment);
+
+//@ts-ignore
+shipmentRouter.post("/bulk", createBulkShipment);
 
 //@ts-ignore
 shipmentRouter.post("/b2b", createB2BShipment);
