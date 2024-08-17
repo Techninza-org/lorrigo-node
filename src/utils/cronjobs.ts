@@ -186,29 +186,32 @@ export const CONNECT_MARUTI = async (): Promise<void> => {
     }
 }
 
-// export const REFRESH_ZOHO_TOKEN = async (): Promise<void> => {
-//   const requestBody = {
-//     refresh_token: config.ZOHO_REFRESH_TOKEN,
-//     client_id: config.ZOHO_CLIENT_ID,
-//     client_secret: config.ZOHO_CLIENT_SECRET,
-//     grant_type: "refresh_token",
-//   };
-
-//   try {
-//     // const response = await axios.post(`https://accounts.zoho.com/oauth/v2/token?refresh_token=${requestBody.refresh_token}&client_id=${requestBody.client_id}&client_secret=${requestBody.client_secret}f&redirect_uri=http://www.lorrigo.in/books&grant_type=refresh_token`, requestBody);
-//     // const responseJSON = response.data;
-//     // console.log(responseJSON);
-//     // await EnvModel.findOneAndUpdate(
-//     //   { name: "ZOHO" },
-//     //   { $set: { nickName: "ZH", token: responseJSON.access_token } },
-//     //   { upsert: true, new: true }
-//     // );
-
-//     // console.log("ZOHO LOGGEDIN: " + responseJSON.access_token);
-//   } catch (err) {
-//     console.log(err);
-//   }
-// }
+export const REFRESH_ZOHO_TOKEN = async (): Promise<void> => {
+  const data = {
+    client_id: process.env.ZOHO_CLIENT_ID,
+    client_secret: process.env.ZOHO_CLIENT_SECRET,
+    grant_type: "refresh_token",
+    refresh_token: process.env.ZOHO_REFRESH_TOKEN,
+  }
+  
+  try {
+    const response = await axios.post("https://accounts.zoho.in/oauth/v2/token", data, {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
+    });
+  
+      await EnvModel.findOneAndUpdate(
+        { name: "ZOHO" },
+        { $set: { nickName: "ZH", token: response.data.access_token } },
+        { upsert: true, new: true }
+      );
+    
+      console.log("ZOHO LOGGEDIN: " + response.data.access_token);
+  } catch (err) {
+    console.log(err);
+  }
+}
 
 /**
  * function to run CronJobs currrently one cron is scheduled to update the status of order which are cancelled to "Already Cancelled".
@@ -612,6 +615,7 @@ export default async function runCron() {
     cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, track_delivery);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
+    cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every2Minutes, trackOrder_Smartr);
 

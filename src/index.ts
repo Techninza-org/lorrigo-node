@@ -29,6 +29,7 @@ import runCron, {
   CONNECT_SHIPROCKET,
   CONNECT_SMARTR,
   CONNECT_SMARTSHIP,
+  REFRESH_ZOHO_TOKEN,
   calculateRemittanceEveryDay,
   trackOrder_Smartr,
 } from "./utils/cronjobs";
@@ -177,6 +178,7 @@ mongoose
     CONNECT_SHIPROCKET();
     CONNECT_SMARTSHIP();
     CONNECT_SMARTR();
+    REFRESH_ZOHO_TOKEN();
   })
   .catch((err) => {
     Logger.log(err.message);

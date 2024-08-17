@@ -1501,18 +1501,10 @@ type PINCODE_RESPONSE = {
 
 export const generateAccessToken = async () => {
   try {
-    const data = {
-      client_id: process.env.ZOHO_CLIENT_ID,
-      client_secret: process.env.ZOHO_CLIENT_SECRET,
-      grant_type: "refresh_token",
-      refresh_token: process.env.ZOHO_REFRESH_TOKEN,
-    }
-    const response = await axios.post("https://accounts.zoho.in/oauth/v2/token", data, {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-      }
-    });
-    return response.data.access_token
+    const env = await EnvModel.findOne({ name: "ZOHO" }).lean();
+    if (!env) return false;
+    //@ts-ignore
+    return env.access_token;
   } catch (err) {
     console.log(err, 'err')
   }
@@ -1521,61 +1513,73 @@ export const generateAccessToken = async () => {
 export const calculateSellerInvoiceAmount = async () => {
   try {
     const sellers = await SellerModel.find({ zoho_contact_id: { $exists: true } });
-    sellers.map(async (seller) => {
-      console.log(seller.name, seller.zoho_contact_id, 'seller [calculateSellerInvoiceAmount]');
-    });
 
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    const today = new Date();
-    const lastInvoiceGenerationDate = await InvoiceModel.find({}).sort({ createdAt: -1 });
-    let lastInvoiceDate;
-    if (!lastInvoiceGenerationDate || lastInvoiceGenerationDate.length === 0) {
-      lastInvoiceDate = startOfMonth;
-    } else {
-      lastInvoiceDate = lastInvoiceGenerationDate[0].createdAt;
-    }
+    const batchSize = 3; 
+    const delay = 5000; 
 
-    sellers.forEach(async (seller) => {
-      const sellerId = seller._id;
-      const zoho_contact_id = seller?.zoho_contact_id;
+    const processBatch = async (batch: any[]) => {
+      for (const seller of batch) {
+        const sellerId = seller._id;
+        const zoho_contact_id = seller?.zoho_contact_id;
 
-      const allOrders = await B2COrderModel.find({
-        sellerId,
-        bucket: 4,
-        "orderStages.stageDateTime": { $gt: lastInvoiceDate, $lt: today },
-        "orderStages.stage": 4
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        const today = new Date();
+        const lastInvoiceGenerationDate = await InvoiceModel.find({}).sort({ createdAt: -1 });
+        let lastInvoiceDate;
+        if (!lastInvoiceGenerationDate || lastInvoiceGenerationDate.length === 0) {
+          lastInvoiceDate = startOfMonth;
+        } else {
+          lastInvoiceDate = lastInvoiceGenerationDate[0].createdAt;
+        }
 
-      }).select(["productId", "awb"]).populate("productId");
+        const allOrders = await B2COrderModel.find({
+          sellerId,
+          bucket: 4,
+          "orderStages.stageDateTime": { $gt: lastInvoiceDate, $lt: today },
+          "orderStages.stage": 4
+        }).select(["productId", "awb"]).populate("productId");
 
-      const billedOrders = await ClientBillingModal.find({ sellerId, awb: { $in: allOrders.map(item => item.awb) } }).select("awb");
-      const billedAwb = billedOrders.map((order: any) => order.awb);
+        const billedOrders = await ClientBillingModal.find({ sellerId, awb: { $in: allOrders.map(item => item.awb) } }).select("awb");
+        const billedAwb = billedOrders.map((order: any) => order.awb);
 
-      const orders = allOrders.filter((order: any) => {
-        return billedAwb.includes(order?.awb);
-      });
+        const orders = allOrders.filter((order: any) => {
+          return billedAwb.includes(order?.awb);
+        });
 
-      const awbToBeInvoiced = orders.map((order: any) => order.awb);
+        const awbToBeInvoiced = orders.map((order: any) => order.awb);
 
-      let totalAmount = 0;
-      for (let i = 0; i < awbToBeInvoiced.length; i++) {
-        const awbTxn = await PaymentTransactionModal.find({ desc: { $regex: awbToBeInvoiced[i] } });
+        let totalAmount = 0;
+        for (let i = 0; i < awbToBeInvoiced.length; i++) {
+          const awbTxn = await PaymentTransactionModal.find({ desc: { $regex: awbToBeInvoiced[i] } });
 
-        for (let txn of awbTxn) {
-          totalAmount += parseFloat(txn.amount);
+          for (let txn of awbTxn) {
+            totalAmount += parseFloat(txn.amount);
+          }
+        }
+
+        const invoiceAmount = Math.round(Number(totalAmount / 1.18));
+
+        if (seller.config?.isPrepaid) {
+          const spentAmount = Number((invoiceAmount * 1.18));
+          await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
+        }
+        if (invoiceAmount > 0) {
+          await createAdvanceAndInvoice(zoho_contact_id, invoiceAmount, awbToBeInvoiced);
         }
       }
+    };
 
-      const invoiceAmount = Math.round(Number(totalAmount / 1.18));
+    for (let i = 0; i < sellers.length; i += batchSize) {
+      const batch = sellers.slice(i, i + batchSize);
+      await processBatch(batch);
 
-      if (seller.config?.isPrepaid) {
-        const spentAmount = Number((invoiceAmount * 1.18));
-        await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
+      if (i + batchSize < sellers.length) {
+        console.log(`Waiting ${delay / 1000} seconds before processing the next batch...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-      if (invoiceAmount > 0) {
-        await createAdvanceAndInvoice(zoho_contact_id, invoiceAmount, awbToBeInvoiced);
-      }
-    });
+    }
+
   } catch (err) {
     console.log(err);
   }
