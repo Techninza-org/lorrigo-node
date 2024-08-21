@@ -169,48 +169,42 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
     const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
 
     const orders = json.map((hub: any) => {
-      const isPaymentCOD = hub["payment_mode"]?.toUpperCase() === "TRUE" ? 1 : 0;
-      const isContainFragileItem = hub["isContainFragileItem"]?.toUpperCase() === "TRUE" ? true : false;
-      const isSellerAddressAdded = hub["isSellerAddressAdded"]?.toUpperCase() === "TRUE" ? true : false;
+      const isPaymentCOD = hub["payment_mode(COD/Preapaid)"]?.toUpperCase() === "COD" ? 1 : 0;
+      const isContainFragileItem = hub["isContainFragileItem(Yes/No)"]?.toUpperCase() === "TRUE" ? true : false;
       return {
         order_reference_id: hub["order_reference_id"],
         productDetails: {
-          name: hub["ProductName"],
-          category: hub["category"],
-          quantity: hub["quantity"],
+          name: hub["product_desc"],
+          category: hub["product_category"],
+          quantity: hub["order_quantity"],
           hsn_code: hub["hsn_code"],
           taxRate: hub["tax_rate"],
-          taxableValue: hub["shipment_value"]
+          taxableValue: hub["order_value"]
         },
         order_invoice_date: hub["order_invoice_date"],
         order_invoice_number: hub["order_invoice_number"],
         isContainFragileItem: Boolean(isContainFragileItem),
         numberOfBoxes: hub["numberOfBoxes"],
-        orderBoxHeight: hub["orderBoxHeight(cm)"],
-        orderBoxWidth: hub["orderBoxWidth(cm)"],
-        orderBoxLength: hub["orderBoxLength(cm)"],
-        orderWeight: hub["orderWeight (Kg)"],
+        orderBoxHeight: hub["length(cm)"],
+        orderBoxWidth: hub["breadth(cm)"],
+        orderBoxLength: hub["height(cm)"],
+        orderWeight: hub["orderWeight(Kg)"],
         orderWeightUnit: "kg",
         orderSizeUnit: "cm",
         payment_mode: isPaymentCOD,
-        amount2Collect: hub['amount2Collect*'],
+        amount2Collect: hub['cod_value*'],
         customerDetails: {
-          name: hub['customerName'],
-          phone: "+91" + hub['customerPhone'],
-          address: hub['customerAdd'],
-          pincode: hub['customerPincode'],
-          city: hub['customerCity'],
-          state: hub['customerState']
+          name: hub['recipient_name'],
+          phone: "+91" + hub['recipient_phone'],
+          address: hub['recipient_address'],
+          pincode: hub['recipient_pincode'],
+          city: hub['recipient_city'],
+          state: hub['recipient_state']
         },
         sellerDetails: {
-          sellerName: hub['sellerName'],
-          sellerGSTIN: hub['sellerGSTIN'],
-          isSellerAddressAdded: Boolean(isSellerAddressAdded),
-          sellerAddress: hub['sellerAddress'],
-          sellerPincode: hub['sellerPincode'],
-          sellerCity: hub['sellerCity'],
-          sellerState: hub['sellerState'],
-          sellerPhone: "+91" + hub['sellerPhone']
+          sellerName: hub['seller_name'],
+          sellerGSTIN: hub['gstin'],
+          sellerAddress: hub['seller_address'],
         },
       };
     })
@@ -395,11 +389,6 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
           sellerName: order?.sellerDetails.sellerName,
           sellerGSTIN: order?.sellerDetails.sellerGSTIN,
           sellerAddress: order?.sellerDetails.sellerAddress,
-          isSellerAddressAdded: order?.sellerDetails.isSellerAddressAdded,
-          sellerPincode: Number(order?.sellerDetails.sellerPincode),
-          sellerCity: order?.sellerDetails.sellerCity,
-          sellerState: order?.sellerDetails.sellerState,
-          sellerPhone: order?.sellerDetails.sellerPhone,
         },
       };
 

@@ -89,7 +89,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
     const vendorName = await EnvModel.findOne({ nickName: body.carrierNickName });
 
-    const courier = await CourierModel.findOne({ vendor_channel_id: vendorName?._id.toString() });
+    const courier = await CourierModel.findById(body.carrierId);
 
     if (vendorName?.name === "SMARTSHIP") {
       const smartShipCourier = await CourierModel.findById(body.carrierId);
@@ -979,8 +979,6 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
     const courier = await CourierModel.findOne({ vendor_channel_id: vendorName?._id.toString() });
     if (!courier) return res.status(200).send({ valid: false, message: "Courier not found" });
 
-    console.log(body.orderIdWCharges, "body.orderIdWCharges")
-
     const results = [];
     for (const orderWChargees of body.orderIdWCharges) {
       try {
@@ -1224,6 +1222,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           }
           )
           const response = cancelOrder?.data
+          console.log(JSON.stringify(response, null, 2), "response [SMARTR]")
           const isCancelled = response.data[0].success;
           if (isCancelled) {
             await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
