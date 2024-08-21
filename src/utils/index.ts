@@ -944,7 +944,7 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
       order_date: format(orderDetails?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
       pickup_location: orderDetails?.pickupAddress?.name,
       billing_customer_name: orderDetails?.customerDetails.get("name"),
-      billing_last_name: orderDetails?.customerDetails.get("name") || "",
+      billing_last_name: "",
       billing_address: orderDetails?.customerDetails.get("address"),
       billing_city: orderDetails?.customerDetails.get("city"),
       billing_pincode: orderDetails?.customerDetails.get("pincode"),
