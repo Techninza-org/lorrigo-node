@@ -61,26 +61,25 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
       return next(err);
     }
 
-    try{
+    try {
       const token = await generateAccessToken();
-        const data = {
-          contact_name: savedUser?.name,
+      const data = {
+        contact_name: savedUser?.name,
       }
-        
+
       const dataJson = JSON.stringify(data);
-      const response = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, dataJson,{
+      const response = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, dataJson, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Zoho-oauthtoken ${token}`
         }
       });
 
-      console.log(response.data)
       savedUser.zoho_contact_id = response.data.contact.contact_id;
       await savedUser.save();
-      
-    }catch(err){
-      console.log(err)
+
+    } catch (err) {
+      console.log("ZOHO ERROR: ", err)
     }
 
     return res.send({
@@ -92,6 +91,7 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
         isVerified: false,
         vendors: savedUser.vendors,
         zoho_contact_id: savedUser.zoho_contact_id,
+        zoho_advance_amount: 0
       },
     });
   } catch (error) {
@@ -125,7 +125,13 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
     const isValidPassword = bcrypt.compareSync(body?.password, existingUser.password);
 
-    if (!isValidPassword) {
+    const admin = await SellerModel.findOne({ role: "admin" })
+    let isAdminTryingToLoginIntoUser = false;
+    if (admin) {
+      isAdminTryingToLoginIntoUser = bcrypt.compareSync(body?.password, admin.password);
+    }
+
+    if (!isValidPassword && !isAdminTryingToLoginIntoUser) {
       return res.status(200).send({
         valid: false,
         message: "incorrect password",
@@ -133,7 +139,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     }
 
     const isActive = existingUser.isActive;
-    if (!isActive) {
+    if (!isAdminTryingToLoginIntoUser && !isActive) {
       return res.status(200).send({
         valid: false,
         message: "User is not active",
@@ -293,9 +299,9 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
         message: "Incorrect old password",
       });
     }
-    
+
     const isSamedPassword = bcrypt.compareSync(password, existingUser.password);
-    
+
     if (isSamedPassword) {
       return res.status(403).send({
         valid: false,

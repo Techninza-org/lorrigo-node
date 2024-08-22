@@ -174,7 +174,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       );
     } catch (err: any) {
       console.log(err)
-      const isExistingHub = err?.response?.data?.errors?.pickup_location[0].includes("Address nick name already in use")
+      const isExistingHub = err?.response?.data?.errors?.pickup_location?.[0].includes("Address nick name already in use")
       if (!isExistingHub) return next(err);
     }
 

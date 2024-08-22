@@ -606,7 +606,6 @@ async function fetchAndSaveData() {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
-  track_delivery()
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
@@ -662,7 +661,7 @@ const processShiprocketOrders = async (orders) => {
         if (
           bucketInfo.bucket !== -1 &&
           orderWithOrderReferenceId.orderStages.length > 0 &&
-          !(orderWithOrderReferenceId.orderStages[orderWithOrderReferenceId.orderStages.length - 1].activity?.includes(response.data.tracking_data?.shipment_track_activities[0]?.activity))
+          !(orderWithOrderReferenceId.orderStages[orderWithOrderReferenceId.orderStages.length - 1].activity?.includes(response.data.tracking_data?.shipment_track_activities?.[0]?.activity))
         ) {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
