@@ -2,7 +2,7 @@ import mongoose, { Types } from "mongoose";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
 import { startOfWeek, addDays, getDay, format, startOfDay } from "date-fns";
-import { getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getSellerChannelConfig, getShiprocketToken, getSMARTRToken, getSmartShipToken, MetroCitys, NorthEastStates, validateEmail } from "./helpers";
+import { getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getMarutiToken, getSellerChannelConfig, getShiprocketToken, getSMARTRToken, getSmartShipToken, MetroCitys, NorthEastStates, validateEmail } from "./helpers";
 import { COURRIER_ASSIGNED_ORDER_DESCRIPTION, DELIVERED, IN_TRANSIT, MANIFEST_ORDER_DESCRIPTION, PICKUP_SCHEDULED_DESCRIPTION, READY_TO_SHIP, RETURN_CONFIRMED, RTO, SHIPMENT_CANCELLED_ORDER_DESCRIPTION, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, SHIPROCKET_MANIFEST_ORDER_STATUS, SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS, SMARTSHIP_MANIFEST_ORDER_STATUS } from "./lorrigo-bucketing-info";
 import { DeliveryDetails, IncrementPrice, PickupDetails, Vendor, Body } from "../types/rate-cal";
 import SellerModel from "../models/seller.model";
@@ -757,6 +757,85 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
     console.log(error)
   }
 }
+
+export async function handleMarutiShipment(
+  { productDetails, sellerId, body, sellerGST, hubDetails, carrierId, order, charge, vendorName, type }:
+  { productDetails: any, sellerId: string, body: any, sellerGST: string, hubDetails: any, carrierId: string, order: any, charge: number, vendorName: any, type: string }) {
+      const marutiCourier = await CourierModel.findOne({ carrierID: carrierId, type: type });
+      
+      const marutiShipmentPayload = {
+        orderId: order.client_order_reference_id,
+        orderSubtype: "FORWARD",
+        orderCreatedAt: new Date(),
+        currency: "INR",
+        amount: productDetails.taxable_value,
+        weight: order.orderWeight * 1000,
+        lineItems: [
+            {
+                name: "Item",
+                price: productDetails.taxable_value,
+                weight: order.orderWeight * 1000,
+                quantity: 1,
+                sku: "PA1475",  
+                unitPrice: productDetails.taxable_value
+            },
+        ],
+        paymentType: order.payment_mode === 0 ? "ONLINE" : "COD",
+        paymentStatus: order.payment_mode === 0 ? "PAID" : "PENDING",
+        subTotal: productDetails.taxable_value,
+        shippingAddress: {
+            name: order.customerDetails.get("name"),
+            phone: order.customerDetails.get("phone"),
+            address1: order.customerDetails.get("address"),
+            address2: "",
+            city: order.customerDetails.get("city"),
+            state: order.customerDetails.get("state"),
+            country: "India",
+            zip: order.customerDetails.get("pincode"),
+        },
+        billingAddress: {
+          name: order.customerDetails.get("name"),
+          phone: order.customerDetails.get("phone"),
+          address1: order.customerDetails.get("address"),
+          address2: "",
+          city: order.customerDetails.get("city"),
+          state: order.customerDetails.get("state"),
+          country: "India",
+          zip: order.customerDetails.get("pincode"),
+        },
+        pickupAddress: {
+            name: hubDetails.name,
+            phone: hubDetails.phone,
+            address1: hubDetails.address1,
+            address2: "",
+            city: hubDetails.city,
+            state:hubDetails.state,
+            country: "India",
+            zip: hubDetails.pincode,
+        },
+        gst: sellerGST,
+        deliveryPromise: type === 'air'? 'AIR': 'SURFACE', 
+        discountUnit: "RUPEES",
+        length: order.orderBoxLength,
+        height: order.orderBoxHeight,
+        width: order.orderBoxWidth
+      }
+      try{
+        const marutiToken = await getMarutiToken();
+        if (!marutiToken) throw new Error("Invalid token");
+      
+        const response = await axios.post(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_BOOKING}`, marutiShipmentPayload, {
+          headers: {
+            Authorization: marutiToken,
+          },
+        });
+        if (response.data.status === 500){
+          throw new Error("Pincodes not serviceable")
+        }
+      }catch(err){
+        console.log(err)
+      }
+    }
 
 export async function handleSmartShipShipment(
   { productDetails, sellerId, sellerGST, hubDetails, carrierId, order, charge, vendorName }:

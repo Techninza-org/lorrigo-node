@@ -61,28 +61,27 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
       return next(err);
     }
 
-    // Errro : refersh Token Cron need to CREATE 
-    // try{
-    //   const token = await generateAccessToken();
-    //     const data = {
-    //       contact_name: savedUser?.name,
-    //   }
+    try{
+      const token = await generateAccessToken();
+        const data = {
+          contact_name: savedUser?.name,
+      }
         
-    //   const dataJson = JSON.stringify(data);
-    //   const response = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, dataJson,{
-    //     headers: {
-    //       "Content-Type": "application/json",
-    //       Authorization: `Zoho-oauthtoken ${token}`
-    //     }
-    //   });
+      const dataJson = JSON.stringify(data);
+      const response = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, dataJson,{
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${token}`
+        }
+      });
 
-    //   console.log(response.data)
-    //   savedUser.zoho_contact_id = response.data.contact.contact_id;
-    //   await savedUser.save();
+      console.log(response.data)
+      savedUser.zoho_contact_id = response.data.contact.contact_id;
+      await savedUser.save();
       
-    // }catch(err){
-    //   console.log(err)
-    // }
+    }catch(err){
+      console.log(err)
+    }
 
     return res.send({
       valid: true,
@@ -93,7 +92,6 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
         isVerified: false,
         vendors: savedUser.vendors,
         zoho_contact_id: savedUser.zoho_contact_id,
-        zoho_advance_amount: 0
       },
     });
   } catch (error) {

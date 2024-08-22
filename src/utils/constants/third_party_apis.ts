@@ -56,7 +56,11 @@ const ECOMM_PINCODE_SERVICEABILITY = "/services/expp/expppincode/";
 
 const ZOHO_CREATE_USER = `/books/v3/users?organization_id=${envConfig.ZOHO_ORG_ID}`
 
+
+const MARUTI_BOOKING = "/fulfillment/public/seller/order/ecomm/push-order"
+const MARUTI_CANCEL_ORDER = "/fulfillment/public/seller/order/cancel-order"
 const MARUTI_SERVICEABILITY = "/fulfillment/public/seller/order/check-ecomm-order-serviceability";
+const MARUTI_ACCESS = "/auth/refresh-token"
 
 const APIs = {
   HUB_REGISTRATION,
@@ -111,7 +115,10 @@ const APIs = {
 
   ZOHO_CREATE_USER,
 
-  MARUTI_SERVICEABILITY
+  MARUTI_SERVICEABILITY,
+  MARUTI_BOOKING,
+  MARUTI_CANCEL_ORDER,
+  MARUTI_ACCESS
 
 };
 export default APIs;

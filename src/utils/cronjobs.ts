@@ -18,6 +18,7 @@ import { getNextToNextFriday } from ".";
 import fs from "fs"
 import path from "path"
 import { setTimeout } from 'timers/promises';
+import envConfig from "../utils/config";
 
 
 /**
@@ -167,50 +168,50 @@ export const CONNECT_SMARTR = async (): Promise<void> => {
 };
 
 export const CONNECT_MARUTI = async (): Promise<void> => {
-  const requestBody = {
-    email: config.MARUTI_USERNAME,
-    password: config.MARUTI_PASSWORD,
-    vendorType: "SELLER"
-  };
+    try{
+      const response = await axios.get(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_ACCESS}`, {
+        headers: {
+          Authorization: `Bearer ${config.MARUTI_REFRESH_TOKEN}`,
+        },
+      });
+      const accessToken = response.data.data.accessToken;
+      await EnvModel.findOneAndUpdate(
+        { name: "MARUTI" },
+        { $set: { nickName: "MRT", token: accessToken } },
+        { upsert: true, new: true }
+      );
+      console.log("MARUTI LOGGEDIN: " + accessToken);
+    }catch(err){
+      console.log(err);
+    }
+}
 
+export const REFRESH_ZOHO_TOKEN = async (): Promise<void> => {
+  const data = {
+    client_id: process.env.ZOHO_CLIENT_ID,
+    client_secret: process.env.ZOHO_CLIENT_SECRET,
+    grant_type: "refresh_token",
+    refresh_token: process.env.ZOHO_REFRESH_TOKEN,
+  }
+  
   try {
-    const response = await axios.post("https://qaapis.delcaper.com/auth/login", requestBody);
-    const responseJSON = response.data.data;
-    await EnvModel.findOneAndUpdate(
-      { name: "MARUTI" },
-      { $set: { nickName: "MRT", token: responseJSON.accessToken, refreshToken: responseJSON.refreshToken } },
-      { upsert: true, new: true }
-    );
-
-    console.log("MARUTI LOGGEDIN: " + responseJSON.accessToken);
+    const response = await axios.post("https://accounts.zoho.in/oauth/v2/token", data, {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
+    });
+  
+      await EnvModel.findOneAndUpdate(
+        { name: "ZOHO" },
+        { $set: { nickName: "ZH", token: response.data.access_token } },
+        { upsert: true, new: true }
+      );
+    
+      console.log("ZOHO LOGGEDIN: " + response.data.access_token);
   } catch (err) {
     console.log(err);
   }
-};
-
-// export const REFRESH_ZOHO_TOKEN = async (): Promise<void> => {
-//   const requestBody = {
-//     refresh_token: config.ZOHO_REFRESH_TOKEN,
-//     client_id: config.ZOHO_CLIENT_ID,
-//     client_secret: config.ZOHO_CLIENT_SECRET,
-//     grant_type: "refresh_token",
-//   };
-
-//   try {
-//     // const response = await axios.post(`https://accounts.zoho.com/oauth/v2/token?refresh_token=${requestBody.refresh_token}&client_id=${requestBody.client_id}&client_secret=${requestBody.client_secret}f&redirect_uri=http://www.lorrigo.in/books&grant_type=refresh_token`, requestBody);
-//     // const responseJSON = response.data;
-//     // console.log(responseJSON);
-//     // await EnvModel.findOneAndUpdate(
-//     //   { name: "ZOHO" },
-//     //   { $set: { nickName: "ZH", token: responseJSON.access_token } },
-//     //   { upsert: true, new: true }
-//     // );
-
-//     // console.log("ZOHO LOGGEDIN: " + responseJSON.access_token);
-//   } catch (err) {
-//     console.log(err);
-//   }
-// }
+}
 
 /**
  * function to run CronJobs currrently one cron is scheduled to update the status of order which are cancelled to "Already Cancelled".
@@ -612,6 +613,7 @@ export default async function runCron() {
     cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, track_delivery);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
+    cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every2Minutes, trackOrder_Smartr);
 
@@ -619,6 +621,7 @@ export default async function runCron() {
     const expression4every59Minutes = "59 * * * *";
     const expression4every9_59Hr = "59 9 * * *";
     const expression4everyFriday = "0 0 * * 5";
+    const expression4every12Hrs = "0 0,12 * * *";
 
     cron.schedule(expression4every9_59Hr, fetchAndSaveData);
     cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
@@ -626,6 +629,7 @@ export default async function runCron() {
     cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
     cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
     cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);
+    cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
 
     Logger.log("Cron jobs scheduled successfully");
   } else {
