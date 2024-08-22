@@ -506,82 +506,79 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
 };
 
 export const track_delivery = async () => {
-  const vendorNicknames = await EnvModel.find({ name: { $regex: "DEL" } }).select("nickName")
+  try {
+    const vendorNicknames = await EnvModel.find({ name: { $regex: "DEL" } }).select("nickName");
 
-  for (let vendor of vendorNicknames) {
-    try {
+    for (const vendor of vendorNicknames) {
+
       const orders = (await B2COrderModel.find({
         bucket: { $in: ORDER_TO_TRACK },
-        carrierName: { $regex: vendor?.nickName }
+        carrierName: { $regex: vendor?.nickName },
       })).reverse();
 
-      for (let ordersReferenceIdOrders of orders) {
+      for (const order of orders) {
         try {
+          let delhiveryToken;
 
-          let delhiveryToken = await getDelhiveryToken();
-          if (vendor.nickName === 'DEL.0.5') {
-            delhiveryToken = await getDelhiveryTokenPoint5();
-          } else if (vendor.nickName === 'DEL.10') {
-            delhiveryToken = await getDelhiveryToken10();
+          switch (vendor.nickName) {
+            case 'DEL.0.5':
+              delhiveryToken = await getDelhiveryTokenPoint5();
+              break;
+            case 'DEL.10':
+              delhiveryToken = await getDelhiveryToken10();
+              break;
+            default:
+              delhiveryToken = await getDelhiveryToken();
+              break;
           }
 
-
-          const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}${ordersReferenceIdOrders?.awb}`;
+          const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}${order?.awb}`;
           const res = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
 
-          if (!res?.data?.ShipmentData?.[0]?.Shipment?.Status) return;
-          if (res?.data?.ShipmentData?.[0]?.Shipment?.Status) {
+          const shipmentData = res?.data?.ShipmentData?.[0];
+          if (!shipmentData || !shipmentData.Shipment?.Status) continue;
 
-            const shipmentData = res.data.ShipmentData[0];
-            const shipment_status = shipmentData.Shipment.Status
+          const shipment_status = shipmentData.Shipment.Status;
+          const bucketInfo = getDelhiveryBucketing(shipment_status.Status);
 
-            const bucketInfo = getDelhiveryBucketing(shipment_status.Status);
+          const orderStages = order?.orderStages || [];
+          const lastStageActivity = orderStages[orderStages.length - 1]?.activity;
 
+          if (
+            bucketInfo.bucket !== -1 &&
+            orderStages.length > 0 &&
+            !lastStageActivity?.includes(shipment_status.Instructions)
+          ) {
+            order.bucket = bucketInfo;
+            order.orderStages.push({
+              stage: bucketInfo,
+              action: shipment_status.Status,
+              stageDateTime: new Date(),
+              activity: shipment_status.Instructions,
+              location: shipment_status.ScannedLocation,
+            });
 
-            // Need to update bucketing for below stautus
-            // "Not Picked"
-            // "Cancelled"
-
-            const orderStages = ordersReferenceIdOrders?.orderStages;
-            const lastStageActivity = orderStages?.[orderStages.length - 1]?.activity;
-
-            if (
-              bucketInfo.bucket !== -1 &&
-              orderStages?.length > 0 &&
-              !lastStageActivity?.includes(shipment_status.Instructions)
-            ) {
-              ordersReferenceIdOrders.bucket = bucketInfo;
-              ordersReferenceIdOrders.orderStages.push({
-                stage: bucketInfo,
-                action: shipment_status.Status,
-                stageDateTime: new Date(),
-                activity: shipment_status.Instructions,
-                location: shipment_status.ScannedLocation,
-              });
-              try {
-                await ordersReferenceIdOrders.save();
-              } catch (error) {
-                console.log("Error occurred while saving order status:", error);
-              }
-
-              // if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.bucket !== RTO) {
-              //   const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-              //   await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
-              //   if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
-              // }
-
+            try {
+              await order.save();
+            } catch (saveError) {
+              console.log("Error occurred while saving order status:", saveError);
             }
+
+            // if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.bucket !== RTO) {
+            //   const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
+            //   await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
+            //   if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
+            // }
           }
-        } catch (err) {
-          console.log(err);
+        } catch (orderError) {
+          console.log("Error processing order:", orderError);
         }
       }
-
-    } catch (err) {
-      console.log("err", err);
     }
+  } catch (err) {
+    console.log("Error fetching vendors or processing orders:", err);
   }
-}
+};
 
 function ensureDirectoryExistence(filePath) {
   const dirname = path.dirname(filePath);
@@ -609,6 +606,7 @@ async function fetchAndSaveData() {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
+  track_delivery()
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
