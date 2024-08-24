@@ -64,7 +64,7 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
     try {
       const token = await generateAccessToken();
       const data = {
-        contact_name: savedUser?.name,
+        contact_name: body?.name,
       }
 
       const dataJson = JSON.stringify(data);
@@ -78,8 +78,8 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
       savedUser.zoho_contact_id = response.data.contact.contact_id;
       await savedUser.save();
 
-    } catch (err) {
-      console.log("ZOHO ERROR: ", err)
+    } catch (err: any) {
+      console.log("ZOHO ERROR: ", err.response.data)
     }
 
     return res.send({

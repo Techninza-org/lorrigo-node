@@ -392,7 +392,7 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
 
 export const B2BRatecalculatorController = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   const body = req.body;
-  const users_vendors = req.seller?.vendors;
+  const users_vendors = req.seller?.b2bVendors;
 
   const {
     deliveryPincode: toPin,
@@ -774,7 +774,7 @@ export const rateCalculation = async (
 
     try {
       const marutiToken = await getMarutiToken();
-      
+
       if (!marutiToken) {
         throw new Error("Failed to retrieve Maruti token");
       }
@@ -788,13 +788,17 @@ export const rateCalculation = async (
         "deliveryMode": "SURFACE"
       }
 
+      console.log(marutiRequestBodySurface, "marutiRequestBodySurface")
+
       const isMarutiServicableSurface = await axios.post(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_SERVICEABILITY}`, marutiRequestBodySurface);
       const isMSSurface = isMarutiServicableSurface.data.data.serviceability
-      
+
+      console.log("isMSSurface", isMarutiServicableSurface.data)
+
       if (isMSSurface) {
         const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
         if (marutiNiceName) {
-          
+
           const marutiVendors = vendors.filter((vendor) => {
             return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString() && vendor?.type === 'surface';
           });
@@ -818,12 +822,12 @@ export const rateCalculation = async (
 
       const isMarutiServicableAir = await axios.post(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_SERVICEABILITY}`, marutiRequestBodyAir);
       const isMSAir = isMarutiServicableAir.data.data.serviceability
-      
+
       if (isMSAir) {
         const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
         if (marutiNiceName) {
           const marutiVendors = vendors.filter((vendor) => {
-            
+
             return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString() && vendor?.type === 'air';
           });
           if (marutiVendors.length > 0) {
@@ -1136,7 +1140,7 @@ export async function getZohoConfig() {
 
 }
 
-export function getMarutiBucketing(status: number){
+export function getMarutiBucketing(status: number) {
   const marutiStatusMapping = {
     6: { bucket: IN_TRANSIT, description: "Shipped" },
     7: { bucket: DELIVERED, description: "Delivered" },
@@ -1144,7 +1148,7 @@ export function getMarutiBucketing(status: number){
     9: { bucket: RTO, description: "RTO Initiated" },
     10: { bucket: RTO, description: "RTO Delivered" },
     12: { bucket: LOST_DAMAGED, description: "Lost" },
-    13: { bucket: READY_TO_SHIP, description: "Pickup Error"},
+    13: { bucket: READY_TO_SHIP, description: "Pickup Error" },
     14: { bucket: RTO, description: "RTO Acknowledged" },
     15: { bucket: READY_TO_SHIP, description: "Pickup Rescheduled" },
     16: { bucket: CANCELED, description: "Cancellation Requested" },
@@ -1504,7 +1508,7 @@ export const generateAccessToken = async () => {
     const env = await EnvModel.findOne({ name: "ZOHO" }).lean();
     if (!env) return false;
     //@ts-ignore
-    return env.access_token;
+    return env.token;
   } catch (err) {
     console.log(err, 'err')
   }
@@ -1514,8 +1518,8 @@ export const calculateSellerInvoiceAmount = async () => {
   try {
     const sellers = await SellerModel.find({ zoho_contact_id: { $exists: true } });
 
-    const batchSize = 3; 
-    const delay = 5000; 
+    const batchSize = 3;
+    const delay = 5000;
 
     const processBatch = async (batch: any[]) => {
       for (const seller of batch) {

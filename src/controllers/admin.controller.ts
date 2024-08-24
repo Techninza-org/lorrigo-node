@@ -42,7 +42,7 @@ export const walletDeduction = async (req: ExtendedRequest, res: Response, next:
 
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    let { limit, page, status }: { limit?: number; page?: number; status?: string } = req.query;
+    let { from, to, status }: { from?: string, to?: string, status?: string } = req.query;
 
     const obj = {
       new: [NEW],
@@ -53,19 +53,35 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
       rto: [RTO],
     };
 
-    limit = Number(limit);
-    page = Number(page);
-    page = page < 1 ? 1 : page;
-    limit = limit < 1 ? 1 : limit;
-
-    const skip = (page - 1) * limit;
-
     let orders, orderCount, b2borders;
     try {
       let query: any = {};
 
       if (status && obj.hasOwnProperty(status)) {
         query.bucket = { $in: obj[status as keyof typeof obj] };
+      }
+
+      if (from || to) {
+        query.createdAt = {};
+
+        if (from) {
+          const [month, day, year] = from.split("/");
+          const fromDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+          query.createdAt.$gte = fromDate;
+        }
+
+        if (to) {
+          const [month, day, year] = to.split("/");
+          const toDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
+          query.createdAt.$lte = toDate;
+        }
+
+        if (!from) {
+          delete query.createdAt.$gte;
+        }
+        if (!to) {
+          delete query.createdAt.$lte;
+        }
       }
 
       orders = await B2COrderModel.find(query)
@@ -82,13 +98,11 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
         .populate("pickupAddress")
         .lean()).reverse();
 
-      orderCount =
-        status && obj.hasOwnProperty(status)
-          ? await B2COrderModel.countDocuments(query)
-          : await B2COrderModel.countDocuments({});
+      orderCount = await B2COrderModel.countDocuments(query);
     } catch (err) {
       return next(err);
     }
+
     return res.status(200).send({
       valid: true,
       response: { orders, orderCount, b2borders },

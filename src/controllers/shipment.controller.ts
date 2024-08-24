@@ -965,40 +965,34 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
       return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
     }
 
-    if (!isValidPayload(body, ["orderIdWCharges", "orderType", "carrierId", "carrierNickName"])) {
+    if (!isValidPayload(body, ["orderWCouriers"])) {
       return res.status(200).send({ valid: false, message: "Invalid payload" });
     }
-    // if (!Array.isArray(body.orderIds) || body.orderIdWCharges.some((orderIdWCharge: any) => !isValidObjectId(orderIdWCharge.orderRefId))) {
-    //   return res.status(200).send({ valid: false, message: "Invalid orderIds" });
-    // }
-    if (body.orderType !== 0) return res.status(200).send({ valid: false, message: "Invalid orderType" });
-
-    // if (!req.seller?.gstno) return res.status(200).send({ valid: false, message: "KYC required. (GST number) " });
-
-    const vendorName = await EnvModel.findOne({ nickName: body.carrierNickName });
-    if (!vendorName) return res.status(200).send({ valid: false, message: "Invalid carrierNickName" });
-
-    const courier = await CourierModel.findOne({ vendor_channel_id: vendorName?._id.toString() });
-    if (!courier) return res.status(200).send({ valid: false, message: "Courier not found" });
 
     const results = [];
-    for (const orderWChargees of body.orderIdWCharges) {
+    for (const orderWCourier of body.orderWCouriers) {
       try {
-        const order = await B2COrderModel.findOne({ order_reference_id: orderWChargees.orderRefId, sellerId });
+        const vendorName = await EnvModel.findOne({ nickName: orderWCourier.nickName });
+        if (!vendorName) return res.status(200).send({ valid: false, message: "Invalid carrierNickName" });
+
+        const courier = await CourierModel.findById(orderWCourier.carrierID);
+        if (!courier) return res.status(200).send({ valid: false, message: "Courier not found" });
+
+        const order = await B2COrderModel.findOne({ order_reference_id: orderWCourier.orderRefId, sellerId });
         if (!order) {
-          results.push({ orderRefId: orderWChargees.orderRefId, valid: false, message: "Order not found" });
+          results.push({ orderRefId: orderWCourier.orderRefId, valid: false, message: "Order not found" });
           continue;
         }
 
         const hubDetails = await HubModel.findById(order.pickupAddress);
         if (!hubDetails) {
-          results.push({ orderRefId: orderWChargees.orderRefId, valid: false, message: "Hub details not found" });
+          results.push({ orderRefId: orderWCourier.orderRefId, valid: false, message: "Hub details not found" });
           continue;
         }
 
         const productDetails = await ProductModel.findById(order.productId);
         if (!productDetails) {
-          results.push({ orderRefId: orderWChargees.orderRefId, valid: false, message: "Product details not found" });
+          results.push({ orderRefId: orderWCourier.orderRefId, valid: false, message: "Product details not found" });
           continue;
         }
 
@@ -1008,9 +1002,9 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
             sellerId,
             sellerGST: req.seller.gstno,
             vendorName,
-            charge: orderWChargees.charges,
+            charge: orderWCourier.charge,
             order,
-            carrierId: body.carrierId,
+            carrierId: orderWCourier.carrierID,
             hubDetails,
             productDetails,
           });
@@ -1018,9 +1012,9 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
           shipmentResponse = await shiprocketShipment({
             sellerId,
             vendorName,
-            charge: orderWChargees.charges,
+            charge: orderWCourier.charge,
             order,
-            carrierId: body.carrierId,
+            carrierId: orderWCourier.carrierID,
           });
         } else if (vendorName.name === "SMARTR") {
           shipmentResponse = await smartRShipment({
@@ -1028,9 +1022,9 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
             sellerGST: req.seller.gstno,
             vendorName,
             courier,
-            charge: orderWChargees.charges,
+            charge: orderWCourier.charge,
             order,
-            carrierId: body.carrierId,
+            carrierId: orderWCourier.carrierID,
             hubDetails,
             productDetails,
           });
@@ -1039,7 +1033,7 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
             sellerId,
             vendorName,
             courier,
-            charge: orderWChargees.charges,
+            charge: orderWCourier.charge,
             order,
             hubDetails,
             productDetails,
@@ -1048,24 +1042,21 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
         } else if (vendorName?.name === "MARUTI") {
           shipmentResponse = await handleMarutiShipment({
             sellerId: req.seller._id,
-            vendorName,
-            type: body.type,
-            body,
+            courier,
             order,
             hubDetails,
             productDetails,
             sellerGST: req.seller.gstno,
-            carrierId: body.carrierId, 
-            charge: body.charge,
+            charge: orderWCourier.charge,
           });
         } else {
           // results.push({ orderId, valid: false, message: "Unsupported vendor" });
           continue;
         }
 
-        results.push({ orderWChargees, valid: true, shipmentResponse });
+        results.push({ orderWCourier, valid: true, shipmentResponse });
       } catch (error) {
-        results.push({ orderWChargees, valid: false, message: "Error creating shipment", error });
+        results.push({ orderWCourier, valid: false, message: "Error creating shipment", error });
       }
     }
 
@@ -1377,7 +1368,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           console.error("Error creating Delhivery shipment:", error);
           return next(error);
         }
-      }else if(vendorName?.name === "MARUTI"){
+      } else if (vendorName?.name === "MARUTI") {
         const marutiToken = await getMarutiToken();
         if (!marutiToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
