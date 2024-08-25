@@ -23,7 +23,8 @@ import {
     updateSellerConfig,
     walletDeduction,
     getInoviceById,
-    generateInvoices
+    generateInvoices,
+    getAllUserWalletTransaction
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -39,6 +40,10 @@ adminRouter.post("/login", handleAdminLogin);
 
 //@ts-ignore
 adminRouter.get("/all-orders", AdminAuthMiddleware, getAllOrdersAdmin);
+
+//@ts-ignore
+adminRouter.get("/all-wallet", AdminAuthMiddleware, getAllUserWalletTransaction);
+
 //@ts-ignore
 adminRouter.get("/order/:id", AdminAuthMiddleware, getSpecificOrderAdmin);
 //@ts-ignore

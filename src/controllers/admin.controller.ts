@@ -18,6 +18,7 @@ import { calculateSellerInvoiceAmount, generateAccessToken } from "../utils/help
 import axios from "axios";
 import B2BCalcModel from "../models/b2b.calc.model";
 import { isValidPayload } from "../utils/helpers";
+import PaymentTransactionModal from "../models/payment.transaction.modal";
 
 export const walletDeduction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -106,6 +107,65 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
     return res.status(200).send({
       valid: true,
       response: { orders, orderCount, b2borders },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getAllUserWalletTransaction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    let { from, to, status }: { from?: string, to?: string, status?: string } = req.query;
+
+    const obj = {
+      new: [NEW],
+      "ready-to-ship": [READY_TO_SHIP],
+      "in-transit": [IN_TRANSIT],
+      delivered: [DELIVERED],
+      ndr: [NDR],
+      rto: [RTO],
+    };
+
+    let walletTxns
+    try {
+      let query: any = {};
+
+      if (status && obj.hasOwnProperty(status)) {
+        query.bucket = { $in: obj[status as keyof typeof obj] };
+      }
+
+      if (from || to) {
+        query.createdAt = {};
+
+        if (from) {
+          const [month, day, year] = from.split("/");
+          const fromDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+          query.createdAt.$gte = fromDate;
+        }
+
+        if (to) {
+          const [month, day, year] = to.split("/");
+          const toDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
+          query.createdAt.$lte = toDate;
+        }
+
+        if (!from) {
+          delete query.createdAt.$gte;
+        }
+        if (!to) {
+          delete query.createdAt.$lte;
+        }
+      }
+
+      walletTxns = await PaymentTransactionModal.find(query).sort({ createdAt: -1 }).populate("sellerId");
+
+    } catch (err) {
+      return next(err);
+    }
+
+    return res.status(200).send({
+      valid: true,
+      response: { walletTxns },
     });
   } catch (error) {
     return next(error);

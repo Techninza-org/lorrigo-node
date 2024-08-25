@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 
 const PaymentTransaction = new mongoose.Schema(
     {
-        sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "seller", required: true },
+        sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true },
         merchantTransactionId: { type: String, required: true },
         amount: { type: String, required: true },
         code: { type: String, required: true },
