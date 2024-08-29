@@ -307,23 +307,74 @@ export const validateField = (value: any, fieldName: string, hub: any, alreadyEx
   }
   return null;
 };
-export const validateBulkOrderField = (value: any, fieldName: string, order: any, alreadyExistingOrders: any): string | null => {
+export const validateBulkOrderField = (value: any, fieldName: any, order: any, alreadyExistingOrders: any): string | null => {
+
   switch (fieldName) {
     case 'order_reference_id':
       if (alreadyExistingOrders.find((item: any) => item.order_reference_id.includes(value))) {
         return "order_id / order_reference_id must be unique";
       }
       break;
-    // case "email":
-    //   if (!value || !validateEmail(value)) {
-    //     return "Invalid email format";
-    //   }
-    //   break;
-    // case "phone":
-    //   if (!value || !(value.toString().slice(2, 12).length === 10)) {
-    //     return "Invalid PickupLocationContact";
-    //   }
-    //   break;
+    case "productDetails":
+      if (!value.name || value.name.trim().length === 0 || !value.quantity || value.quantity.trim().length === 0 || !value.taxableValue || value.taxableValue.trim().length === 0 || !value.taxRate || value.taxRate.trim().length === 0) {
+        return "Invalid Product details";
+      }
+      break;
+    case "customerDetails":
+      if (!value || value.phone.toString().slice(2, 12).length !== 10 || !value.name || value.name.trim().length === 0 || !value.address || value.address.trim().length === 0 || !value.city || value.city.trim().length === 0 || !value.state || value.state.trim().length === 0 || !value.pincode || value.pincode.trim().length === 0) {
+        return "Invalid Customer details";
+      }
+      break;
+    case "sellerDetails":
+      if (!value.name || value.name.trim().length === 0) {
+        return "Invalid Seller details";
+      }
+      break;
+    case "amount2Collect":
+      if (!value || isNaN(value)) {
+        return "Invalid Amount to collect"
+      }
+      break;
+    case "payment_mode":
+      if (!value || (value !== 0 && value !== 1)) {
+        return "Invalid Payment mode";
+      }
+      break;
+    case "orderWeight":
+      if (!value || isNaN(value)) {
+        return "Invalid Order weight";
+      }
+      break;
+    case "orderBoxLength":
+      if (!value || isNaN(value)) {
+        return "Invalid Order Length";
+      }
+      break;
+    case "orderBoxWidth":
+      if (!value || isNaN(value)) {
+        return "Invalid Order width";
+      }
+      break;
+    case "orderBoxHeight":
+      if (!value || isNaN(value)) {
+        return "Invalid Order height";
+      }
+      break;
+    case "numberOfBoxes":
+      if (!value || isNaN(value)) {
+        return "Invalid number of boxes";
+      }
+      break;
+    case "order_invoice_date":
+      if (!value) {
+        return "Invalid invoice date";
+      }
+      break;
+    case "order_invoice_number":
+      if (!value) {
+        return "Invalid invoice number";
+      }
+      break;
     // Add validation cases for other fields as needed
     default:
       break;
@@ -455,6 +506,39 @@ export const validateClientBillingFeilds = (value: any, fieldName: string, bill:
     case 'isRTOApplicable':
       if (value === null || value === undefined) {
         return "RTO applicable flag is required";
+      }
+      break;
+    default:
+      break;
+  }
+  return null;
+};
+
+export const validateB2BClientBillingFeilds = (value: any, fieldName: string, bill: any, alreadyExistingBills: any): string | null => {
+  switch (fieldName) {
+    case 'orderRefId':
+      if (!value || alreadyExistingBills.find((item: any) => item.orderRefId.includes(value))) {
+        return "Order ID / Order Reference ID must be unique and cannot be empty";
+      }
+      break;
+    case 'orderWeight':
+      if (!value || isNaN(value)) {
+        return "Order weight is required and must be a number";
+      }
+      break;
+    case 'awb':
+      if (!value) {
+        return "AWB is required";
+      }
+      break;
+    case 'isODAApplicable':
+      if (value === null || value === undefined) {
+        return "ODA applicable is required";
+      }
+      break;
+    case 'carrierID':
+      if (value === null || value === undefined) {
+        return "carrierID is required";
       }
       break;
     default:

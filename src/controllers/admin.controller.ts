@@ -5,7 +5,7 @@ import { DELIVERED, IN_TRANSIT, NDR, NEW, READY_TO_SHIP, RTO } from "../utils/lo
 import { Types, isValidObjectId } from "mongoose";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
-import { calculateShippingCharges, convertToISO, csvJSON, updateSellerWalletBalance, validateClientBillingFeilds } from "../utils";
+import { calculateShippingCharges, convertToISO, csvJSON, updateSellerWalletBalance, validateB2BClientBillingFeilds, validateClientBillingFeilds } from "../utils";
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
 import CustomPricingModel, { CustomB2BPricingModel } from "../models/custom_pricing.model";
@@ -19,6 +19,8 @@ import axios from "axios";
 import B2BCalcModel from "../models/b2b.calc.model";
 import { isValidPayload } from "../utils/helpers";
 import PaymentTransactionModal from "../models/payment.transaction.modal";
+import B2BClientBillingModal from "../models/b2b-client.billing.modal";
+import { calculateRateAndPrice, regionToZoneMappingLowercase } from "../utils/B2B-helper";
 
 export const walletDeduction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -259,37 +261,63 @@ export const getSellerRemittance = async (req: ExtendedRequest, res: Response, n
 
 export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   let body = req.body;
-  const new_id = req.query?.sellerId;
+  const sellerId = req.query?.sellerId;
   if (body?.password) return res.status(200).send({ valid: false, message: "Invalid payload" });
 
   try {
-    const existingSeller = await SellerModel.findById(new_id).select("-__v -password -margin");
+    const existingSeller = await SellerModel.findById(sellerId).select("-__v -password -margin");
 
     if (!existingSeller) {
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
 
-    const updatedData = { ...existingSeller.toObject(), ...body };
+    // Initialize an object to store the updated data
+    const updatedData: any = {};
+
+    // Update top-level fields
+    for (const key in body) {
+      if (body[key] !== undefined && body[key] !== null && key in existingSeller.toObject()) {
+        updatedData[key] = body[key];
+      }
+    }
+
+    // Handle nested objects like bankDetails and kycDetails
+    if (body.bankDetails) {
+      updatedData['bankDetails'] = { ...existingSeller.bankDetails, ...body.bankDetails };
+    }
+
+    if (body.kycDetails) {
+      updatedData['kycDetails'] = { ...existingSeller.kycDetails, ...body.kycDetails };
+    }
+
+    // If there are no valid fields to update, return early
+    if (Object.keys(updatedData).length === 0) {
+      return res.status(400).send({ valid: false, message: "No valid fields to update" });
+    }
 
     const updatedSeller = await SellerModel.findByIdAndUpdate(
-      new_id,
+      sellerId,
       { $set: updatedData },
       { new: true, select: "-__v -password -margin" }
     );
 
     if (body.isVerified === true) {
-      const accessToken = await generateAccessToken();
-      const updateContactBody = {
-        "gst_no": updatedSeller?.gstInvoice?.gstin,
-        "company_name": updatedSeller?.companyProfile?.companyName,
-      }
-      const updateRes = await axios.post(`https://www.zohoapis.in/books/v3/contacts/${updatedSeller?.zoho_contact_id}?organization_id=60014023368`, updateContactBody, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Zoho-oauthtoken ${accessToken}`
+      try {
+        const accessToken = await generateAccessToken();
+        const updateContactBody = {
+          "gst_no": updatedSeller?.gstInvoice?.gstin,
+          "company_name": updatedSeller?.companyProfile?.companyName,
         }
-      })
-      console.log(updateRes, 'updateRes');
+        const updateRes = await axios.post(`https://www.zohoapis.in/books/v3/contacts/${updatedSeller?.zoho_contact_id}?organization_id=60014023368`, updateContactBody, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Zoho-oauthtoken ${accessToken}`
+          }
+        })
+        console.log(updateRes, 'updateRes[zoho]');
+      } catch (error) {
+        console.log(error, 'error');
+      }
     }
 
     return res.status(200).send({
@@ -298,6 +326,7 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
       seller: updatedSeller,
     });
   } catch (err) {
+    console.log(err, 'err[updateselleradmin]')
     return next(err);
   }
 };
@@ -829,13 +858,149 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
   }
 };
 
+
+export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).send({ valid: false, message: "No file uploaded" });
+  }
+
+  const alreadyExistingBills = await B2BClientBillingModal.find({}).select(["orderRefId", "awb"]);
+  const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
+
+  const bills = json.map((bill: any) => {
+    const isODAApplicable = Boolean(bill["ODA Applicable"]?.toUpperCase() === "YES");
+    return {
+      awb: bill["AWB"],
+      orderWeight: bill["Weight (Kgs)"],
+      otherCharges: bill["Other Charges"],
+      carrierID: bill["Carrier Id"],
+      isODAApplicable,
+    };
+  });
+
+  if (bills.length < 1) {
+    return res.status(200).send({ valid: false, message: "empty payload" });
+  }
+
+  try {
+    const errorWorkbook = new exceljs.Workbook();
+    const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
+
+    errorWorksheet.columns = [
+      { header: 'Awb', key: 'awb', width: 20 },
+      { header: 'Error Message', key: 'errors', width: 40 },
+    ];
+
+    const errorRows: any = [];
+
+    bills.forEach((bill) => {
+      const errors: string[] = [];
+      Object.entries(bill).forEach(([fieldName, value]) => {
+        const error = validateB2BClientBillingFeilds(value, fieldName, bill, alreadyExistingBills);
+        if (error) {
+          errors.push(error);
+        }
+      });
+
+      if (errors.length > 0) {
+        errorRows.push({ awb: bill.awb, errors: errors.join(", ") });
+      }
+    });
+
+    if (errorRows.length > 0) {
+      errorWorksheet.addRows(errorRows);
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+
+      await errorWorkbook.csv.write(res);
+      return res.end();
+    }
+
+    const orderAwbs = bills.map(bill => bill.awb);
+    const orders = await B2BOrderModel.find({
+      $or: [
+        { awb: { $in: orderAwbs } },
+      ]
+    }).populate(["pickupAddress", "customer"]);
+
+    const orderRefIdToSellerIdMap = new Map();
+    orders.forEach(order => {
+      orderRefIdToSellerIdMap.set(order.order_reference_id, order.sellerId);
+    });
+
+    const billsWithCharges = await Promise.all(bills?.map(async (bill) => {
+      const order: any = orders.find(o => o.awb === bill.awb);
+      if (!order) {
+        throw new Error(`Order not found for AWB: ${bill.awb}`);
+      }
+
+      const courier: any = await B2BCalcModel.findById(bill.carrierID).populate("vendor_channel_id");
+
+      const pickupPincodeData = await PincodeModel.findOne({ Pincode: order.pickupAddress.pincode }).exec();
+      const deliveryPincodeData = await PincodeModel.findOne({ Pincode: order.customer.pincode }).exec();
+
+      if (!pickupPincodeData || !deliveryPincodeData) {
+        return;
+      }
+
+      const fromRegionName = pickupPincodeData.District.toLowerCase(); // convert to lowercase
+      const toRegionName = deliveryPincodeData.District.toLowerCase(); // convert to lowercase
+
+      const Fzone = regionToZoneMappingLowercase[fromRegionName];
+      const Tzone = regionToZoneMappingLowercase[toRegionName];
+
+      const result = await calculateRateAndPrice(courier, Fzone, Tzone, bill.orderWeight, courier?._id?.toString(), fromRegionName, toRegionName, order.amount, bill.otherCharges, bill.isODAApplicable);
+
+      return {
+        updateOne: {
+          filter: { awb: bill.awb },
+          update: {
+            $set: {
+              sellerId: order.sellerId,
+              orderRefId: order.order_reference_id,
+              awb: bill.awb,
+              isODAApplicable: bill.isODAApplicable,
+              orderWeight: bill.orderWeight,
+              billingAmount: result.finalAmount,
+              otherCharges: result.otherExpensesTotal,
+              vendorWNickName: `${courier.name} ${courier.vendor_channel_id.nickName}`,
+            }
+          },
+          upsert: true
+        }
+      };
+    }));
+    
+    // @ts-ignore
+    await B2BClientBillingModal.bulkWrite(billsWithCharges);
+
+    await Promise.all(billsWithCharges.map(async (bill: any) => {
+      if (bill.sellerId && bill.billingAmount) {
+        await updateSellerWalletBalance(bill.sellerId, (bill.billingAmount), false, `AWB: ${bill.awb}, Revised B2B`);
+      }
+    }));
+
+    return res.status(200).send({
+      valid: true,
+      message: "Billing uploaded successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    return next(error);
+  }
+};
+
+
 export const getVendorBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const data = (await ClientBillingModal.find({}).populate("sellerId")).reverse();
+    const b2bData = (await B2BClientBillingModal.find({}).populate("sellerId")).reverse();
     if (!data) return res.status(200).send({ valid: false, message: "No Client Billing found" });
     return res.status(200).send({
       valid: true,
       data,
+      b2bData
     });
   } catch (error) {
     return next(error);
@@ -844,10 +1009,12 @@ export const getVendorBillingData = async (req: ExtendedRequest, res: Response, 
 export const getClientBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const data = (await ClientBillingModal.find({}).populate("sellerId")).reverse();
+    const b2bData = (await B2BClientBillingModal.find({}).populate("sellerId")).reverse();
     if (!data) return res.status(200).send({ valid: false, message: "No Client Billing found" });
     return res.status(200).send({
       valid: true,
-      data
+      data,
+      b2bData
     });
   } catch (error) {
     return next(error);

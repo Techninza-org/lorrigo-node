@@ -105,7 +105,7 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
     return courierData.filter(data => data !== null);
 }
 
-export async function calculateRateAndPrice(calcData: any, zoneFrom: string, zoneTo: string, weight: number, calcId: string, fromRegion: string, toRegion: string, amount: number) {
+export async function calculateRateAndPrice(calcData: any, zoneFrom: string, zoneTo: string, weight: number, calcId: string, fromRegion: string, toRegion: string, amount: number, otherExpensesTotal?: number, isODAApplicable?: boolean) {
     try {
         const zoneMatrix = calcData.zoneMatrix;
         const zoneMapping = calcData.zoneMapping;
@@ -123,7 +123,7 @@ export async function calculateRateAndPrice(calcData: any, zoneFrom: string, zon
 
         const fuelSurcharge = (calcData.fuelSurcharge / 100) * baseFreightCharge;
 
-        const ODACharge = 0; // As of now not required, 
+        const ODACharge = isODAApplicable ?  (weight * calcData.ODACharge < 800 ? 800 : weight * calcData.ODACharge) : 0 ; // As of now not required, 
         // const ODACharge = weight * calcData.ODACharge < 800 ? 800 : weight * calcData.ODACharge;
 
         let greenTax = 0;
@@ -139,9 +139,7 @@ export async function calculateRateAndPrice(calcData: any, zoneFrom: string, zon
             baseFreightOne = foValue;
         }
 
-        const otherExpensesTotal = 0; // calcData.otherExpenses.reduce((total, expense) => total + expense.amount, 0);
-
-        const totalCostBeforeGST = baseFreightCharge + fuelSurcharge + calcData.docketCharge + ODACharge + greenTax + baseFreightOne + otherExpensesTotal;
+        const totalCostBeforeGST = baseFreightCharge + fuelSurcharge + calcData.docketCharge + ODACharge + greenTax + baseFreightOne + (otherExpensesTotal ?? 0);
         const gst = (18 / 100) * totalCostBeforeGST;
         const finalAmount = totalCostBeforeGST + gst;
 

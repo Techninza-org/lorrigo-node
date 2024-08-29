@@ -1404,25 +1404,56 @@ export function getSmartRBucketing(status: string, desc: string, reasonCode: str
   return smarRPossibleResponse ? { bucket: smarRPossibleResponse.bucket, description: smarRPossibleResponse.description } : { bucket: -1, description: "Status code not found" }
 }
 
-export function getDelhiveryBucketing(status: string) {
-  const delhiveryStatusMapping = {
-    "Manifested": READY_TO_SHIP,
-    "In Transit": IN_TRANSIT,
-    "Pending": IN_TRANSIT,
-    "Delivered": DELIVERED,
-    "RTO": RTO,
-    "LOST": LOST_DAMAGED,
-    "Dispatched": RETURN_OUT_FOR_PICKUP,
-    "DTO": RETURN_DELIVERED,
-    "Returned": RETURN_DELIVERED,
-  }
+type DelhiveryBucket = {
+  bucket: number;
+  description: string;
+};
+
+export function getDelhiveryBucketing(scanDetail: { ScanType: string; Scan: string }): DelhiveryBucket {
+  const forwardStatusMapping = {
+    "In Transit": { bucket: IN_TRANSIT, description: "In Transit" },
+    "Pending": { bucket: IN_TRANSIT, description: "In Transit" },
+    "Delivered": { bucket: DELIVERED, description: "Delivered" },
+    "Dispatched": { bucket: IN_TRANSIT, description: "Out for Delivery" },
+    "RTO": { bucket: RTO, description: "Return to Origin (RTO)" },
+    "DTO": { bucket: DELIVERED, description: "Return Delivered" },
+    "Returned": { bucket: RETURN_CONFIRMED, description: "Return Delivered" },
+    "LOST": { bucket: LOST_DAMAGED, description: "Lost or Damaged" },
+  };
+
+  const returnStatusMapping = {
+    "In Transit": { bucket: RETURN_IN_TRANSIT, description: "In Transit (Return)" },
+    "Pending": { bucket: RETURN_ORDER_MANIFESTED, description: "Pending (Return)" },
+    "Dispatched": { bucket: RETURN_OUT_FOR_PICKUP, description: "Out for Pickup (Return)" },
+    // "RTO": { bucket: 4, description: "Return to Origin (RTO)" },
+    "DTO": { bucket: RETURN_DELIVERED, description: "Return Delivered" },
+    "Returned": { bucket: RETURN_DELIVERED, description: "Return Delivered" },
+  };
+
+  const deliveredStatusMapping = {
+    "Delivered": { bucket: DELIVERED, description: "Delivered" },
+    "DTO": { bucket: RETURN_DELIVERED, description: "Delivered To Origin" },
+    "RETURN Accepted": { bucket: RETURN_DELIVERED, description: "Delivered To Origin" },
+    "Returned": { bucket: RETURN_CONFIRMED, description: "Returned" },
+  };
+
+  const { ScanType, Scan } = scanDetail;
+
+  // Determine the correct mapping based on ScanType (UD for forward, RT for return, DL for delivered)
+  const statusMapping =
+    ScanType === "UD" ? forwardStatusMapping :
+    ScanType === "RT" ? returnStatusMapping :
+    ScanType === "DL" ? deliveredStatusMapping : null;
+
+  // Return the bucket and description, or a default if not found
   return (
-    delhiveryStatusMapping[status as keyof typeof delhiveryStatusMapping] || {
+    statusMapping && statusMapping[Scan as keyof typeof statusMapping] || {
       bucket: -1,
       description: "Status code not found",
     }
   );
 }
+
 
 export async function isSmartr_surface_servicable(pincode: number): Promise<boolean> {
   /*

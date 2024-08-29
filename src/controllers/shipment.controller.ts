@@ -296,7 +296,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
             }
           );
 
-          let awb = awbResponse?.data?.response?.data?.awb_code || awbResponse?.data?.response?.data?.awb_assign_error?.split("-")[1].split(" ")[1];
+          let awb = awbResponse?.data?.response?.data?.awb_code || awbResponse?.data?.response?.data?.awb_assign_error?.split("-")[1]?.split(" ")[1];
 
           if (!awb) {
             return res

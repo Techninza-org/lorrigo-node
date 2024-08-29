@@ -167,23 +167,24 @@ export const CONNECT_SMARTR = async (): Promise<void> => {
   }
 };
 
+// TODO: Need fixes in this function
 export const CONNECT_MARUTI = async (): Promise<void> => {
-    try{
-      const response = await axios.get(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_ACCESS}`, {
-        headers: {
-          Authorization: `Bearer ${config.MARUTI_REFRESH_TOKEN}`,
-        },
-      });
-      const accessToken = response.data.data.accessToken;
-      await EnvModel.findOneAndUpdate(
-        { name: "MARUTI" },
-        { $set: { nickName: "MRT", token: accessToken } },
-        { upsert: true, new: true }
-      );
-      console.log("MARUTI LOGGEDIN: " + accessToken);
-    }catch(err){
-      console.log(err);
-    }
+  try {
+    const response = await axios.get(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_ACCESS}`, {
+      headers: {
+        Authorization: `Bearer ${config.MARUTI_REFRESH_TOKEN}`,
+      },
+    });
+    const accessToken = response.data.data.accessToken;
+    await EnvModel.findOneAndUpdate(
+      { name: "MARUTI" },
+      { $set: { nickName: "MRT", token: accessToken } },
+      { upsert: true, new: true }
+    );
+    console.log("MARUTI LOGGEDIN: " + accessToken);
+  } catch (err) {
+    console.log(err);
+  }
 }
 
 export const REFRESH_ZOHO_TOKEN = async (): Promise<void> => {
@@ -193,21 +194,21 @@ export const REFRESH_ZOHO_TOKEN = async (): Promise<void> => {
     grant_type: "refresh_token",
     refresh_token: process.env.ZOHO_REFRESH_TOKEN,
   }
-  
+
   try {
     const response = await axios.post("https://accounts.zoho.in/oauth/v2/token", data, {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded"
       }
     });
-  
-      await EnvModel.findOneAndUpdate(
-        { name: "ZOHO" },
-        { $set: { nickName: "ZH", token: response.data.access_token } },
-        { upsert: true, new: true }
-      );
-    
-      console.log("ZOHO LOGGEDIN: " + response.data.access_token);
+
+    await EnvModel.findOneAndUpdate(
+      { name: "ZOHO" },
+      { $set: { nickName: "ZH", token: response.data.access_token } },
+      { upsert: true, new: true }
+    );
+
+    console.log("ZOHO LOGGEDIN: " + response.data.access_token);
   } catch (err) {
     console.log(err);
   }
@@ -549,9 +550,9 @@ export const track_delivery = async () => {
             orderStages.length > 0 &&
             !lastStageActivity?.includes(shipment_status.Instructions)
           ) {
-            order.bucket = bucketInfo;
+            order.bucket = bucketInfo.bucket;
             order.orderStages.push({
-              stage: bucketInfo,
+              stage: bucketInfo.bucket,
               action: shipment_status.Status,
               stageDateTime: new Date(),
               activity: shipment_status.Instructions,
@@ -580,29 +581,31 @@ export const track_delivery = async () => {
   }
 };
 
-function ensureDirectoryExistence(filePath) {
-  const dirname = path.dirname(filePath);
-  if (!fs.existsSync(dirname)) {
-    fs.mkdirSync(dirname, { recursive: true });
-  }
-}
 
-async function fetchAndSaveData() {
-  try {
-    // Make the API request
-    const delhiveryToken = await getDelhiveryTokenPoint5();
+// Function used to fetch delhivery data and save it to a file
+// async function fetchAndSaveData() {
+//   try {
+//     // Make the API request
+// 
+//     const delhiveryToken = await getDelhiveryTokenPoint5();
 
-    const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}9145210460073`;
-    const response = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
+//     const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}9145210460073`;
+//     const response = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
 
-    const data = response.data;
+//     const data = response.data;
 
-    ensureDirectoryExistence('delhivery-0.5-tracking.json');
-    fs.writeFileSync("delhivery-0.5-tracking.json", JSON.stringify(data, null, 2), 'utf8');
-  } catch (error: any) {
-    console.error('Error fetching data:', error.message);
-  }
-}
+//     ensureDirectoryExistence('delhivery-0.5-tracking.json');
+//     fs.writeFileSync("delhivery-0.5-tracking.json", JSON.stringify(data, null, 2), 'utf8');
+//   } catch (error: any) {
+//     console.error('Error fetching data:', error.message);
+//   }
+// }
+// function ensureDirectoryExistence(filePath) {
+//   const dirname = path.dirname(filePath);
+//   if (!fs.existsSync(dirname)) {
+//     fs.mkdirSync(dirname, { recursive: true });
+//   }
+// }
 
 export default async function runCron() {
   console.log("Running cron scheduler");
@@ -622,7 +625,6 @@ export default async function runCron() {
     const expression4everyFriday = "0 0 * * 5";
     const expression4every12Hrs = "0 0,12 * * *";
 
-    cron.schedule(expression4every9_59Hr, fetchAndSaveData);
     cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
     cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
     cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
@@ -667,8 +669,8 @@ const processShiprocketOrders = async (orders) => {
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
             action: bucketInfo.description,
-            activity: response.data.tracking_data?.shipment_track_activities[0]?.activity,
-            location: response.data.tracking_data?.shipment_track_activities[0]?.location,
+            activity: response.data.tracking_data?.shipment_track_activities?.[0]?.activity,
+            location: response.data.tracking_data?.shipment_track_activities?.[0]?.location,
             stageDateTime: formatISO(parse(response?.data?.tracking_data?.shipment_track_activities?.[0]?.date, 'yyyy-MM-dd HH:mm:ss', new Date())),
           });
           try {

@@ -24,7 +24,8 @@ import {
     walletDeduction,
     getInoviceById,
     generateInvoices,
-    getAllUserWalletTransaction
+    getAllUserWalletTransaction,
+    uploadB2BClientBillingCSV
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -99,6 +100,9 @@ adminRouter.put("/pincodes", upload.single('file'), uploadPincodes);
 
 //@ts-ignore
 adminRouter.put("/billing/client-billing/upload-csv", AdminAuthMiddleware, upload.single('file'), uploadClientBillingCSV);
+
+//@ts-ignore
+adminRouter.put("/billing/b2b/client-billing/upload-csv", AdminAuthMiddleware, upload.single('file'), uploadB2BClientBillingCSV);
 
 //@ts-ignore
 adminRouter.get("/billing/vendor", AdminAuthMiddleware, getVendorBillingData);
