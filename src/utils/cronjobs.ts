@@ -614,7 +614,6 @@ export default async function runCron() {
   if (cron.validate(expression4every2Minutes)) {
     cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, track_delivery);  // Track order status every 30 minutes
-    cron.schedule(expression4every30Minutes, fetchAndSaveData);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every2Minutes, trackOrder_Smartr);
