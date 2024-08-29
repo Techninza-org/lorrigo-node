@@ -15,6 +15,7 @@ import InvoiceModel from "../models/invoice.model";
 import CustomPricingModel from "../models/custom_pricing.model";
 import CourierModel from "../models/courier.model";
 import { isValidObjectId } from "mongoose";
+import B2BClientBillingModal from "../models/b2b-client.billing.modal";
 
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -318,11 +319,13 @@ export const updateChannelPartner = async (req: ExtendedRequest, res: Response, 
 export const getSellerBilling = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const bills = await ClientBillingModal.find({ sellerId: req.seller._id });
+    const b2bBills = await B2BClientBillingModal.find({ sellerId: req.seller._id });
     if (!bills) return res.status(200).send({ valid: false, message: "No Seller found" });
 
     return res.status(200).send({
       valid: true,
       billing: bills,
+      b2bBills
     });
   } catch (error) {
     return next(error)
