@@ -5,6 +5,7 @@ const modal = new mongoose.Schema({
   orderRefId: { type: String, required: true },
   awb: { type: String, required: true },
   orderWeight: { type: Number, required: true },
+  billingDate: { type: Date, required: true },
   billingAmount: { type: Number, required: true },
   otherCharges: { type: String, required: false },
   isODAApplicable: { type: Boolean, required: true },

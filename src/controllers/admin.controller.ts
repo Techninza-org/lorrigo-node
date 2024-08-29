@@ -962,6 +962,7 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
               awb: bill.awb,
               isODAApplicable: bill.isODAApplicable,
               orderWeight: bill.orderWeight,
+              billingDate: new Date()?.toISOString() ?? "",
               billingAmount: result.finalAmount,
               otherCharges: result.otherExpensesTotal,
               vendorWNickName: `${courier.name} ${courier.vendor_channel_id.nickName}`,

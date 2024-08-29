@@ -1,4 +1,4 @@
-import mongoose, { Types } from "mongoose";
+import mongoose, { isValidObjectId, Types } from "mongoose";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
 import { startOfWeek, addDays, getDay, format, startOfDay } from "date-fns";
@@ -537,8 +537,8 @@ export const validateB2BClientBillingFeilds = (value: any, fieldName: string, bi
       }
       break;
     case 'carrierID':
-      if (value === null || value === undefined) {
-        return "carrierID is required";
+      if (value === null || value === undefined || !isValidObjectId(value)) {
+        return "carrierID is required or invalid";
       }
       break;
     default:
