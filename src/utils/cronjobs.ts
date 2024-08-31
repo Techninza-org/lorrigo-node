@@ -399,7 +399,17 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
   try {
     const companyName = 'L';
     const currentDate = new Date();
+    const currMonth = new Date();
+    currMonth.setDate(1);
+    currMonth.setHours(0, 0, 0, 0);
+    currMonth.setMonth(currMonth.getMonth());
     const sellerIds = await SellerModel.find({}).select("_id").lean();
+
+    // const deleteAugRemittance = await RemittanceModel.deleteMany({ remittanceDate: { $gte: "2024-08-01" } });
+    //  console.log("deleteAugRemittance", deleteAugRemittance);
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     for (const seller of sellerIds) {
       // Find all orders for the seller that are delivered and are COD
@@ -407,6 +417,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
         sellerId: seller._id,
         bucket: DELIVERED, // Assuming 1 represents DELIVERED
         payment_mode: 1, // COD
+        createdAt: { $lte: sevenDaysAgo, $gte: currMonth }, // Filter for orders created in the last 7 days
       }).populate("productId").lean() as OrderDocument[];
 
       // Check for orders already included in any remittance
@@ -422,7 +433,9 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
 
       // Group unremitted orders by delivery date
       const ordersGroupedByDate: { [key: string]: OrderDocument[] } = unremittedOrders.reduce((acc: { [key: string]: OrderDocument[] }, order) => {
-        const deliveryDate = order.orderStages?.pop()?.stageDateTime;
+        const length = order?.orderStages?.length
+        const deliveryDate = order?.orderStages[length - 1]?.stageDateTime;
+        
         const deliveryDateOnly = format(deliveryDate, 'yyyy-MM-dd');
 
         if (!acc[deliveryDateOnly]) {
@@ -435,7 +448,6 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
       for (const [deliveryDateStr, ordersOnSameDate] of Object.entries(ordersGroupedByDate)) {
         const deliveryDate = parseISO(deliveryDateStr);
         const daysSinceDelivery = Math.floor((currentDate.getTime() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24));
-        console.log("daysSinceDelivery", daysSinceDelivery, ordersOnSameDate.map(order => order._id));
 
         if (daysSinceDelivery >= 7) {
           const remittanceDate = nextFriday(deliveryDate);
@@ -452,7 +464,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
             const remittanceId = generateRemittanceId(companyName, seller._id.toString(), remittanceDate);
             const remittanceAmount = ordersOnSameDate.reduce((sum, order) => sum + Number(order.amount2Collect), 0);
             const remittanceStatus = 'pending';
-            const BankTransactionId = '123456789000';
+            const BankTransactionId = 'xxxxxxxxxxxxx';
 
             const remittance = new RemittanceModel({
               sellerId: seller._id,
@@ -609,6 +621,7 @@ export const track_delivery = async () => {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
+  // calculateRemittanceEveryDay();
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
