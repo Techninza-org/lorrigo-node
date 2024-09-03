@@ -1,5 +1,5 @@
 import express from "express";
-// import * as dotenv from "dotenv";
+import apicache from 'apicache';
 import type { Request, Response } from "express";
 import authRouter from "./routes/auth.routes";
 import mongoose from "mongoose";
@@ -29,8 +29,10 @@ import adminRouter from "./routes/admin.routes";
 import { getSpecificOrder } from "./controllers/order.controller";
 
 
+const cache = apicache.middleware;
 app.use(cors({ origin: "*" }));
 app.use(express.json());
+app.use(cache("5 minutes"));
 
 //@ts-ignore
 morgan.token("reqbody", (req, res) => JSON.stringify(req.body));

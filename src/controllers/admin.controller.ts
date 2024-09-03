@@ -42,12 +42,12 @@ export const walletDeduction = async (req: ExtendedRequest, res: Response, next:
     return next(error);
   }
 }
-
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    let { from, to, status }: { from?: string, to?: string, status?: string } = req.query;
+    const { from, to, status }: { from?: string, to?: string, status?: string } = req.query;
 
-    const obj = {
+    // Define status buckets
+    const statusBuckets = {
       new: [NEW],
       "ready-to-ship": [READY_TO_SHIP],
       "in-transit": [IN_TRANSIT],
@@ -56,64 +56,54 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
       rto: [RTO],
     };
 
-    let orders, orderCount, b2borders;
-    try {
-      let query: any = {};
+    const query: any = {};
 
-      if (status && obj.hasOwnProperty(status)) {
-        query.bucket = { $in: obj[status as keyof typeof obj] };
+    if (status && statusBuckets.hasOwnProperty(status)) {
+      query.bucket = { $in: statusBuckets[status as keyof typeof statusBuckets] };
+    }
+
+    if (from || to) {
+      const createdAtQuery: any = {};
+
+      if (from) {
+        const fromDate = new Date(from.split("/").reverse().join("-") + "T00:00:00.000Z");
+        createdAtQuery.$gte = fromDate;
       }
 
-      if (from || to) {
-        query.createdAt = {};
-
-        if (from) {
-          const [month, day, year] = from.split("/");
-          const fromDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
-          query.createdAt.$gte = fromDate;
-        }
-
-        if (to) {
-          const [month, day, year] = to.split("/");
-          const toDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
-          query.createdAt.$lte = toDate;
-        }
-
-        if (!from) {
-          delete query.createdAt.$gte;
-        }
-        if (!to) {
-          delete query.createdAt.$lte;
-        }
+      if (to) {
+        const toDate = new Date(to.split("/").reverse().join("-") + "T23:59:59.999Z");
+        createdAtQuery.$lte = toDate;
       }
 
-      orders = await B2COrderModel.find(query)
+      if (Object.keys(createdAtQuery).length > 0) {
+        query.createdAt = createdAtQuery;
+      }
+    }
+
+    const [orders, orderCount, b2borders] = await Promise.all([
+      B2COrderModel.find(query)
         .sort({ createdAt: -1 })
         .populate("productId")
         .populate("pickupAddress")
-        .lean();
-
-      b2borders = (await B2BOrderModel
-        .find(query)
+        .lean(),
+      B2COrderModel.countDocuments(query),
+      B2BOrderModel.find(query)
         .sort({ createdAt: -1 })
         .populate("customer")
         .populate("sellerId")
         .populate("pickupAddress")
-        .lean()).reverse();
-
-      orderCount = await B2COrderModel.countDocuments(query);
-    } catch (err) {
-      return next(err);
-    }
+        .lean()
+    ]);
 
     return res.status(200).send({
       valid: true,
-      response: { orders, orderCount, b2borders },
+      response: { orders, orderCount, b2borders: b2borders.reverse() },
     });
   } catch (error) {
     return next(error);
   }
 };
+
 
 export const getAllUserWalletTransaction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -200,7 +190,46 @@ export const getSellerSpecificOrderAdmin = async (req: ExtendedRequest, res: Res
 
 export const getAllRemittances = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const remittanceOrders = await RemittanceModel.find({}).populate("sellerId").lean();
+    const { from, to }: { from?: string, to?: string, status?: string } = req.query;
+
+    const query: { createdAt?: any } = {};
+
+    if (from || to) {
+      const createdAtQuery: any = {};
+
+      if (from) {
+        const fromDate = new Date(from.split("/").reverse().join("-") + "T00:00:00.000Z");
+        createdAtQuery.$gte = fromDate;
+      }
+
+      if (to) {
+        const toDate = new Date(to.split("/").reverse().join("-") + "T23:59:59.999Z");
+        createdAtQuery.$lte = toDate;
+      }
+
+      if (Object.keys(createdAtQuery).length > 0) {
+        query.createdAt = createdAtQuery;
+      }
+    }
+
+    const remittanceOrders = await RemittanceModel.find({},  {
+      BankTransactionId: 1,
+      remittanceStatus: 1,
+      remittanceDate: 1,
+      remittanceId: 1,
+      remittanceAmount: 1,
+      sellerId: 1,
+      orders: {
+        $map: {
+          input: "$orders",
+          as: "order",
+          in: {
+            orderStages: "$$order.orderStages",
+            awb: "$$order.awb"
+          }
+        }
+      }
+    }).populate("sellerId").lean();
     if (!remittanceOrders) return res.status(200).send({ valid: false, message: "No Remittance found" });
     return res.status(200).send({
       valid: true,
@@ -214,16 +243,41 @@ export const getAllRemittances = async (req: ExtendedRequest, res: Response, nex
 export const getFutureRemittances = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const currentDate = new Date();
-    const currDate = format(currentDate, 'yy-MM-dd');
-    const futureRemittances = await RemittanceModel.find({
-      remittanceDate: { $gte: currDate },
-    }).populate("sellerId").lean();;
+    const currDate = format(currentDate, 'yyyy-MM-dd');
+
+    const futureRemittances = await RemittanceModel.find(
+      {
+        remittanceDate: { $gte: currDate },
+      },
+      {
+        BankTransactionId: 1,
+        remittanceStatus: 1,
+        remittanceDate: 1,
+        remittanceId: 1,
+        remittanceAmount: 1,
+        sellerId: 1,
+        orders: {
+          $map: {
+            input: "$orders",
+            as: "order",
+            in: {
+              orderStages: "$$order.orderStages",
+              awb: "$$order.awb"
+            }
+          }
+        }
+      }
+    )
+      .populate("sellerId", "name email")
+      .lean()
+      .exec();
+
     return res.status(200).send({
       valid: true,
       remittanceOrders: futureRemittances,
     });
   } catch (error) {
-    return res.status(200).send({ valid: false, message: "Error in fetching remittance" });
+    return res.status(500).send({ valid: false, message: "Error in fetching remittance" });
   }
 };
 
@@ -418,28 +472,31 @@ export const uploadPincodes = async (req: ExtendedRequest, res: Response, next: 
 
 export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const couriers = await CourierModel.find().populate("vendor_channel_id").lean();
-    const b2bCouriers = await B2BCalcModel.find().populate("vendor_channel_id").lean();
-    if (!couriers) return res.status(200).send({ valid: false, message: "No Couriers found" })
-    const courierWNickName = couriers.map((courier) => {
+    const [couriers, b2bCouriers] = await Promise.all([
+      CourierModel.find().populate("vendor_channel_id").lean(),
+      B2BCalcModel.find().populate("vendor_channel_id").lean(),
+    ]);
 
-      const { vendor_channel_id, ...courierData } = courier;
-      // @ts-ignore
-      const nameWNickname = `${courierData.name} ${vendor_channel_id?.nickName}`;
-      return {
-        ...courierData,
-        nameWNickname,
-      };
-    });
-    const b2bCouriersWNickName = b2bCouriers.map((courier) => {
-      const { vendor_channel_id, ...courierData } = courier;
-      // @ts-ignore
-      const nameWNickname = `${courierData.name} ${vendor_channel_id?.nickName}`;
-      return {
-        ...courierData,
-        nameWNickname,
-      };
-    });
+    if (!couriers.length && !b2bCouriers.length) {
+      return res.status(200).send({ valid: false, message: "No Couriers found" });
+    }
+
+    const mapWithNickname = (couriersList: any[]) => {
+      return couriersList.map(courier => {
+        const { vendor_channel_id, ...courierData } = courier;
+        const nameWNickname = `${courierData.name} ${vendor_channel_id?.nickName || ''}`.trim();
+        return {
+          ...courierData,
+          nameWNickname,
+        };
+      });
+    };
+
+    const [courierWNickName, b2bCouriersWNickName] = await Promise.all([
+      mapWithNickname(couriers),
+      mapWithNickname(b2bCouriers)
+    ]);
+
     return res.status(200).send({
       valid: true,
       couriers: courierWNickName,
@@ -972,7 +1029,7 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
         }
       };
     }));
-    
+
     // @ts-ignore
     await B2BClientBillingModal.bulkWrite(billsWithCharges);
 
@@ -1009,13 +1066,19 @@ export const getVendorBillingData = async (req: ExtendedRequest, res: Response, 
 }
 export const getClientBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const data = (await ClientBillingModal.find({}).populate("sellerId")).reverse();
-    const b2bData = (await B2BClientBillingModal.find({}).populate("sellerId")).reverse();
-    if (!data) return res.status(200).send({ valid: false, message: "No Client Billing found" });
+    const [data, b2bData] = await Promise.all([
+      ClientBillingModal.find({}).populate("sellerId").lean(),
+      B2BClientBillingModal.find({}).populate("sellerId").lean(),
+    ]);
+
+    if (!data.length && !b2bData.length) {
+      return res.status(200).send({ valid: false, message: "No Client Billing found" });
+    }
+
     return res.status(200).send({
       valid: true,
-      data,
-      b2bData
+      data: data.reverse(),
+      b2bData: b2bData.reverse()
     });
   } catch (error) {
     return next(error);
