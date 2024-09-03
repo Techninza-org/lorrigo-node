@@ -1,0 +1,568 @@
+{
+  "ShipmentData": [
+    {
+      "Shipment": {
+        "PickUpDate": "2024-07-24T13:18:58",
+        "Destination": "Jamnagar",
+        "DestRecieveDate": "2024-07-29T08:54:41.125",
+        "Scans": [
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-22T13:39:54.448",
+              "ScanType": "UD",
+              "Scan": "Manifested",
+              "StatusDateTime": "2024-07-22T13:39:54.448",
+              "ScannedLocation": "Noida_Bairangpur_GW (Uttar Pradesh)",
+              "StatusCode": "X-UCI",
+              "Instructions": "Manifest uploaded"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-22T13:39:56",
+              "ScanType": "UD",
+              "Scan": "Manifested",
+              "StatusDateTime": "2024-07-22T13:39:56",
+              "ScannedLocation": "Noida_Bairangpur_GW (Uttar Pradesh)",
+              "StatusCode": "FMPUR-101",
+              "Instructions": "Pickup scheduled"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-23T10:02:05",
+              "ScanType": "UD",
+              "Scan": "Manifested",
+              "StatusDateTime": "2024-07-23T10:02:05",
+              "ScannedLocation": "Noida_Bairangpur_GW (Uttar Pradesh)",
+              "StatusCode": "FMOFP-101",
+              "Instructions": "Out for Pickup"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-23T16:14:26",
+              "ScanType": "UD",
+              "Scan": "Manifested",
+              "StatusDateTime": "2024-07-23T16:14:26",
+              "ScannedLocation": "Noida_Bairangpur_GW (Uttar Pradesh)",
+              "StatusCode": "FMEOD-152",
+              "Instructions": "Shipment not ready for pickup"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-23T16:14:29",
+              "ScanType": "UD",
+              "Scan": "Manifested",
+              "StatusDateTime": "2024-07-23T16:14:29",
+              "ScannedLocation": "Noida_Bairangpur_GW (Uttar Pradesh)",
+              "StatusCode": "FMPUR-101",
+              "Instructions": "Pickup scheduled"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-24T10:45:32",
+              "ScanType": "UD",
+              "Scan": "Manifested",
+              "StatusDateTime": "2024-07-24T10:45:32",
+              "ScannedLocation": "Noida_Bairangpur_GW (Uttar Pradesh)",
+              "StatusCode": "FMOFP-101",
+              "Instructions": "Out for Pickup"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-24T13:18:58",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-24T13:18:58",
+              "ScannedLocation": "Noida_Bairangpur_GW (Uttar Pradesh)",
+              "StatusCode": "X-PPOM",
+              "Instructions": "Shipment picked up"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-25T01:20:19",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-25T01:20:19",
+              "ScannedLocation": "Noida_Bairangpur_GW (Uttar Pradesh)",
+              "StatusCode": "X-DWS",
+              "Instructions": "System weight captured"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-25T01:20:19",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-25T01:20:19",
+              "ScannedLocation": "Noida_Bairangpur_GW (Uttar Pradesh)",
+              "StatusCode": "X-PIOM",
+              "Instructions": "Shipment Recieved at Origin Center"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-25T04:25:33.294",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-25T04:25:33.294",
+              "ScannedLocation": "Noida_Bairangpur_GW (Uttar Pradesh)",
+              "StatusCode": "X-DBL1F",
+              "Instructions": "Added to Bag"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-25T10:58:42.415",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-25T10:58:42.415",
+              "ScannedLocation": "Noida_Bairangpur_GW (Uttar Pradesh)",
+              "StatusCode": "X-DLL2F",
+              "Instructions": "Bag Added To Trip"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-26T04:18:59.775",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-26T04:18:59.775",
+              "ScannedLocation": "Jaipur_Sez_GW (Rajasthan)",
+              "StatusCode": "X-ILL2F",
+              "Instructions": "Trip Arrived"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-26T14:24:32.358",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-26T14:24:32.358",
+              "ScannedLocation": "Jaipur_Sez_GW (Rajasthan)",
+              "StatusCode": "X-ILL1F",
+              "Instructions": "Bag Received at Facility"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-26T15:37:29.892",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-26T15:37:29.892",
+              "ScannedLocation": "Jaipur_Sez_GW (Rajasthan)",
+              "StatusCode": "X-DLL2F",
+              "Instructions": "Bag Added To Trip"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-27T13:20:13.45",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-27T13:20:13.45",
+              "ScannedLocation": "Ahmedabad_Kanera_GW (Gujarat)",
+              "StatusCode": "X-ILL2F",
+              "Instructions": "Trip Arrived"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-27T17:43:39.194",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-27T17:43:39.194",
+              "ScannedLocation": "Ahmedabad_Kanera_GW (Gujarat)",
+              "StatusCode": "X-ILL1F",
+              "Instructions": "Bag Received at Facility"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-27T20:51:22.887",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-27T20:51:22.887",
+              "ScannedLocation": "Ahmedabad_Kanera_GW (Gujarat)",
+              "StatusCode": "X-DLL2F",
+              "Instructions": "Bag Added To Trip"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-28T03:15:12.296",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-28T03:15:12.296",
+              "ScannedLocation": "Rajkot_Amargadh_H (Gujarat)",
+              "StatusCode": "X-ILL2F",
+              "Instructions": "Trip Arrived"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-28T06:04:53.502",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-28T06:04:53.502",
+              "ScannedLocation": "Rajkot_Amargadh_H (Gujarat)",
+              "StatusCode": "X-ILL1F",
+              "Instructions": "Bag Received at Facility"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-28T10:54:33.98",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-28T10:54:33.98",
+              "ScannedLocation": "Rajkot_Amargadh_H (Gujarat)",
+              "StatusCode": "X-IBD3F",
+              "Instructions": "Shipment Received at Facility"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-28T11:31:18.707",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-28T11:31:18.707",
+              "ScannedLocation": "Rajkot_Amargadh_H (Gujarat)",
+              "StatusCode": "X-DBL1F",
+              "Instructions": "Added to Bag"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-29T02:33:06.694",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-29T02:33:06.694",
+              "ScannedLocation": "Rajkot_Amargadh_H (Gujarat)",
+              "StatusCode": "X-DLL2F",
+              "Instructions": "Bag Added To Trip"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-29T08:26:28.096",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-29T08:26:28.096",
+              "ScannedLocation": "Kalavad_Khodiyarpara_D (Gujarat)",
+              "StatusCode": "X-ILL2F",
+              "Instructions": "Trip Arrived"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-29T08:40:03.752",
+              "ScanType": "UD",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-29T08:40:03.752",
+              "ScannedLocation": "Kalavad_Khodiyarpara_D (Gujarat)",
+              "StatusCode": "X-ILL1F",
+              "Instructions": "Bag Received at Facility"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-29T08:54:41.135",
+              "ScanType": "UD",
+              "Scan": "Pending",
+              "StatusDateTime": "2024-07-29T08:54:41.135",
+              "ScannedLocation": "Kalavad_Khodiyarpara_D (Gujarat)",
+              "StatusCode": "X-IBD3F",
+              "Instructions": "Shipment Received at Facility"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-29T09:33:03.186",
+              "ScanType": "UD",
+              "Scan": "Dispatched",
+              "StatusDateTime": "2024-07-29T09:33:03.186",
+              "ScannedLocation": "Kalavad_Khodiyarpara_D (Gujarat)",
+              "StatusCode": "X-DDD3FD",
+              "Instructions": "Out for delivery"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-29T17:00:26.002",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-29T17:00:26.002",
+              "geo_location": {
+                "lat": 22.2680344,
+                "long": 70.3310211
+              },
+              "ScannedLocation": "Kalavad_Khodiyarpara_D (Gujarat)",
+              "StatusCode": "EOD-6O",
+              "Instructions": "Code verified cancellation"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-29T21:45:18.021",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-29T21:45:18.021",
+              "ScannedLocation": "Kalavad_Khodiyarpara_D (Gujarat)",
+              "StatusCode": "X-DBL1F",
+              "Instructions": "Added to Bag"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-30T08:47:55.572",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-30T08:47:55.572",
+              "ScannedLocation": "Kalavad_Khodiyarpara_D (Gujarat)",
+              "StatusCode": "X-DLL2F",
+              "Instructions": "Bag Added To Trip"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-30T10:34:53.108",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-30T10:34:53.108",
+              "ScannedLocation": "Rajkot_Amargadh_H (Gujarat)",
+              "StatusCode": "X-ILL2F",
+              "Instructions": "Trip Arrived"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-30T11:07:37.366",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-30T11:07:37.366",
+              "ScannedLocation": "Rajkot_Amargadh_H (Gujarat)",
+              "StatusCode": "X-ILL1F",
+              "Instructions": "Bag Received at Facility"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-30T11:17:18",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-30T11:17:18",
+              "ScannedLocation": "Rajkot_Amargadh_H (Gujarat)",
+              "StatusCode": "X-IBD3F",
+              "Instructions": "Shipment Received at Facility"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-30T11:27:10.542",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-30T11:27:10.542",
+              "ScannedLocation": "Rajkot_Amargadh_H (Gujarat)",
+              "StatusCode": "X-DBL1F",
+              "Instructions": "Added to Bag"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-07-31T04:36:31.364",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-07-31T04:36:31.364",
+              "ScannedLocation": "Rajkot_Amargadh_H (Gujarat)",
+              "StatusCode": "X-DLL2F",
+              "Instructions": "Bag Added To Trip"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-08-01T08:16:09.567",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-08-01T08:16:09.567",
+              "ScannedLocation": "Gurgaon_Tauru_GW (Haryana)",
+              "StatusCode": "X-ILL2F",
+              "Instructions": "Trip Arrived"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-08-01T10:02:36.531",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-08-01T10:02:36.531",
+              "ScannedLocation": "Gurgaon_Tauru_GW (Haryana)",
+              "StatusCode": "DLYLH-105",
+              "Instructions": "Vehicle delayed"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-08-01T11:03:02.221",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-08-01T11:03:02.221",
+              "ScannedLocation": "Gurgaon_Tauru_GW (Haryana)",
+              "StatusCode": "X-ILL1F",
+              "Instructions": "Bag Received at Facility"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-08-01T11:41:20.094",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-08-01T11:41:20.094",
+              "ScannedLocation": "Gurgaon_Tauru_GW (Haryana)",
+              "StatusCode": "X-IBD3F",
+              "Instructions": "Shipment Received at Facility"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-08-01T12:20:00.222",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-08-01T12:20:00.222",
+              "ScannedLocation": "Gurgaon_Tauru_GW (Haryana)",
+              "StatusCode": "X-DBL1F",
+              "Instructions": "Added to Bag"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-08-02T11:32:58.596",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-08-02T11:32:58.596",
+              "ScannedLocation": "Gurgaon_Tauru_GW (Haryana)",
+              "StatusCode": "X-DLL2F",
+              "Instructions": "Bag Added To Trip"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-08-02T15:44:15.404",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-08-02T15:44:15.404",
+              "ScannedLocation": "Noida_Sector63D_R (Uttar Pradesh)",
+              "StatusCode": "X-ILL2F",
+              "Instructions": "Trip Arrived"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-08-02T16:08:35.379",
+              "ScanType": "RT",
+              "Scan": "In Transit",
+              "StatusDateTime": "2024-08-02T16:08:35.379",
+              "ScannedLocation": "Noida_Sector63D_R (Uttar Pradesh)",
+              "StatusCode": "X-ILL1F",
+              "Instructions": "Bag Received at Facility"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-08-02T17:46:41.404",
+              "ScanType": "RT",
+              "Scan": "Pending",
+              "StatusDateTime": "2024-08-02T17:46:41.404",
+              "ScannedLocation": "Noida_Sector63D_R (Uttar Pradesh)",
+              "StatusCode": "X-IBD3F",
+              "Instructions": "Shipment Received at Facility"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-08-02T18:10:45.895",
+              "ScanType": "RT",
+              "Scan": "Pending",
+              "StatusDateTime": "2024-08-02T18:10:45.895",
+              "ScannedLocation": "Noida_Sector63D_R (Uttar Pradesh)",
+              "StatusCode": "X-DBL1F",
+              "Instructions": "Added to Bag"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-08-03T08:42:20.607",
+              "ScanType": "RT",
+              "Scan": "Dispatched",
+              "StatusDateTime": "2024-08-03T08:42:20.607",
+              "ScannedLocation": "Noida_Sector63D_R (Uttar Pradesh)",
+              "StatusCode": "X-DDD3FD",
+              "Instructions": "Dispatched for RTO"
+            }
+          },
+          {
+            "ScanDetail": {
+              "ScanDateTime": "2024-08-03T12:36:45.159",
+              "ScanType": "DL",
+              "Scan": "RTO",
+              "StatusDateTime": "2024-08-03T12:36:45.159",
+              "ScannedLocation": "Noida_Sector63D_R (Uttar Pradesh)",
+              "StatusCode": "RD-AC",
+              "Instructions": "RETURN Accepted"
+            }
+          }
+        ],
+        "Status": {
+          "Status": "RTO",
+          "StatusLocation": "Noida_Sector63D_R (Uttar Pradesh)",
+          "StatusDateTime": "2024-08-03T12:36:45.159",
+          "RecievedBy": "",
+          "StatusCode": "RD-AC",
+          "StatusType": "DL",
+          "Instructions": "RETURN Accepted"
+        },
+        "ExpectedReturnDate": "2024-08-06T23:59:59",
+        "ReturnPromisedDeliveryDate": "2024-08-06T23:59:59",
+        "Ewaybill": [],
+        "InvoiceAmount": 868,
+        "ChargedWeight": null,
+        "PickedupDate": "2024-07-24T13:18:58",
+        "DeliveryDate": "2024-08-03T12:36:45.159",
+        "SenderName": "LORRIGO6 SURFACE",
+        "AWB": "9145210460073",
+        "DispatchCount": 1,
+        "OrderType": "COD",
+        "ReturnedDate": "2024-08-03T08:42:21.851",
+        "RTOStartedDate": "2024-07-29T17:00:31.993",
+        "Extras": "",
+        "FirstAttemptDate": "2024-07-29T09:33:03.186",
+        "ReverseInTransit": false,
+        "Quantity": "1",
+        "Origin": "Noida_Bairangpur_GW (Uttar Pradesh)",
+        "Consignee": {
+          "City": "Jamnagar",
+          "Name": "Hiten patel",
+          "Address1": [],
+          "Address2": [],
+          "Address3": "",
+          "PinCode": 361013,
+          "State": "Gujarat",
+          "Telephone2": "",
+          "Country": "India",
+          "Telephone1": ""
+        },
+        "ReferenceNo": "#STR100014511",
+        "OutDestinationDate": "2024-07-25T04:25:33.093",
+        "CODAmount": 868,
+        "PromisedDeliveryDate": "2024-07-29T23:59:59",
+        "PickupLocation": "The Strutt Store",
+        "OriginRecieveDate": "2024-07-25T01:20:19"
+      }
+    }
+  ]
+}
