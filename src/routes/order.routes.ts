@@ -16,10 +16,11 @@ import {
   getBulkOrdersCourier,
 } from "../controllers/order.controller";
 import multer from "multer";
+import apicache from "apicache";
 
 const upload = multer();
 
-// ts-ignore is used as contollers request type is extended with custom property seller
+const cache = apicache.middleware;
 
 const orderRouter = Router();
 
@@ -27,7 +28,7 @@ const orderRouter = Router();
 orderRouter.get("/", getOrders);
 
 // @ts-ignore
-orderRouter.get("/b2c/channels", getChannelOrders);
+orderRouter.get("/b2c/channels", cache("10 minutes"), getChannelOrders);
 
 // @ts-ignore
 orderRouter.post("/b2c", createB2COrder);
@@ -48,10 +49,10 @@ orderRouter.patch("/update/b2c", updateB2COrder);
 orderRouter.patch("/update/b2c/shopify", updateB2CBulkShopifyOrders);
 
 // @ts-ignore
-orderRouter.post("/b2b", upload.fields([{ name: 'invoice', maxCount: 1 },{ name: 'supporting_document', maxCount: 1 }]), createB2BOrder);
+orderRouter.post("/b2b", upload.fields([{ name: 'invoice', maxCount: 1 }, { name: 'supporting_document', maxCount: 1 }]), createB2BOrder);
 
 // @ts-ignore
-orderRouter.patch("/update/b2b",  upload.fields([{ name: 'invoice', maxCount: 1 },{ name: 'supporting_document', maxCount: 1 }]),updateB2BOrder);
+orderRouter.patch("/update/b2b", upload.fields([{ name: 'invoice', maxCount: 1 }, { name: 'supporting_document', maxCount: 1 }]), updateB2BOrder);
 
 //@ts-ignore
 orderRouter.get("/all/b2b", getB2BOrders);

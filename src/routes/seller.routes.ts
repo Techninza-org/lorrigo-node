@@ -23,11 +23,18 @@ import {
 
 import multer from 'multer';
 import apicache from 'apicache';
-import { invalidateCache } from "../utils/cacheControl";
 
 const storage = multer.memoryStorage();
 const fileUpload = multer({ storage: storage });
-const cache = apicache.middleware;
+
+const cache = apicache.options({
+    appendKey: (req: any, res) => {
+        const endpoint = req.url.split('?')[0];
+        const queryParams = JSON.stringify(req.query);
+        console.log(`${req}`);
+        return `_${endpoint}_${queryParams}`;
+    }
+}).middleware;
 
 
 const sellerRouter = Router();
@@ -36,7 +43,7 @@ const sellerRouter = Router();
 sellerRouter.get("/", getSeller);
 
 //@ts-ignore
-sellerRouter.get("/couriers", cache('5 minutes'), getSellerCouriers);
+sellerRouter.get("/couriers", getSellerCouriers);
 
 //@ts-ignore
 sellerRouter.get("/wallet-balance", getSellerWalletBalance);
@@ -45,22 +52,22 @@ sellerRouter.get("/wallet-balance", getSellerWalletBalance);
 sellerRouter.get("/transactions", getSellerTransactionHistory);
 
 //@ts-ignore
-sellerRouter.get("/invoice", getInvoices)
+sellerRouter.get("/invoice", cache("5 minutes"), getInvoices)
 
 //@ts-ignore
-sellerRouter.get("/invoice/:id", getInoviceById)
+sellerRouter.get("/invoice/:id", cache("1 day"), getInoviceById)
 
 //@ts-ignore
 sellerRouter.get('/cod-price', getCodPrice)
 
 //@ts-ignore
-sellerRouter.get("/remittance", getRemittaces);
+sellerRouter.get("/remittance", cache("1 day"), getRemittaces);
 
 //@ts-ignore
-sellerRouter.get("/remittance/:id", getRemittaceByID);
+sellerRouter.get("/remittance/:id", cache("1 day"), getRemittaceByID);
 
 //@ts-ignore
-sellerRouter.get("/billing", getSellerBilling);
+sellerRouter.get("/billing",cache("50 minutes"), getSellerBilling);
 
 //@ts-ignore
 sellerRouter.post("/channels", manageChannelPartner);

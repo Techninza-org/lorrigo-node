@@ -758,7 +758,9 @@ export const updateB2CBulkShopifyOrders = async (req: ExtendedRequest, res: Resp
 export const getOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const sellerId = req.seller._id;
-    let { limit, page, status }: { limit?: number; page?: number; status?: string } = req.query;
+    // let { limit, page, status }: { limit?: number; page?: number; status?: string } = req.query;
+    let { from, to, status }: { from?: string, to?: string, status?: string } = req.query;
+
 
     const obj = {
       new: [NEW, RETURN_CONFIRMED],
@@ -769,38 +771,59 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       rto: [RTO],
     };
 
-    limit = Number(limit);
-    page = Number(page);
-    page = page < 1 ? 1 : page;
-    limit = limit < 1 ? 1 : limit;
+    // limit = Number(limit);
+    // page = Number(page);
+    // page = page < 1 ? 1 : page;
+    // limit = limit < 1 ? 1 : limit;
 
-    const skip = (page - 1) * limit;
+    // const skip = (page - 1) * limit;
 
-    let orders, orderCount;
+    let orders;
     try {
       let query: any = { sellerId };
+
+      if (from || to) {
+        query.createdAt = {};
+
+        if (from) {
+          const [month, day, year] = from.split("/");
+          const fromDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+          query.createdAt.$gte = fromDate;
+        }
+
+        if (to) {
+          const [month, day, year] = to.split("/");
+          const toDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
+          query.createdAt.$lte = toDate;
+        }
+
+        if (!from) {
+          delete query.createdAt.$gte;
+        }
+        if (!to) {
+          delete query.createdAt.$lte;
+        }
+      }
+
 
       if (status && obj.hasOwnProperty(status)) {
         query.bucket = { $in: obj[status as keyof typeof obj] };
       }
 
+      // Optimized query
       orders = await B2COrderModel
         .find(query)
         .sort({ createdAt: -1 })
-        .populate("productId")
-        .populate("pickupAddress")
+        .populate("productId", "name category quantity taxable_value") // Fetch only required fields from productId
+        .populate("pickupAddress")    // Fetch only required fields from pickupAddress
         .lean();
 
-      orderCount =
-        status && obj.hasOwnProperty(status)
-          ? await B2COrderModel.countDocuments(query)
-          : await B2COrderModel.countDocuments({ sellerId });
     } catch (err) {
       return next(err);
     }
     return res.status(200).send({
       valid: true,
-      response: { orders, orderCount },
+      response: { orders },
     });
   } catch (error) {
     return next(error);
@@ -1080,7 +1103,6 @@ export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: Ne
       orders = (await B2BOrderModel
         .find(query)
         .populate("customer")
-        .populate('sellerId')
         .populate("pickupAddress")
         .lean()).reverse();
 

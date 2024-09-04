@@ -473,7 +473,7 @@ export const getHub = async (req: ExtendedRequest, res: Response, next: NextFunc
 
   const query = type === "all" ? { sellerId } : { sellerId, isActive: true };
 
-  let sellerHubs;
+  let sellerHubs: any[] = [];
   try {
     sellerHubs = await HubModel.find(query);
   } catch (err) {

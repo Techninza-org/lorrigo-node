@@ -5,7 +5,7 @@ import {
   cancelShipment,
   createB2BShipment,
   createShipment,
-  getShipemntDetails,
+  getShipmentDetails,
   orderManifest,
   orderReattempt,
   createBulkShipment
@@ -41,6 +41,6 @@ shipmentRouter.post("/b2b/cancel", cancelB2BShipment);
 shipmentRouter.get("/b2b/track", trackB2BShipment);
 
 //@ts-ignore
-shipmentRouter.get("/dashboard", getShipemntDetails);
+shipmentRouter.get("/dashboard", getShipmentDetails);
 
 export default shipmentRouter;

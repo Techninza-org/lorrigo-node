@@ -75,9 +75,18 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const seller = await req.seller;
-    delete seller?.password;
-    delete seller?.__v;
+    const sellerId = req.seller._id;
+    const seller = await SellerModel.findById(sellerId)
+      .select({
+        channelPartners: 1,
+        config: 1,
+        bankDetails: 1,
+        billingAddress: 1,
+        companyProfile: 1,
+        gstInvoice: 1,
+        kycDetails: { submitted: 1 },  // Include only 'submitted' field in 'kycDetails'
+      });
+
     return res.status(200).send({ valid: true, seller });
   } catch (error) {
     return next(error);
@@ -222,7 +231,24 @@ export const deleteSeller = async (req: ExtendedRequest, res: Response, next: Ne
 
 export const getRemittaces = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const remittanceOrders = await RemittanceModel.find({ sellerId: req.seller._id });
+    const remittanceOrders = await RemittanceModel.find({ sellerId: req.seller._id }, {
+      BankTransactionId: 1,
+      remittanceStatus: 1,
+      remittanceDate: 1,
+      remittanceId: 1,
+      remittanceAmount: 1,
+      sellerId: 1,
+      orders: {
+        $map: {
+          input: "$orders",
+          as: "order",
+          in: {
+            orderStages: "$$order.orderStages",
+            awb: "$$order.awb"
+          }
+        }
+      }
+    }).populate("sellerId").lean();;
     if (!remittanceOrders) return res.status(200).send({ valid: false, message: "No Remittance found" });
 
     return res.status(200).send({
@@ -556,7 +582,7 @@ export const confirmInvoicePayment = async (req: ExtendedRequest, res: Response,
 
 export const getSellerWalletBalance = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const seller = await SellerModel.findById(req.seller._id);
+    const seller = await SellerModel.findById(req.seller._id).select("walletBalance");
     if (!seller) return res.status(200).send({ valid: false, message: "No Seller found" });
 
     return res.status(200).send({

@@ -36,11 +36,12 @@ import { updateVendor4Seller } from "../utils/helpers";
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 const adminRouter = Router();
+
 const cache = apicache.options({
-    appendKey: (req, res) => {
+    appendKey: (req: any, res) => {
         const endpoint = req.url.split('?')[0];
         const queryParams = JSON.stringify(req.query);
-        return `${endpoint}_${queryParams}`;
+        return `${req?.seller?._id?.toString()}_${endpoint}_${queryParams}`;
     }
 }).middleware;
 
@@ -48,15 +49,15 @@ const cache = apicache.options({
 adminRouter.post("/login", handleAdminLogin);
 
 //@ts-ignore
-adminRouter.get("/all-orders", AdminAuthMiddleware, cache("5 minutes"), getAllOrdersAdmin);
+adminRouter.get("/all-orders", AdminAuthMiddleware, cache("2 minutes"), getAllOrdersAdmin);
 
 //@ts-ignore
-adminRouter.get("/all-wallet", AdminAuthMiddleware, getAllUserWalletTransaction);
+adminRouter.get("/all-wallet", AdminAuthMiddleware, cache("2 minutes"), getAllUserWalletTransaction);
 
 //@ts-ignore
-adminRouter.get("/order/:id", AdminAuthMiddleware, cache("5 minutes"), getSpecificOrderAdmin);
+adminRouter.get("/order/:id", AdminAuthMiddleware, cache("10 minutes"), getSpecificOrderAdmin);
 //@ts-ignore
-adminRouter.get("/orders/seller/:id", AdminAuthMiddleware, getSellerSpecificOrderAdmin);
+adminRouter.get("/orders/seller/:id", AdminAuthMiddleware, cache("10 minutes"), getSellerSpecificOrderAdmin);
 //@ts-ignore
 adminRouter.get("/all-remittances", AdminAuthMiddleware, cache("1 day"), getAllRemittances);
 
@@ -76,7 +77,7 @@ adminRouter.put("/seller/config/:sellerId", updateSellerConfig);
 adminRouter.get("/seller", AdminAuthMiddleware, getSellerDetails);
 
 //@ts-ignore
-adminRouter.get("/couriers", AdminAuthMiddleware, cache("5 minutes"), getAllCouriers);
+adminRouter.get("/couriers", AdminAuthMiddleware, getAllCouriers);
 
 //@ts-ignore
 adminRouter.post("/wallet-deduction", AdminAuthMiddleware, walletDeduction);
@@ -93,7 +94,7 @@ adminRouter.post("/manage-seller-couriers", AdminAuthMiddleware, manageSellerCou
 
 // B2B
 //@ts-ignore
-adminRouter.get("/seller-b2b-couriers", AdminAuthMiddleware, cache("5 minutes"), getSellerB2BCouriers);
+adminRouter.get("/seller-b2b-couriers", AdminAuthMiddleware, getSellerB2BCouriers);
 
 // B2B
 //@ts-ignore
@@ -113,21 +114,21 @@ adminRouter.put("/billing/client-billing/upload-csv", AdminAuthMiddleware, uploa
 adminRouter.put("/billing/b2b/client-billing/upload-csv", AdminAuthMiddleware, upload.single('file'), uploadB2BClientBillingCSV);
 
 //@ts-ignore
-adminRouter.get("/billing/vendor", AdminAuthMiddleware, getVendorBillingData);
+adminRouter.get("/billing/vendor", AdminAuthMiddleware, cache("3 minutes"), getVendorBillingData);
 
 //@ts-ignore
-adminRouter.get("/billing/client", AdminAuthMiddleware, getClientBillingData);
+adminRouter.get("/billing/client", AdminAuthMiddleware, cache("3 minutes"), getClientBillingData);
 
 //@ts-ignore
 adminRouter.post("/manage-remittance", AdminAuthMiddleware, manageSellerRemittance);
 
 //@ts-ignore
-adminRouter.get("/invoice", AdminAuthMiddleware, getInvoices);
+adminRouter.get("/invoice", AdminAuthMiddleware, cache("1 day"), getInvoices);
 
 //@ts-ignore
-adminRouter.get("/invoice/:id", AdminAuthMiddleware, getInoviceById);
+adminRouter.get("/invoice/:id", AdminAuthMiddleware, cache("1 day"), getInoviceById);
 
 // @ts-ignore
-adminRouter.get('/generate-invoice', AdminAuthMiddleware, generateInvoices);
+adminRouter.get('/generate-invoice', AdminAuthMiddleware, cache("1 day"), generateInvoices);
 
 export default adminRouter;

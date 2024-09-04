@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 const app = express();
 import config from "./utils/config";
 import orderRouter from "./routes/order.routes";
-import { AuthMiddleware, ErrorHandler } from "./utils/middleware";
+import { AuthMiddleware, ErrorHandler, ExtendedRequest } from "./utils/middleware";
 import {
   B2BRatecalculatorController,
   addVendors,
@@ -26,19 +26,10 @@ import runCron, {
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
 import { getSpecificOrder } from "./controllers/order.controller";
-import { cacheControl } from "./utils/cacheControl";
 import apicache from "apicache";
 
 app.use(cors({ origin: "*" }));
 app.use(express.json());
-
-// const cache = apicache.options({
-//   appendKey: (req: Request, res: Response) => {
-//     const endpoint = req.url.split('?')[0];
-//     const queryParams = JSON.stringify(req.query);
-//     return `${endpoint}_${queryParams}`;
-//   }
-// }).middleware;
 
 const cache = apicache.middleware;
 
@@ -92,7 +83,7 @@ mongoose
 
 app.use("/api/auth", authRouter);
 app.post("/api/vendor", addVendors);
-app.get("/api/getsellers", cache("5 minutes") , getSellers); //admin
+app.get("/api/getsellers", cache("5 minutes"), getSellers); //admin
 
 // @ts-ignore
 app.get("/api/order/:awb", getSpecificOrder);

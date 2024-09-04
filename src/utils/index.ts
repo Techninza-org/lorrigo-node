@@ -15,83 +15,68 @@ import APIs from "./constants/third_party_apis";
 import ShipmentResponseModel from "../models/shipment-response.model";
 
 
-export function calculateShipmentDetails(orders: any[]) {
-  let totalShipments: any[] = [];
-  let pickupPending = 0;
-  let inTransit = 0;
-  let delivered = 0;
-  let rto = 0;
 
-  orders.forEach((order) => {
-    totalShipments.push(order);
+export function calculateShipmentDetails(orders: any[]) {
+  let pickupPending = 0, inTransit = 0, delivered = 0, rto = 0;
+
+  orders.forEach(order => {
     switch (order.bucket) {
-      case READY_TO_SHIP:
-        pickupPending++;
-        break;
-      case IN_TRANSIT:
-        inTransit++;
-        break;
-      case DELIVERED:
-        delivered++;
-        break;
-      case RTO:
-        rto++;
-        break;
-      default:
-        break;
+      case READY_TO_SHIP: pickupPending++; break;
+      case IN_TRANSIT: inTransit++; break;
+      case DELIVERED: delivered++; break;
+      case RTO: rto++; break;
     }
   });
 
-  return { totalShipments, pickupPending, inTransit, delivered, ndrPending: 0, rto };
+  return { totalShipments: orders.length, pickupPending, inTransit, delivered, ndrPending: 0, rto };
 }
 
 export function calculateNDRDetails(orders: any[]) {
-  let totalNDR = 0;
-  let yourReattempt = 0;
-  let buyerReattempt = 0;
-  let NDRDelivered = 0;
+  let totalNDR = 0, yourReattempt = 0, buyerReattempt = 0;
 
-  orders.forEach((order) => {
-    switch (order.bucket) {
-      case (12, 13, 14, 15, 16, 17):
-        totalNDR++;
-        break;
-      case (12, 13, 14):
-        yourReattempt++;
-        break;
-      case (15, 16, 17):
-        buyerReattempt++;
-        break;
-      default:
-        break;
+  orders.forEach(order => {
+    if ([12, 13, 14, 15, 16, 17].includes(order.bucket)) {
+      totalNDR++;
+      if ([12, 13, 14].includes(order.bucket)) yourReattempt++;
+      if ([15, 16, 17].includes(order.bucket)) buyerReattempt++;
     }
   });
 
-  return { TotalNRD: 0, buyerReattempt: 0, yourReattempt: 0, NDRDelivered: 0 };
+  return { totalNDR, yourReattempt, buyerReattempt, NDRDelivered: 0 };
 }
 
 export function calculateCODDetails(orders: any[]) {
-  const currentDate = new Date();
-  const date30DaysAgo = new Date(currentDate);
+  const date30DaysAgo = new Date();
   date30DaysAgo.setDate(date30DaysAgo.getDate() - 30);
 
-  const CODOrders = orders.filter((order) => order.payment_mode === 1);
-  const totalCODLast30Days = CODOrders.filter((order) => new Date(order.order_invoice_date) >= date30DaysAgo).length;
-  const CODAvailable = CODOrders.length;
+  const CODOrders = orders.filter(order => order.payment_mode === 1);
+  const totalCODLast30Days = CODOrders.filter(order => new Date(order.order_invoice_date) >= date30DaysAgo).length;
 
-  const currentDateTimestamp = currentDate.getTime();
-  const eightDaysAgoTimestamp = currentDateTimestamp - 8 * 24 * 60 * 60 * 1000;
-  const CODPending = CODOrders.filter(
-    (order) => new Date(order.order_invoice_date).getTime() < eightDaysAgoTimestamp
-  ).length;
+  const CODPending = CODOrders.filter(order => new Date(order.order_invoice_date) < new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)).length;
 
-  const remittedCODOrders = CODOrders.filter((order) => order.bucket === 3);
-  const lastCODRemitted = remittedCODOrders.reduce(
-    (prev, curr) => (new Date(curr.order_invoice_date) > new Date(prev.order_invoice_date) ? curr : prev),
+  const lastCODRemitted = CODOrders.filter(order => order.bucket === 3).reduce(
+    (prev, curr) => new Date(curr.order_invoice_date) > new Date(prev.order_invoice_date) ? curr : prev,
     {}
   );
 
-  return { totalCODLast30Days, CODAvailable, CODPending, lastCODRemitted };
+  return { totalCODLast30Days, CODAvailable: CODOrders.length, CODPending, lastCODRemitted };
+}
+
+export function calculateTodayYesterdayAnalysis(todayOrders: any[], yesterdayOrders: any[]) {
+  const todayRevenue = calculateRevenue(todayOrders);
+  const yesterdayRevenue = calculateRevenue(yesterdayOrders);
+
+  const todayAverageShippingCost = calculateAverageShippingCost(todayOrders);
+  const yesterdayAverageShippingCost = calculateAverageShippingCost(yesterdayOrders);
+
+  return {
+    todayOrdersCount: todayOrders.length,
+    yesterdayOrdersCount: yesterdayOrders.length,
+    todayRevenue,
+    yesterdayRevenue,
+    todayAverageShippingCost,
+    yesterdayAverageShippingCost,
+  };
 }
 
 export function calculateRevenue(orders: any[]) {
@@ -99,7 +84,7 @@ export function calculateRevenue(orders: any[]) {
 }
 
 export function calculateAverageShippingCost(orders: any[]) {
-  const totalShippingCost = orders.reduce((total, order) => total + (order.amount2Collect || 0), 0);
+  const totalShippingCost = calculateRevenue(orders);
   return orders.length > 0 ? totalShippingCost / orders.length : 0;
 }
 

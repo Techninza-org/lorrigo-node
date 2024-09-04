@@ -43,8 +43,16 @@ export const AuthMiddleware = async (req: ExtendedRequest, res: Response, next: 
       return next(err);
     }
 
-    const seller = await SellerModel.findOne({ email: sellerEmail }).populate("channelPartners");
-    if (!seller) return res.status(200).send({ valid: false, message: "Seller no more exists" });
+    const seller = await SellerModel.findOne({ email: sellerEmail })
+      .select('_id vendors gstno b2bVendors')
+      .populate({
+        path: 'channelPartners',  // Specify the field to populate
+        select: '_id name',       // Select only the necessary fields from channelPartners
+      });
+
+    if (!seller) {
+      return res.status(200).send({ valid: false, message: "Seller no more exists" });
+    }
     req.seller = seller;
     next();
   } catch (error) {
@@ -85,7 +93,8 @@ export const AdminAuthMiddleware = async (req: ExtendedRequest, res: Response, n
       return next(err);
     }
 
-    const seller = await SellerModel.findOne({ email: sellerEmail, role: "admin" }).populate("channelPartners");
+    const seller = await SellerModel.findOne({ email: sellerEmail,  role: "admin"  }).select('_id');
+
     if (!seller) return res.status(200).send({ valid: false, message: "Admin no more exists" });
     req.admin = seller;
     next();

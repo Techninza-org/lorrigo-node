@@ -30,6 +30,7 @@ import {
   calculateNDRDetails,
   calculateRevenue,
   calculateShipmentDetails,
+  calculateTodayYesterdayAnalysis,
   createDelhiveryShipment,
   handleMarutiShipment,
   handleSmartShipShipment,
@@ -1909,64 +1910,31 @@ export async function cancelB2BShipment(req: ExtendedRequest, res: Response, nex
   }
 }
 
-export async function getShipemntDetails(req: ExtendedRequest, res: Response, next: NextFunction) {
+export async function getShipmentDetails(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {
     const sellerID = req.seller._id.toString();
     const currentDate = new Date();
-
-    // Calculate last 30 days from today
     const date30DaysAgo = new Date(currentDate);
     date30DaysAgo.setDate(date30DaysAgo.getDate() - 30);
 
-    // Calculate start and end of today
     const startOfToday = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
-    const endOfToday = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 1);
-
-    // Calculate start and end of yesterday
     const startOfYesterday = new Date(startOfToday);
     startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-    const endOfYesterday = new Date(startOfYesterday);
-    endOfYesterday.setDate(endOfYesterday.getDate() + 1);
 
-    // Fetch today's and yesterday's orders
     const [orders, todayOrders, yesterdayOrders, remittanceCODOrders] = await Promise.all([
-      B2COrderModel.find({
-        sellerId: sellerID,
-        createdAt: { $gte: date30DaysAgo, $lt: currentDate }
-      }),
-      B2COrderModel.find({ sellerId: sellerID, createdAt: { $gte: startOfToday, $lt: endOfToday } }),
-      B2COrderModel.find({ sellerId: sellerID, createdAt: { $gte: startOfYesterday, $lt: endOfYesterday } }),
-      ClientBillingModal.find({
-        sellerId: sellerID,
-        createdAt: { $gte: date30DaysAgo, $lt: currentDate }
-      }),
-
+      B2COrderModel.find({ sellerId: sellerID, createdAt: { $gte: date30DaysAgo, $lt: currentDate } }),
+      B2COrderModel.find({ sellerId: sellerID, createdAt: { $gte: startOfToday, $lt: new Date(startOfToday).setDate(startOfToday.getDate() + 1) } }),
+      B2COrderModel.find({ sellerId: sellerID, createdAt: { $gte: startOfYesterday, $lt: startOfToday } }),
+      ClientBillingModal.find({ sellerId: sellerID, createdAt: { $gte: date30DaysAgo, $lt: currentDate } })
     ]);
-    // Extract shipment details
+
     const shipmentDetails = calculateShipmentDetails(orders);
-
-    // Calculate NDR details
     const NDRDetails = calculateNDRDetails(orders);
-
-    // Calculate COD details
     const CODDetails = calculateCODDetails(remittanceCODOrders);
 
-    // Calculate today's and yesterday's revenue and average shipping cost
-    const todayRevenue = calculateRevenue(todayOrders);
-    const yesterdayRevenue = calculateRevenue(yesterdayOrders);
-    const todayAverageShippingCost = calculateAverageShippingCost(todayOrders);
-    const yesterdayAverageShippingCost = calculateAverageShippingCost(yesterdayOrders);
+    const todayYesterdayAnalysis = calculateTodayYesterdayAnalysis(todayOrders, yesterdayOrders);
 
-    const todayYesterdayAnalysis = {
-      todayOrdersCount: todayOrders.length,
-      yesterdayOrdersCount: yesterdayOrders.length,
-      todayRevenue,
-      yesterdayRevenue,
-      todayAverageShippingCost,
-      yesterdayAverageShippingCost,
-    };
-
-    return res.status(200).json({ shipmentDetails, NDRDetails, CODDetails, todayYesterdayAnalysis });
+    return res.status(200).json({ totalShipments: orders.length, shipmentDetails, NDRDetails, CODDetails, todayYesterdayAnalysis });
   } catch (error) {
     return res.status(500).json({ message: "Something went wrong" });
   }

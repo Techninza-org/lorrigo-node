@@ -2,3 +2,4 @@
 node_modules/
 *.js
 delhivery-0.5-tracking.json
+dist/

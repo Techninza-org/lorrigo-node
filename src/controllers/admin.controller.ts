@@ -28,7 +28,7 @@ export const walletDeduction = async (req: ExtendedRequest, res: Response, next:
     if (!sellerId || !amt || !desc) {
       return res.status(200).send({ valid: false, message: "Invalid payload" });
     }
-    const seller = await SellerModel.findById(sellerId);
+    const seller = await SellerModel.findById(sellerId).select("_id walletBalance").lean();
     if (!seller) {
       return res.status(200).send({ valid: false, message: "Seller not found" });
     }
@@ -154,7 +154,12 @@ export const getAllUserWalletTransaction = async (req: ExtendedRequest, res: Res
         }
       }
 
-      walletTxns = await PaymentTransactionModal.find(query).sort({ createdAt: -1 }).populate("sellerId");
+      walletTxns = await PaymentTransactionModal.find(query)
+        .sort({ createdAt: -1 })
+        .populate({
+          path: "sellerId",
+          select: "name",
+        });
 
     } catch (err) {
       return next(err);
@@ -217,7 +222,7 @@ export const getAllRemittances = async (req: ExtendedRequest, res: Response, nex
       }
     }
 
-    const remittanceOrders = await RemittanceModel.find({},  {
+    const remittanceOrders = await RemittanceModel.find({}, {
       BankTransactionId: 1,
       remittanceStatus: 1,
       remittanceDate: 1,
@@ -298,7 +303,7 @@ export const getSellerRemittance = async (req: ExtendedRequest, res: Response, n
       return res.status(400).send({ valid: false, message: "Invalid or missing remittanceId" });
     }
 
-    const seller = await SellerModel.findById(sellerId);
+    const seller = await SellerModel.findById(sellerId).select("_id").lean();
     if (!seller) {
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
@@ -407,7 +412,7 @@ export const updateSellerConfig = async (req: ExtendedRequest, res: Response, ne
       }
     };
 
-    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, update, { new: true });
+    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, update, { new: true }).select("-__v -password -margin -kycDetails");
 
     if (!updatedSeller) {
       return res.status(404).send({ error: "Seller not found" });
@@ -478,8 +483,18 @@ export const uploadPincodes = async (req: ExtendedRequest, res: Response, next: 
 export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const [couriers, b2bCouriers] = await Promise.all([
-      CourierModel.find().populate("vendor_channel_id").lean(),
-      B2BCalcModel.find().populate("vendor_channel_id").lean(),
+      CourierModel.find()
+        .populate({
+          path: 'vendor_channel_id',
+          select: '-token -refreshToken'
+        })
+        .lean(),
+      B2BCalcModel.find()
+        .populate({
+          path: 'vendor_channel_id',
+          select: '-token -refreshToken'
+        })
+        .lean()
     ]);
 
     if (!couriers.length && !b2bCouriers.length) {
@@ -521,7 +536,7 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
       return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
     }
 
-    const seller = await SellerModel.findById(sellerId).lean();
+    const seller = await SellerModel.findById(sellerId).select('vendors').lean();
     if (!seller) {
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
@@ -580,7 +595,7 @@ export const manageSellerCourier = async (req: ExtendedRequest, res: Response, n
     }
 
     // Find seller and validate
-    const seller = await SellerModel.findById(sellerId);
+    const seller = await SellerModel.findById(sellerId).select("-kycDetails");
     if (!seller) {
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
@@ -618,7 +633,7 @@ export const getSellerB2BCouriers = async (req: ExtendedRequest, res: Response, 
       return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
     }
 
-    const seller = await SellerModel.findById(sellerId).lean();
+    const seller = await SellerModel.findById(sellerId).select("b2bVendors").lean();
     if (!seller) {
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
@@ -677,7 +692,7 @@ export const manageB2BSellerCourier = async (req: ExtendedRequest, res: Response
     }
 
     // Find seller and validate
-    const seller = await SellerModel.findById(sellerId);
+    const seller = await SellerModel.findById(sellerId).select("-kycDetails");
     if (!seller) {
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
@@ -1057,13 +1072,27 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
 
 export const getVendorBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const data = (await ClientBillingModal.find({}).populate("sellerId")).reverse();
-    const b2bData = (await B2BClientBillingModal.find({}).populate("sellerId")).reverse();
-    if (!data) return res.status(200).send({ valid: false, message: "No Client Billing found" });
+    const [data, b2bData] = await Promise.all([
+      ClientBillingModal.find({})
+        .populate({
+          path: 'sellerId',
+          select: '-kycDetails'
+        }),
+      B2BClientBillingModal.find({})
+        .populate({
+          path: 'sellerId',
+          select: '-kycDetails'
+        })
+    ]);
+
+    if (!data.length && !b2bData.length) {
+      return res.status(200).send({ valid: false, message: "No Client Billing found" });
+    }
+
     return res.status(200).send({
       valid: true,
-      data,
-      b2bData
+      data: data.reverse(),
+      b2bData: b2bData.reverse()
     });
   } catch (error) {
     return next(error);
@@ -1072,8 +1101,16 @@ export const getVendorBillingData = async (req: ExtendedRequest, res: Response, 
 export const getClientBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const [data, b2bData] = await Promise.all([
-      ClientBillingModal.find({}).populate("sellerId").lean(),
-      B2BClientBillingModal.find({}).populate("sellerId").lean(),
+      ClientBillingModal.find({})
+        .populate({
+          path: 'sellerId',
+          select: '-kycDetails'
+        }),
+      B2BClientBillingModal.find({})
+        .populate({
+          path: 'sellerId',
+          select: '-kycDetails'
+        })
     ]);
 
     if (!data.length && !b2bData.length) {
