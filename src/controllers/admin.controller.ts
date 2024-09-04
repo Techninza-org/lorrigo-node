@@ -63,20 +63,25 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
     }
 
     if (from || to) {
-      const createdAtQuery: any = {};
+      query.createdAt = {};
 
       if (from) {
-        const fromDate = new Date(from.split("/").reverse().join("-") + "T00:00:00.000Z");
-        createdAtQuery.$gte = fromDate;
+        const [month, day, year] = from.split("/");
+        const fromDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+        query.createdAt.$gte = fromDate;
       }
 
       if (to) {
-        const toDate = new Date(to.split("/").reverse().join("-") + "T23:59:59.999Z");
-        createdAtQuery.$lte = toDate;
+        const [month, day, year] = to.split("/");
+        const toDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
+        query.createdAt.$lte = toDate;
       }
 
-      if (Object.keys(createdAtQuery).length > 0) {
-        query.createdAt = createdAtQuery;
+      if (!from) {
+        delete query.createdAt.$gte;
+      }
+      if (!to) {
+        delete query.createdAt.$lte;
       }
     }
 

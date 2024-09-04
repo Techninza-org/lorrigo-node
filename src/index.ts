@@ -1,5 +1,4 @@
 import express from "express";
-import apicache from 'apicache';
 import type { Request, Response } from "express";
 import authRouter from "./routes/auth.routes";
 import mongoose from "mongoose";
@@ -27,12 +26,21 @@ import runCron, {
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
 import { getSpecificOrder } from "./controllers/order.controller";
+import { cacheControl } from "./utils/cacheControl";
+import apicache from "apicache";
 
-
-const cache = apicache.middleware;
 app.use(cors({ origin: "*" }));
 app.use(express.json());
-app.use(cache("5 minutes"));
+
+// const cache = apicache.options({
+//   appendKey: (req: Request, res: Response) => {
+//     const endpoint = req.url.split('?')[0];
+//     const queryParams = JSON.stringify(req.query);
+//     return `${endpoint}_${queryParams}`;
+//   }
+// }).middleware;
+
+const cache = apicache.middleware;
 
 //@ts-ignore
 morgan.token("reqbody", (req, res) => JSON.stringify(req.body));
@@ -84,7 +92,7 @@ mongoose
 
 app.use("/api/auth", authRouter);
 app.post("/api/vendor", addVendors);
-app.get("/api/getsellers", getSellers); //admin
+app.get("/api/getsellers", cache("5 minutes") , getSellers); //admin
 
 // @ts-ignore
 app.get("/api/order/:awb", getSpecificOrder);

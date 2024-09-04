@@ -29,34 +29,42 @@ import {
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
+import apicache from 'apicache';
 import { AdminAuthMiddleware } from "../utils/middleware";
 import { updateVendor4Seller } from "../utils/helpers";
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 const adminRouter = Router();
+const cache = apicache.options({
+    appendKey: (req, res) => {
+        const endpoint = req.url.split('?')[0];
+        const queryParams = JSON.stringify(req.query);
+        return `${endpoint}_${queryParams}`;
+    }
+}).middleware;
 
 
 adminRouter.post("/login", handleAdminLogin);
 
 //@ts-ignore
-adminRouter.get("/all-orders", AdminAuthMiddleware, getAllOrdersAdmin);
+adminRouter.get("/all-orders", AdminAuthMiddleware, cache("5 minutes"), getAllOrdersAdmin);
 
 //@ts-ignore
 adminRouter.get("/all-wallet", AdminAuthMiddleware, getAllUserWalletTransaction);
 
 //@ts-ignore
-adminRouter.get("/order/:id", AdminAuthMiddleware, getSpecificOrderAdmin);
+adminRouter.get("/order/:id", AdminAuthMiddleware, cache("5 minutes"), getSpecificOrderAdmin);
 //@ts-ignore
 adminRouter.get("/orders/seller/:id", AdminAuthMiddleware, getSellerSpecificOrderAdmin);
 //@ts-ignore
-adminRouter.get("/all-remittances", AdminAuthMiddleware, getAllRemittances);
+adminRouter.get("/all-remittances", AdminAuthMiddleware, cache("1 day"), getAllRemittances);
 
 //@ts-ignore
-adminRouter.get('/remittances/future', AdminAuthMiddleware, getFutureRemittances);
+adminRouter.get('/remittances/future', AdminAuthMiddleware, cache("1 day"), getFutureRemittances);
 
 //@ts-ignore
-adminRouter.get("/seller-remittance", AdminAuthMiddleware, getSellerRemittance);
+adminRouter.get("/seller-remittance", AdminAuthMiddleware, cache("1 day"), getSellerRemittance);
 
 //@ts-ignore
 adminRouter.put("/seller", AdminAuthMiddleware, updateSellerAdmin);
@@ -68,7 +76,7 @@ adminRouter.put("/seller/config/:sellerId", updateSellerConfig);
 adminRouter.get("/seller", AdminAuthMiddleware, getSellerDetails);
 
 //@ts-ignore
-adminRouter.get("/couriers", AdminAuthMiddleware, getAllCouriers);
+adminRouter.get("/couriers", AdminAuthMiddleware, cache("5 minutes"), getAllCouriers);
 
 //@ts-ignore
 adminRouter.post("/wallet-deduction", AdminAuthMiddleware, walletDeduction);
@@ -85,7 +93,7 @@ adminRouter.post("/manage-seller-couriers", AdminAuthMiddleware, manageSellerCou
 
 // B2B
 //@ts-ignore
-adminRouter.get("/seller-b2b-couriers", AdminAuthMiddleware, getSellerB2BCouriers);
+adminRouter.get("/seller-b2b-couriers", AdminAuthMiddleware, cache("5 minutes"), getSellerB2BCouriers);
 
 // B2B
 //@ts-ignore

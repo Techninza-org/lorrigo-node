@@ -179,22 +179,31 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
 
 export const getSellers = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    let { limit, page, status }: { limit?: number; page?: number; status?: string } = req.query;
+    let { limit = 10, page = 1 }: { limit?: number; page?: number } = req.query;
 
-    limit = Number(limit);
-    page = Number(page);
-    page = page < 1 ? 1 : page;
-    limit = limit < 1 ? 1 : limit;
+    // Ensure that limit and page are valid numbers
+    limit = isNaN(Number(limit)) ? 10 : Math.max(Number(limit), 1);
+    page = isNaN(Number(page)) ? 1 : Math.max(Number(page), 1);
 
     const skip = (page - 1) * limit;
-    const sellers = (await SellerModel.find()).reverse();
-    return res.status(200).send({
+
+    const sellers = await SellerModel.find()
+      .sort({ _id: -1 }) // Sort by _id in descending order
+      // .skip(skip)
+      // .limit(limit)
+      .select('-kycDetails'); // Exclude the kycDetails field
+
+    return res.status(200).json({
       valid: true,
       sellers: sellers,
     });
-  } catch (err) {
-    console.log(err)
-    return next(err);
+  } catch (err: any) {
+    console.error('Error fetching sellers:', err);
+    return res.status(500).json({
+      valid: false,
+      message: 'An error occurred while fetching sellers.',
+      error: err.message || 'Unknown error',
+    });
   }
 };
 
@@ -1442,8 +1451,8 @@ export function getDelhiveryBucketing(scanDetail: { ScanType: string; Scan: stri
   // Determine the correct mapping based on ScanType (UD for forward, RT for return, DL for delivered)
   const statusMapping =
     ScanType === "UD" ? forwardStatusMapping :
-    ScanType === "RT" ? returnStatusMapping :
-    ScanType === "DL" ? deliveredStatusMapping : null;
+      ScanType === "RT" ? returnStatusMapping :
+        ScanType === "DL" ? deliveredStatusMapping : null;
 
   // Return the bucket and description, or a default if not found
   return (
