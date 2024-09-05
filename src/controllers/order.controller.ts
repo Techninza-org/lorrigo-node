@@ -1092,7 +1092,7 @@ export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: Ne
 
     const skip = (page - 1) * limit;
 
-    let orders, orderCount;
+    let orders;
     try {
       let query: any = { sellerId };
 
@@ -1106,16 +1106,12 @@ export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: Ne
         .populate("pickupAddress")
         .lean()).reverse();
 
-      orderCount =
-        status && obj.hasOwnProperty(status)
-          ? await B2BOrderModel.countDocuments(query)
-          : await B2BOrderModel.countDocuments({ sellerId });
     } catch (err) {
       return next(err);
     }
     return res.status(200).send({
       valid: true,
-      response: { orders, orderCount },
+      response: { orders },
     });
   } catch (error) {
     return next(error);

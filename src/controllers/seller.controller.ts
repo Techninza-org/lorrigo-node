@@ -85,7 +85,8 @@ export const getSeller = async (req: ExtendedRequest, res: Response, next: NextF
         companyProfile: 1,
         gstInvoice: 1,
         kycDetails: { submitted: 1 },  // Include only 'submitted' field in 'kycDetails'
-      });
+      })
+      .populate("channelPartners");
 
     return res.status(200).send({ valid: true, seller });
   } catch (error) {
