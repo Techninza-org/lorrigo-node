@@ -85,24 +85,32 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
       }
     }
 
-    const [orders, orderCount, b2borders] = await Promise.all([
+    const [orders, b2borders] = await Promise.all([
       B2COrderModel.find(query)
         .sort({ createdAt: -1 })
         .populate("productId")
         .populate("pickupAddress")
+        .populate({
+          path: "sellerId",
+          select: "name"
+        })
         .lean(),
-      B2COrderModel.countDocuments(query),
       B2BOrderModel.find(query)
         .sort({ createdAt: -1 })
         .populate("customer")
-        .populate("sellerId")
         .populate("pickupAddress")
+        .populate({
+          path: "sellerId",
+          select: "name"
+        })
+        .select('-invoiceImage')
         .lean()
     ]);
 
+
     return res.status(200).send({
       valid: true,
-      response: { orders, orderCount, b2borders: b2borders.reverse() },
+      response: { orders, b2borders: b2borders.reverse() },
     });
   } catch (error) {
     return next(error);
