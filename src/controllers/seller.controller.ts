@@ -450,16 +450,16 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
     const rechargeWalletViaPhoenpe = await axios.request(options);
     const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
 
-    const isPaymentSuccess = rechargeWalletViaPhoenpeData.code.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL);
+    const isPaymentSuccess = rechargeWalletViaPhoenpeData.code.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE);
 
     const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId, sellerId }, {
       $set: {
-        code: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletViaPhoenpeData.code,
+        code: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE : rechargeWalletViaPhoenpeData.code,
         data: rechargeWalletViaPhoenpeData,
       },
       $push: {
         stage: {
-          action: rechargeWalletViaPhoenpeData.success ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletInfo.PAYMENT_FAILED,
+          action: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletInfo.PAYMENT_FAILED,
           dateTime: new Date().toISOString()
         }
       }
@@ -490,20 +490,11 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
 export const refetchLastTransactions = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const sellerId = req.seller._id;
-    const failedTxnTodayYesterday = await PaymentTransactionModal.find({
-      sellerId,
-      stage: {
-        $elemMatch: {
-          action: rechargeWalletInfo.PAYMENT_FAILED,
-          dateTime: {
-            $gte: new Date(new Date().setHours(0, 0, 0, 0)),
-            $lt: new Date(new Date().setHours(23, 59, 59, 999))
-          }
-        }
-      }
-    });
+    // Optimize query to fetch only failed transactions of today and yesterday of whose stage last value is PAYMENT_FAILED
 
     const transactions = await PaymentTransactionModal.find({ sellerId }).sort({ _id: -1 });
+    const failedTxnTodayYesterday = transactions.filter(txn => txn.stage[txn.stage.length - 1].action === rechargeWalletInfo.PAYMENT_FAILED && (new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate() || new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate() - 1));
+
 
     failedTxnTodayYesterday.forEach(async txn => {
       const xVerify = crypto.createHash('sha256').update(`${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${txn.merchantTransactionId}` + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
@@ -522,11 +513,11 @@ export const refetchLastTransactions = async (req: ExtendedRequest, res: Respons
       const rechargeWalletViaPhoenpe = await axios.request(options);
       const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
 
-      const isPaymentSuccess = rechargeWalletViaPhoenpeData?.code?.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL);
+      const isPaymentSuccess = rechargeWalletViaPhoenpeData?.code?.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE);
 
       const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId: txn.merchantTransactionId, sellerId }, {
         $set: {
-          code: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletViaPhoenpeData.code,
+          code: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE : rechargeWalletViaPhoenpeData.code,
           data: rechargeWalletViaPhoenpeData,
         },
         $push: {

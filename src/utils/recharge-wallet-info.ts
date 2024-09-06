@@ -1,5 +1,6 @@
 const PAYMENT_INITIATED = 'Failed';
 const PAYMENT_SUCCESSFUL = 'Completed';
+const PAYMENT_SUCCESSFUL_PHONEPE = 'PAYMENT_SUCCESS';
 const PAYMENT_FAILED = 'Failed';
 const PAYMENT_PENDING = 'In Progress';
 const PAYMENT_CANCELLED = 'Cancelled';
@@ -12,4 +13,5 @@ export const rechargeWalletInfo = {
     PAYMENT_PENDING,
     PAYMENT_CANCELLED,
     PAYMENT_REFUNDED,
+    PAYMENT_SUCCESSFUL_PHONEPE
 }
