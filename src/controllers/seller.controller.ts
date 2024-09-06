@@ -450,9 +450,11 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
     const rechargeWalletViaPhoenpe = await axios.request(options);
     const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
 
-    const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId }, {
+    const isPaymentSuccess = rechargeWalletViaPhoenpeData.code.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL);
+
+    const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId, sellerId }, {
       $set: {
-        code: rechargeWalletViaPhoenpeData.code.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL) ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletViaPhoenpeData.code,
+        code: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletViaPhoenpeData.code,
         data: rechargeWalletViaPhoenpeData,
       },
       $push: {
@@ -464,7 +466,7 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
     });
 
     let updatedSeller;
-    if (rechargeWalletViaPhoenpeData.success) {
+    if (isPaymentSuccess) {
       updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
         $set: {
           walletBalance: Number(req.seller.walletBalance) + (Number(rechargeWalletViaPhoenpeData.data.amount) / 100)
@@ -481,6 +483,73 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
 
   } catch (error) {
     console.log(error, "error [confirmRechargeWallet]")
+    return next(error)
+  }
+}
+
+export const refetchLastTransactions = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = req.seller._id;
+    const failedTxnTodayYesterday = await PaymentTransactionModal.find({
+      sellerId,
+      stage: {
+        $elemMatch: {
+          action: rechargeWalletInfo.PAYMENT_FAILED,
+          dateTime: {
+            $gte: new Date(new Date().setHours(0, 0, 0, 0)),
+            $lt: new Date(new Date().setHours(23, 59, 59, 999))
+          }
+        }
+      }
+    });
+
+    const transactions = await PaymentTransactionModal.find({ sellerId }).sort({ _id: -1 });
+
+    failedTxnTodayYesterday.forEach(async txn => {
+      const xVerify = crypto.createHash('sha256').update(`${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${txn.merchantTransactionId}` + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
+
+      const options = {
+        method: 'get',
+        url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${txn.merchantTransactionId}`,
+        headers: {
+          'accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-VERIFY': xVerify,
+          'X-MERCHANT-ID': envConfig.PHONEPE_MERCHENT_ID,
+        },
+      };
+
+      const rechargeWalletViaPhoenpe = await axios.request(options);
+      const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
+
+      const isPaymentSuccess = rechargeWalletViaPhoenpeData?.code?.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL);
+
+      const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId: txn.merchantTransactionId, sellerId }, {
+        $set: {
+          code: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletViaPhoenpeData.code,
+          data: rechargeWalletViaPhoenpeData,
+        },
+        $push: {
+          stage: {
+            action: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletInfo.PAYMENT_FAILED,
+            dateTime: new Date().toISOString()
+          }
+        }
+      });
+
+      let updatedSeller;
+      if (isPaymentSuccess) {
+        updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
+          $set: {
+            walletBalance: Number(req.seller.walletBalance) + (Number(rechargeWalletViaPhoenpeData.data.amount) / 100)
+          }
+        });
+      }
+    });
+
+
+    return res.status(200).send({ valid: true, transactions });
+  } catch (error) {
     return next(error)
   }
 }

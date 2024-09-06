@@ -18,7 +18,8 @@ import {
     getSellerCouriers,
     getInoviceById,
     confirmInvoicePayment,
-    payInvoiceIntent
+    payInvoiceIntent,
+    refetchLastTransactions
 } from "../controllers/seller.controller";
 
 import multer from 'multer';
@@ -92,6 +93,9 @@ sellerRouter.post("/recharge-wallet", rechargeWalletIntent);
 
 //@ts-ignore
 sellerRouter.post("/confirm-recharge-wallet", confirmRechargeWallet);
+
+//@ts-ignore
+sellerRouter.get("/last-transactions", refetchLastTransactions);
 
 //@ts-ignore
 sellerRouter.post("/pay-invoice", payInvoiceIntent);
