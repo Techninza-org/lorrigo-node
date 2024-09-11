@@ -117,6 +117,9 @@ const B2BOrderSchema = new mongoose.Schema({
   awb: { type: String },
   shipmentCharges: { type: Number, required: false },
   carrierName: { type: String, required: false },
+  shiprocket_order_id: { type: String, required: false },
+  mode_id: { type: String, required: false },
+  delivery_partner_id: { type: String, required: false },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 })

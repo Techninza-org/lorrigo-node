@@ -1061,6 +1061,23 @@ export const MetroCitys = [
 ];
 export const NorthEastStates = ["Sikkim", "Mizoram", "Manipur", "Assam", "Megalaya", "Nagaland", "Tripura", "Jammu and Kashmir", "Himachal Pradesh"];
 
+export async function getShiprocketB2BConfig(): Promise<any> {
+  try {
+    const env = await EnvModel.findOne({ name: "SHIPROCKET_B2B" }).lean();
+    if (!env) return false;
+    const token = "Bearer" + " " + env?.token;
+    return {
+      //@ts-ignore
+      clientId: env.client_id,
+      refreshToken: env.refreshToken,
+      token,
+    }
+  }
+  catch (error) {
+    return false;
+  }
+}
+
 export async function getSmartShipToken(): Promise<string | false> {
   const env = await EnvModel.findOne({ name: "SMARTSHIP" }).lean();
   if (!env) return false;

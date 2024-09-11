@@ -44,7 +44,7 @@ export const AuthMiddleware = async (req: ExtendedRequest, res: Response, next: 
     }
 
     const seller = await SellerModel.findOne({ email: sellerEmail })
-      .select('_id vendors gstno b2bVendors walletBalance channelPartners')
+      .select('_id vendors gstno b2bVendors walletBalance channelPartners name')
       .populate({
         path: 'channelPartners',  // Specify the field to populate
         select: '_id name',       // Select only the necessary fields from channelPartners

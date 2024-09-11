@@ -22,7 +22,7 @@ import exceljs from "exceljs";
 import { DELIVERED, IN_TRANSIT, NDR, NEW, NEW_ORDER_DESCRIPTION, NEW_ORDER_STATUS, READY_TO_SHIP, RETURN_CANCELLATION, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_PICKED, RTO } from "../utils/lorrigo-bucketing-info";
 import { convertToISO, registerOrderOnShiprocket, validateBulkOrderField } from "../utils";
 import CourierModel from "../models/courier.model";
-import { calculateB2BPriceCouriers } from "../utils/B2B-helper";
+import { calculateB2BPriceCouriers, getB2BShiprocketServicableOrder, registerB2BShiprocketOrder } from "../utils/B2B-helper";
 import { OrderDetails } from "../types/b2b";
 
 // TODO create api to delete orders
@@ -1122,7 +1122,7 @@ export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: N
   try {
     const orderId = req.params.id;
     const users_vendors = req.seller.b2bVendors
-    const order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate(["pickupAddress", "customer"]);
+    const order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate(["pickupAddress", "customer"]).select("-__v -updatedAt -createdAt -invoiceImage -supporting_document");
     if (!order) return res.status(200).send({ valid: false, message: "Order not found" });
 
     const orderDetails: OrderDetails = { ...order.toObject() };
@@ -1137,6 +1137,31 @@ export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: N
 
     orderDetails.payment_mode = orderDetails.freightType;
     delete orderDetails.freightType;
+
+    //order_id, mode_id, delivery_partner_id
+    const registerOrder = await registerB2BShiprocketOrder(orderDetails, req.seller.name);
+    const updateOrder = await B2BOrderModel.findByIdAndUpdate(orderId, { shiprocket_order_id: registerOrder.order_id, mode_id: registerOrder.mode_id, delivery_partner_id: registerOrder.delivery_partner_id });
+
+    const b2bShiprocketServicableOrders = await getB2BShiprocketServicableOrder({
+      from_pincode: orderDetails.pickupAddress.pincode,
+      from_city: orderDetails.pickupAddress.city,
+      from_state: orderDetails.pickupAddress.state,
+      to_pincode: orderDetails.customerDetails.pincode,
+      to_city: orderDetails.customerDetails.city,
+      to_state: orderDetails.customerDetails.state,
+      quantity: orderDetails.quantity,
+      invoice_value: orderDetails.amount,
+      packaging_unit_details: orderDetails.packageDetails.map((packageDetail: any) => ({
+        units: packageDetail?.qty || 1,
+        length: packageDetail?.orderBoxLength || 0,
+        width: packageDetail?.orderBoxWidth || 0,
+        height: packageDetail?.orderBoxHeight || 0,
+        weight: packageDetail?.orderBoxWeight || 0,
+        unit: "cm"
+      })),
+    });
+
+    console.log(b2bShiprocketServicableOrders, 'b2bShiprocketServicableOrders')
 
     const data2send = await calculateB2BPriceCouriers(orderId, users_vendors, req.seller._id);
     if (data2send.length < 1) return res.status(200).send({ valid: false, message: "No courier partners found" });
@@ -1342,6 +1367,24 @@ export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next
     return next(error);
   }
 };
+
+
+export const getOrderInvoiceById = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const orderId = req.params.id;
+    const order = await B2BOrderModel.findById(orderId).select("invoiceImage").lean();
+    if (!order) {
+      return res.status(404).send({ valid: false, message: "Invoice not found" });
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename=generated.pdf');
+    const pdfBuffer = Buffer.from(order?.invoiceImage ?? '', 'base64');
+    res.send(pdfBuffer);
+  } catch (error) {
+    return next(error);
+  }
+}
 
 type PickupAddress = {
   name: string;

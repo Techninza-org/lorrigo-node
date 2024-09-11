@@ -11,6 +11,7 @@ import {
   getDelhiveryToken10,
   getDelhiveryTokenPoint5,
   getPincodeDetails,
+  getShiprocketB2BConfig,
   getShiprocketToken,
   getSmartShipToken,
   isValidPayload,
@@ -90,7 +91,17 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
     const shiprocketToken = await getShiprocketToken();
     if (!smartshipToken) return res.status(200).send({ valid: false, message: "smartship ENVs not found" });
 
+    const shiprocketB2BConfig = await getShiprocketB2BConfig()
+    if (!shiprocketB2BConfig) return res.status(200).send({ valid: false, message: "shiprocket B2B ENVs not found" });
+
     const shiprocketAPIconfig = { headers: { Authorization: shiprocketToken } };
+
+    const shiprocketB2BAPIconfig = {
+      headers: {
+        Authorization: shiprocketB2BConfig.token
+
+      }
+    };
 
     const smartshipApiBodySurface = {
       hub_details: {
@@ -145,9 +156,28 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       return_country: "India"
     }
 
+    const shiprocketB2BPayload = {
+      name: name,
+      client_id: shiprocketB2BConfig.clientId, // Pass the clientId dynamically
+      address: {
+        address_line_1: address1,
+        address_line_2: address2 || '', // Optional field, can default to empty string
+        pincode: pincode.toString(), // Convert pincode to string for API
+        city: city,
+        state: state,
+        country: 'India', // Assuming it's always India, change as needed
+      },
+      warehouse_code: `wh_${pincode}`, // Custom warehouse code (e.g., based on pincode)
+      contact_person_name: contactPersonName,
+      contact_person_email: 'noreply@lorrigo.com',
+      contact_person_contact_no: phone,
+    };
+
+
     let smartShipResponse;
     let smartShipResponseExpress;
     let shiprocketResponse;
+    let shiprocketB2BResponse;
     try {
       smartShipResponse = await axios.post(
         config.SMART_SHIP_API_BASEURL! + APIs.HUB_REGISTRATION,
@@ -172,8 +202,14 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
         shiprocketHubPayload,
         shiprocketAPIconfig
       );
+
+      shiprocketB2BResponse = await axios.post(
+        config.SHIPROCKET_B2B_API_BASEURL + APIs.CREATE_HUB_B2B_SHIPROCKET,
+        shiprocketB2BPayload,
+        shiprocketB2BAPIconfig
+      );
+
     } catch (err: any) {
-      console.log(err)
       const isExistingHub = err?.response?.data?.errors?.pickup_location?.[0].includes("Address nick name already in use")
       if (!isExistingHub) return next(err);
     }

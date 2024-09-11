@@ -20,13 +20,6 @@ import path from "path"
 import { setTimeout } from 'timers/promises';
 import envConfig from "../utils/config";
 
-
-/**
- * Update order with statusCode (2) to cancelled order(3)
- * prints Error if occurred during this process
- * @returns Promise(void)
- */
-
 const BATCH_SIZE = 130;
 const API_DELAY = 120000; // 2 minutes in milliseconds
 const trackedOrders = new Set();
@@ -130,6 +123,63 @@ export const CONNECT_SHIPROCKET = async (): Promise<void> => {
   }
 };
 
+export const CONNECT_SHIPROCKET_B2B = async (): Promise<void> => {
+  try {
+    // Fetch the refresh token from the database or environment config
+    const existingEnv = await EnvModel.findOne({ name: "SHIPROCKET_B2B" });
+    const refreshToken = existingEnv ? existingEnv.refreshToken : null;
+
+    if (!refreshToken) {
+      throw new Error('Refresh token not available. Please login first.');
+    }
+
+    const requestBody = {
+      refresh: refreshToken,
+    };
+
+    // Make the request to refresh the token
+    const response = await axios.post(
+      'https://api-cargo.shiprocket.in/api/token/refresh/',
+      requestBody,
+      {
+        headers: {
+          'Authorization': `Bearer ${refreshToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    const responseBody = response.data;
+
+    // Check if the new token was received successfully
+    if (!responseBody || !responseBody.access) {
+      throw new Error('Failed to refresh token');
+    }
+
+    // Save the new access token and refresh token
+    await EnvModel.findOneAndUpdate(
+      { name: "SHIPROCKET_B2B" },
+      {
+        $set: {
+          nickName: "SR_B2B",
+          token: responseBody.access, 
+          refreshToken: responseBody.refresh,  // assuming refresh token might get updated
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    const token = `Bearer ${responseBody.access}`;
+
+    console.log(token, "token")
+    
+    Logger.plog("Shiprocket token refreshed successfully");
+  } catch (err) {
+    console.error(err);
+    Logger.err("Error refreshing Shiprocket token: ", err.message);
+  }
+};
+
 /**
  * function to get SMARTR token and save it into the database
  * @return void
@@ -213,12 +263,6 @@ export const REFRESH_ZOHO_TOKEN = async (): Promise<void> => {
     console.log(err);
   }
 }
-
-/**
- * function to run CronJobs currrently one cron is scheduled to update the status of order which are cancelled to "Already Cancelled".
- * @emits CANCEL_REQUESTED_ORDER
- * @returns void
- */
 
 export const trackOrder_Smartship = async () => {
 
@@ -338,8 +382,8 @@ export const trackOrder_Shiprocket = async () => {
 };
 
 export const trackOrder_Smartr = async () => {
-  const vendorNickname = await EnvModel.findOne({ name: "SMARTR" }).select("nickName")
-  const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } });
+  const vendorNickname = await EnvModel.findOne({ name: "SMARTR" }).select("nickName") // Replace SMARTSHIP, SHIPROCKET etc with SMARTR
+  const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } }); // vendorNickname.nickName: SS, SR, SMR etc
 
   for (let ordersReferenceIdOrders of orders) {
     try {
@@ -621,6 +665,8 @@ export const track_delivery = async () => {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
+
+  // CONNECT_SHIPROCKET_B2B();
   // calculateRemittanceEveryDay();
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";

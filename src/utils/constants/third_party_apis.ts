@@ -62,6 +62,10 @@ const MARUTI_CANCEL_ORDER = "/fulfillment/public/seller/order/cancel-order"
 const MARUTI_SERVICEABILITY = "/fulfillment/public/seller/order/check-ecomm-order-serviceability";
 const MARUTI_ACCESS = "/auth/refresh-token"
 
+const CREATE_HUB_B2B_SHIPROCKET = "/api/warehouses/";
+const REGISTER_ORDER_B2B_SHIPROCKET = "/api/external/order_creation/";
+const CHECK_B2B_SERVICEABILITY = "/api/shipment/charges/";
+
 const APIs = {
   HUB_REGISTRATION,
   HUB_UPDATE,
@@ -118,7 +122,11 @@ const APIs = {
   MARUTI_SERVICEABILITY,
   MARUTI_BOOKING,
   MARUTI_CANCEL_ORDER,
-  MARUTI_ACCESS
+  MARUTI_ACCESS,
+
+  CREATE_HUB_B2B_SHIPROCKET,
+  REGISTER_ORDER_B2B_SHIPROCKET,
+  CHECK_B2B_SERVICEABILITY,
 
 };
 export default APIs;

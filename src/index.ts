@@ -25,7 +25,7 @@ import runCron, {
 } from "./utils/cronjobs";
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
-import { getSpecificOrder } from "./controllers/order.controller";
+import { getOrderInvoiceById, getSpecificOrder } from "./controllers/order.controller";
 import apicache from "apicache";
 
 app.use(cors({ origin: "*" }));
@@ -93,6 +93,8 @@ app.post("/api/shopify", (req, res) => {
   return res.send("ok");
 });
 
+//@ts-ignore
+app.get("/invoice/:id", getOrderInvoiceById);
 //@ts-ignore
 app.post("/api/ratecalculator", AuthMiddleware, ratecalculatorController);
 //@ts-ignore

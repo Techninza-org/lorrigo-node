@@ -490,10 +490,12 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
 export const refetchLastTransactions = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const sellerId = req.seller._id;
-    // Optimize query to fetch only failed transactions of today and yesterday of whose stage last value is PAYMENT_FAILED
-
     const transactions = await PaymentTransactionModal.find({ sellerId }).sort({ _id: -1 });
-    const failedTxnTodayYesterday = transactions.filter(txn => txn.stage[txn.stage.length - 1].action === rechargeWalletInfo.PAYMENT_FAILED && (new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate() || new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate() - 1));
+    const failedTxnTodayYesterday = transactions.filter(txn => txn.stage[txn.stage.length - 1].action === rechargeWalletInfo.PAYMENT_FAILED &&
+      (new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate()
+        ||
+        new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate() - 1))
+      .slice(0, 5);
 
 
     failedTxnTodayYesterday.forEach(async txn => {
