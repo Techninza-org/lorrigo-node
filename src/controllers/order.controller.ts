@@ -1139,29 +1139,29 @@ export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: N
     delete orderDetails.freightType;
 
     //order_id, mode_id, delivery_partner_id
-    const registerOrder = await registerB2BShiprocketOrder(orderDetails, req.seller.name);
-    const updateOrder = await B2BOrderModel.findByIdAndUpdate(orderId, { shiprocket_order_id: registerOrder.order_id, mode_id: registerOrder.mode_id, delivery_partner_id: registerOrder.delivery_partner_id });
+    // const registerOrder = await registerB2BShiprocketOrder(orderDetails, req.seller.name);
+    // const updateOrder = await B2BOrderModel.findByIdAndUpdate(orderId, { shiprocket_order_id: registerOrder?.order_id, mode_id: registerOrder.mode_id, delivery_partner_id: registerOrder.delivery_partner_id });
 
-    const b2bShiprocketServicableOrders = await getB2BShiprocketServicableOrder({
-      from_pincode: orderDetails.pickupAddress.pincode,
-      from_city: orderDetails.pickupAddress.city,
-      from_state: orderDetails.pickupAddress.state,
-      to_pincode: orderDetails.customerDetails.pincode,
-      to_city: orderDetails.customerDetails.city,
-      to_state: orderDetails.customerDetails.state,
-      quantity: orderDetails.quantity,
-      invoice_value: orderDetails.amount,
-      packaging_unit_details: orderDetails.packageDetails.map((packageDetail: any) => ({
-        units: packageDetail?.qty || 1,
-        length: packageDetail?.orderBoxLength || 0,
-        width: packageDetail?.orderBoxWidth || 0,
-        height: packageDetail?.orderBoxHeight || 0,
-        weight: packageDetail?.orderBoxWeight || 0,
-        unit: "cm"
-      })),
-    });
+    // const b2bShiprocketServicableOrders = await getB2BShiprocketServicableOrder({
+    //   from_pincode: orderDetails.pickupAddress.pincode,
+    //   from_city: orderDetails.pickupAddress.city,
+    //   from_state: orderDetails.pickupAddress.state,
+    //   to_pincode: orderDetails.customerDetails.pincode,
+    //   to_city: orderDetails.customerDetails.city,
+    //   to_state: orderDetails.customerDetails.state,
+    //   quantity: orderDetails.quantity,
+    //   invoice_value: orderDetails.amount,
+    //   packaging_unit_details: orderDetails.packageDetails.map((packageDetail: any) => ({
+    //     units: packageDetail?.qty || 1,
+    //     length: packageDetail?.orderBoxLength || 0,
+    //     width: packageDetail?.orderBoxWidth || 0,
+    //     height: packageDetail?.orderBoxHeight || 0,
+    //     weight: packageDetail?.orderBoxWeight || 0,
+    //     unit: "cm"
+    //   })),
+    // });
 
-    console.log(b2bShiprocketServicableOrders, 'b2bShiprocketServicableOrders')
+    // console.log(b2bShiprocketServicableOrders, 'b2bShiprocketServicableOrders')
 
     const data2send = await calculateB2BPriceCouriers(orderId, users_vendors, req.seller._id);
     if (data2send.length < 1) return res.status(200).send({ valid: false, message: "No courier partners found" });
