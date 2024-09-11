@@ -3,6 +3,128 @@ import B2BCalcModel from "../models/b2b.calc.model";
 import { B2BOrderModel } from "../models/order.model";
 import PincodeModel from "../models/pincode.model";
 import { CustomB2BPricingModel } from "../models/custom_pricing.model";
+import { getShiprocketB2BConfig } from "./helpers";
+import envConfig from "./config";
+import APIs from "./constants/third_party_apis";
+
+export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: string) => {
+    try {
+        const b2bVol = orderDetails?.packageDetails?.reduce((sum: any, box: any) => sum + parseFloat(String(box.orderBoxHeight * box.orderBoxLength * box.orderBoxWidth) || '0'), 0);
+
+        const shiprocketB2BConfig = await getShiprocketB2BConfig()
+        const payload = {
+            no_of_packages: orderDetails.quantity || 1,
+            approx_weight: orderDetails?.orderWeight?.toString() || "0",
+            is_insured: orderDetails.isInsured || false,
+            is_to_pay: false, ///
+            to_pay_amount: orderDetails.toPayAmount || null,
+            source_warehouse_name: orderDetails.pickupAddress?.name,
+            source_address_line1: orderDetails.pickupAddress?.address1,
+            source_address_line2: orderDetails.pickupAddress?.address2 || "",
+            source_pincode: orderDetails.pickupAddress?.pincode,
+            source_city: orderDetails.pickupAddress?.city,
+            source_state: orderDetails.pickupAddress?.state,
+            sender_contact_person_name: orderDetails.pickupAddress?.contactPersonName || sellerName,
+            sender_contact_person_email: orderDetails.pickupAddress?.contactPersonEmail || "",
+            sender_contact_person_contact_no: orderDetails.pickupAddress?.phone,
+            destination_warehouse_name: orderDetails.customerDetails?.name,
+            destination_address_line1: orderDetails.customerDetails?.address,
+            destination_address_line2: "",
+            destination_pincode: orderDetails.customerDetails?.pincode,
+            destination_city: orderDetails.customerDetails?.city,
+            destination_state: orderDetails.customerDetails?.state,
+            recipient_contact_person_name: orderDetails.customerDetails?.name,
+            recipient_contact_person_email: orderDetails.customerDetails?.email || "",
+            recipient_contact_person_contact_no: orderDetails.customerDetails?.phone,
+            client_id: shiprocketB2BConfig.clientId,
+            packaging_unit_details: orderDetails.packageDetails.map((packageDetail: any) => ({
+                units: packageDetail?.qty || 1,
+                length: packageDetail?.orderBoxLength || 0,
+                width: packageDetail?.orderBoxWidth || 0,
+                height: packageDetail?.orderBoxHeight || 0,
+                weight: packageDetail?.orderBoxWeight || 0,
+                display_in: "cm"
+            })),
+            recipient_GST: orderDetails.customerDetails?.gst || null,
+            volumetric_weight: (b2bVol / 4500).toString() || "0",
+            supporting_docs: orderDetails.supportingDocs || [],
+            shipment_type: "forward",
+            is_cod: orderDetails.isCOD || false,
+            cod_amount: orderDetails.codAmount || null,
+            mode_name: "surface",  // Can be dynamic based on order
+            source: "API",
+            client_order_id: orderDetails.order_reference_id
+        };
+
+        console.log(payload, "payload")
+
+        const response = await fetch(`${envConfig.SHIPROCKET_B2B_API_BASEURL}${APIs.REGISTER_ORDER_B2B_SHIPROCKET}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': shiprocketB2BConfig.token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+
+        console.log(response, "b2b order register response")
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.log(error, 'error in registerB2BShiprocketOrder')
+    }
+}
+
+export const getB2BShiprocketServicableOrder = async (orderDetails: any) => {
+    try {
+        const {
+            from_pincode,
+            from_city,
+            from_state,
+            to_pincode,
+            to_city,
+            to_state,
+            quantity,
+            invoice_value,
+            packaging_unit_details
+        } = orderDetails;
+
+        // Ensure all required fields are present in the request body
+        if (!from_pincode || !from_city || !from_state || !to_pincode || !to_city || !to_state || !quantity || !invoice_value || !packaging_unit_details) {
+            throw new Error("Missing required fields.")
+        }
+
+        // Construct payload for Shiprocket Shipment Charges API
+        const payload = {
+            from_pincode,
+            from_city,
+            from_state,
+            to_pincode,
+            to_city,
+            to_state,
+            quantity,
+            invoice_value,
+            calculator_page: "true", // Required by API
+            packaging_unit_details
+        };
+        const shiprocketB2BConfig = await getShiprocketB2BConfig()
+
+        const response = await fetch(`${envConfig.SHIPROCKET_B2B_API_BASEURL}${APIs.CHECK_B2B_SERVICEABILITY}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': shiprocketB2BConfig.token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.log(error)
+    }
+}
 
 export async function calculateB2BPriceCouriers(orderId: string, allowedCourierIds: any[], sellerId: string) {
     const order: any = await B2BOrderModel.findById(orderId).populate(['customer', 'pickupAddress']);
@@ -23,47 +145,36 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
     const fromRegionName = pickupPincodeData.StateName.toLowerCase(); // convert to lowercase
     const toRegionName = deliveryPincodeData.StateName.toLowerCase(); // convert to lowercase
 
-    console.log(toRegionName)
-
     const Fzone = regionToZoneMappingLowercase[fromRegionName];
     const Tzone = regionToZoneMappingLowercase[toRegionName];
-
-    console.log(Fzone, Tzone)
 
     if (!Fzone || !Tzone) {
         throw new Error('Zone not found for the given region');
     }
 
-    let query: {
-        _id: { $in: (Types.ObjectId | null)[] };
-        isActive: boolean;
-        isReversedCourier?: boolean;
-    } = {
-        _id: { $in: allowedCourierIds },
-        isActive: true,
-        isReversedCourier: false,
-    };
+    let b2bCouriers: any[] = [];
 
-    let b2bCouriers = []
+    const [customB2bCouriers, b2bCalcCouriers] = await Promise.all([
+        CustomB2BPricingModel.find({
+            B2BVendorId: { $in: allowedCourierIds },
+            sellerId
+        }).populate({
+            path: 'B2BVendorId',
+            populate: {
+                path: 'vendor_channel_id'
+            }
+        }),
 
-    b2bCouriers = await CustomB2BPricingModel.find({
-        B2BVendorId: { $in: allowedCourierIds },
-        sellerId
-    }).populate({
-        path: 'B2BVendorId',
-        populate: {
-            path: 'vendor_channel_id'
-        }
-    });
+        B2BCalcModel.find({
+            _id: { $in: allowedCourierIds },
+            isActive: true,
+            isReversedCourier: false,
+        }).populate("vendor_channel_id")
+    ]);
 
-    if (b2bCouriers.length === 0) {
-        b2bCouriers = await B2BCalcModel.find(query).populate("vendor_channel_id");
-    }
-
-    console.log(b2bCouriers, "  b2bCouriers")
-    if (b2bCouriers.length === 0) {
-        return [];
-    }
+    const foundCourierIds = new Set(customB2bCouriers.map((c: any) => c?.B2BVendorId._id.toString()));
+    const notFoundCouriers = b2bCalcCouriers.filter(courier => !foundCourierIds.has(courier._id.toString()));
+    b2bCouriers = customB2bCouriers.concat(notFoundCouriers);
 
     const courierDataPromises = b2bCouriers.map(async (courier) => {
         try {
@@ -123,7 +234,7 @@ export async function calculateRateAndPrice(calcData: any, zoneFrom: string, zon
 
         const fuelSurcharge = (calcData.fuelSurcharge / 100) * baseFreightCharge;
 
-        const ODACharge = isODAApplicable ?  (weight * calcData.ODACharge < 800 ? 800 : weight * calcData.ODACharge) : 0 ; // As of now not required, 
+        const ODACharge = isODAApplicable ? (weight * calcData.ODACharge < 800 ? 800 : weight * calcData.ODACharge) : 0; // As of now not required, 
         // const ODACharge = weight * calcData.ODACharge < 800 ? 800 : weight * calcData.ODACharge;
 
         let greenTax = 0;
@@ -165,6 +276,7 @@ export const regionToZoneMapping = {
     "noida": "North 1",
     "faridabad": "North 1",
     "punjab": "North 2",
+    "Rajasthan": "North 2",
     "AMRITSAR": "North 2",
     "JALANDHAR": "North 2",
     "LUDHIANA": "North 2",
