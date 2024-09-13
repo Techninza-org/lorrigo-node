@@ -666,8 +666,6 @@ export const track_delivery = async () => {
 export default async function runCron() {
   console.log("Running cron scheduler");
 
-  // CONNECT_SHIPROCKET_B2B();
-  // calculateRemittanceEveryDay();
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
@@ -685,6 +683,7 @@ export default async function runCron() {
 
     cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
     cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
+    cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET_B2B);
     cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
     cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
     cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);

@@ -56,8 +56,6 @@ export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: 
             client_order_id: orderDetails.order_reference_id
         };
 
-        console.log(payload, "payload")
-
         const response = await fetch(`${envConfig.SHIPROCKET_B2B_API_BASEURL}${APIs.REGISTER_ORDER_B2B_SHIPROCKET}`, {
             method: 'POST',
             headers: {
@@ -66,9 +64,6 @@ export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: 
             },
             body: JSON.stringify(payload)
         });
-
-
-        console.log(response, "b2b order register response")
         const result = await response.json();
         return result;
     } catch (error) {
@@ -120,7 +115,31 @@ export const getB2BShiprocketServicableOrder = async (orderDetails: any) => {
         });
 
         const result = await response.json();
-        return result;
+
+        const couriers = await B2BCalcModel.find({ isActive: true, carrierID: { $in: Object?.values(result).map((x: any) => x?.id) } }).select('_id carrierID').lean();
+
+        const courierUpdates = couriers.map((courier: any) => {
+            const carrierData: any = Object.values(result).find(
+                (x: any) => x.id === courier.carrierID
+            );
+            return {
+                updateOne: {
+                    filter: { _id: courier._id },
+                    update: {
+                        transporter_id: carrierData.transporter_id,
+                        transporter_name: carrierData.transporter_name,
+                    },
+                },
+            };
+        });
+
+        if (courierUpdates.length > 0) {
+            await B2BCalcModel.bulkWrite(courierUpdates);
+        }
+
+        const courierIds = couriers.map((courier: any) => courier._id);
+
+        return courierIds;
     } catch (error) {
         console.log(error)
     }
@@ -201,9 +220,11 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
                 rtoCharges: result.finalAmount,
                 minWeight: 0.5,
                 type: courier.type,
-                carrierID: courier?.carrierID || courier?.B2BVendorId?.carrierID,
+                carrierID: courier?._id || courier?.B2BVendorId?._id,
                 order_zone: `${Fzone}-${Tzone}`,
                 charge: result.finalAmount,
+                transportId: courier.transporter_id,
+                transporterName: courier.transporter_name,
                 ...result
             };
         } catch (error) {

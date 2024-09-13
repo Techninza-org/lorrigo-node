@@ -6,6 +6,7 @@ import {
   getMarutiToken,
   getSMARTRToken,
   getSellerChannelConfig,
+  getShiprocketB2BConfig,
   getShiprocketToken,
   getSmartShipToken,
   isValidPayload,
@@ -46,6 +47,7 @@ import { CANCELED, CANCELLED_ORDER_DESCRIPTION, SMARTSHIP_COURIER_ASSIGNED_ORDER
 import ClientBillingModal from "../models/client.billing.modal";
 import envConfig from "../utils/config";
 import SellerModel from "../models/seller.model";
+import B2BCalcModel from "../models/b2b.calc.model";
 
 // TODO: REMOVE THIS CODE: orderType = 0 ? "b2c" : "b2b"
 export async function createShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
@@ -1723,9 +1725,15 @@ export async function orderReattempt(req: ExtendedRequest, res: Response, next: 
  */
 export async function createB2BShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {
-    const body = req.body;
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const hostUrl = `${protocol}://${host}`;
+    // const hostUrl = "https://xz0zv40s-4000.inc1.devtunnels.ms";
 
+    const body = req.body;
     const sellerId = req.seller._id;
+    const carrierId = body.carrierId;
+
     const seller = await SellerModel.findById(sellerId).select("gst").lean();
 
     if (!isValidPayload(body, ["orderId"])) return res.status(200).send({ valid: false, message: "Invalid payload" });
@@ -1734,127 +1742,196 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
     const order: any | null = await B2BOrderModel.findOne({ _id: body?.orderId, sellerId }) //OrderPayload
       .populate("customer")
       .populate("pickupAddress")
+
     if (!order) return res.status(200).send({ valid: false, message: "order not found" });
 
-    const vendorName = await EnvModel.findOne({ nickName: body.carrierNickName });
-    const courier = await CourierModel.findOne({ vendor_channel_id: vendorName?._id.toString() });
-
-    const smartr_token = await getSMARTRToken();
-    if (!smartr_token) return res.status(500).send({ valid: false, message: "SMARTR token not found" });
-
-    let dimensions = order?.packageDetails
-      ?.map((item: any) => {
-        return `${item?.orderBoxLength}~${item?.orderBoxWidth}~${item?.orderBoxHeight}~${item.qty}~${item?.orderBoxWeight}~0/`;
-      })
-      .join("");
-
-    let data = [
-      {
-        packageDetails: {
-          awbNumber: "",
-          orderNumber: order?.order_reference_id,
-          productType: "WKO", // WKO for surface bookings
-          collectableValue: 0 + "",
-          declaredValue: order?.amount + "",
-          itemDesc: order?.product_description,
-          dimensions: dimensions,
-          pieces: order?.quantity + "",
-          weight: order?.total_weight + "",
-          invoiceNumber: order.invoiceNumber + "",
-        },
-        deliveryDetails: {
-          toName: order.customer?.name ?? "",
-          toAdd: order.customer?.address ?? "",
-          toCity: order.customer?.city ?? "",
-          toState: order.customer?.state ?? "",
-          toPin: order.customer?.pincode + "",
-          toMobile: (order.customer?.phone).substring(3),
-          toAddType: "Home",
-          toLat: "26.00",
-          toLng: "78.00",
-          toEmail: order.customer?.email ?? "",
-        },
-        pickupDetails: {
-          fromName: order.pickupAddress?.name,
-          fromAdd: order.pickupAddress?.address1,
-          fromCity: order.pickupAddress?.city,
-          fromState: order.pickupAddress?.state,
-          fromPin: order.pickupAddress?.pincode + "",
-          fromMobile: (order.pickupAddress?.phone).substring(2),
-          fromAddType: "Hub",
-          fromLat: "26.00",
-          fromLng: "78.00",
-          fromEmail: order.pickupAddress?.email ?? "",
-        },
-        returnDetails: {
-          rtoName: order.pickupAddress?.name,
-          rtoAdd: order.pickupAddress?.address1,
-          rtoCity: order.pickupAddress?.city,
-          rtoState: order.pickupAddress?.state,
-          rtoPin: order.pickupAddress?.pincode + "",
-          rtoMobile: (order.pickupAddress?.phone).substring(2),
-          rtoAddType: "Hub",
-          rtoLat: "26.00",
-          rtoLng: "78.00",
-          rtoEmail: order.pickupAddress?.email ?? "",
-        },
-        additionalInformation: {
-          customerCode: envConfig.SMARTR_USERNAME,
-          essentialFlag: "",
-          otpFlag: "",
-          dgFlag: "",
-          isSurface: "true",
-          isReverse: "false",
-          sellerGSTIN: seller?.gst ?? "",
-          sellerERN: "",
-        },
-      },
-    ];
-
-    let config = {
-      method: "post",
-      maxBodyLength: Infinity,
-      url: "https://api.smartr.in/api/v1/add-order/",
-      headers: {
-        Authorization: `${smartr_token}`,
-        "Content-Type": "application/json",
-      },
-      data: JSON.stringify(data),
-    };
-
-    try {
-      const axisoRes = await axios.request(config);
-      const smartRShipmentResponse = axisoRes.data;
-
-      let orderAWB = smartRShipmentResponse.total_success[0]?.awbNumber;
-      if (orderAWB === undefined) {
-        orderAWB = smartRShipmentResponse.total_failure[0]?.awbNumber
-      }
-      order.awb = orderAWB;
-      order.shipmentCharges = body.charge;
-      order.carrierName = courier?.name + " " + (vendorName?.nickName);
-
-      console.log(orderAWB, "orderAWB")
-
-      if (orderAWB) {
-        order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
-        order.orderStages.push({
-          stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,  // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
-          action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
-          stageDateTime: new Date(),
-        });
-        await order.save();
-        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-        return res.status(200).send({ valid: true, order });
-      }
-      return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });
-
-    } catch (error) {
-      console.error("Error creating SMARTR shipment:", error);
-      return next(error);
+    if (body?.invoiceNumber) {
+      order.invoiceNumber = body.invoiceNumber;
+      order.save();
     }
 
-    return res.status(500).send({ valid: false, message: "Incomplete route" });
+    const vendorName = await EnvModel.findOne({ nickName: body.carrierNickName });
+    if (!vendorName) return res.status(200).send({ valid: false, message: "Carrier not found" });
+    const courier = await B2BCalcModel.findById(carrierId);
+
+    if (vendorName?.name === "SMARTR") {
+      const smartr_token = await getSMARTRToken();
+      if (!smartr_token) return res.status(500).send({ valid: false, message: "SMARTR token not found" });
+
+      let dimensions = order?.packageDetails
+        ?.map((item: any) => {
+          return `${item?.orderBoxLength}~${item?.orderBoxWidth}~${item?.orderBoxHeight}~${item.qty}~${item?.orderBoxWeight}~0/`;
+        })
+        .join("");
+
+      let data = [
+        {
+          packageDetails: {
+            awbNumber: "",
+            orderNumber: order?.order_reference_id,
+            productType: "WKO", // WKO for surface bookings
+            collectableValue: 0 + "",
+            declaredValue: order?.amount + "",
+            itemDesc: order?.product_description,
+            dimensions: dimensions,
+            pieces: order?.quantity + "",
+            weight: order?.total_weight + "",
+            invoiceNumber: order.invoiceNumber + "",
+          },
+          deliveryDetails: {
+            toName: order.customer?.name ?? "",
+            toAdd: order.customer?.address ?? "",
+            toCity: order.customer?.city ?? "",
+            toState: order.customer?.state ?? "",
+            toPin: order.customer?.pincode + "",
+            toMobile: (order.customer?.phone).substring(3),
+            toAddType: "Home",
+            toLat: "26.00",
+            toLng: "78.00",
+            toEmail: order.customer?.email ?? "",
+          },
+          pickupDetails: {
+            fromName: order.pickupAddress?.name,
+            fromAdd: order.pickupAddress?.address1,
+            fromCity: order.pickupAddress?.city,
+            fromState: order.pickupAddress?.state,
+            fromPin: order.pickupAddress?.pincode + "",
+            fromMobile: (order.pickupAddress?.phone).substring(2),
+            fromAddType: "Hub",
+            fromLat: "26.00",
+            fromLng: "78.00",
+            fromEmail: order.pickupAddress?.email ?? "",
+          },
+          returnDetails: {
+            rtoName: order.pickupAddress?.name,
+            rtoAdd: order.pickupAddress?.address1,
+            rtoCity: order.pickupAddress?.city,
+            rtoState: order.pickupAddress?.state,
+            rtoPin: order.pickupAddress?.pincode + "",
+            rtoMobile: (order.pickupAddress?.phone).substring(2),
+            rtoAddType: "Hub",
+            rtoLat: "26.00",
+            rtoLng: "78.00",
+            rtoEmail: order.pickupAddress?.email ?? "",
+          },
+          additionalInformation: {
+            customerCode: envConfig.SMARTR_USERNAME,
+            essentialFlag: "",
+            otpFlag: "",
+            dgFlag: "",
+            isSurface: "true",
+            isReverse: "false",
+            sellerGSTIN: seller?.gst ?? "",
+            sellerERN: "",
+          },
+        },
+      ];
+
+      console.log(data, "SMARTR Payload")
+
+      let config = {
+        method: "post",
+        maxBodyLength: Infinity,
+        url: "https://api.smartr.in/api/v1/add-order/",
+        headers: {
+          Authorization: `${smartr_token}`,
+          "Content-Type": "application/json",
+        },
+        data: JSON.stringify(data),
+      };
+
+      try {
+        const axisoRes = await axios.request(config);
+        const smartRShipmentResponse = axisoRes.data;
+
+        console.log(smartRShipmentResponse, "smartRShipmentResponse")
+
+        let orderAWB = smartRShipmentResponse.total_success[0]?.awbNumber;
+        if (orderAWB === undefined) {
+          orderAWB = smartRShipmentResponse.total_failure[0]?.awbNumber
+        }
+        order.awb = orderAWB;
+        order.shipmentCharges = body.charge;
+        order.carrierName = courier?.name + " " + (vendorName?.nickName);
+
+        if (orderAWB) {
+          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
+          order.orderStages.push({
+            stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,  // Evantuallly change this to SMARTRd_COURIER_ASSIGNED_ORDER_STATUS
+            action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
+            stageDateTime: new Date(),
+          });
+          await order.save();
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+          return res.status(200).send({ valid: true, order });
+        }
+        return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });
+
+      } catch (error) {
+        console.error("Error creating SMARTR shipment:", error);
+        return next(error);
+      }
+    } else if (vendorName?.name === "SHIPROCKET_B2B") {
+      const shiprocketB2BConfig = await getShiprocketB2BConfig();
+
+      const data = {
+        client_id: shiprocketB2BConfig.clientId ?? "",
+        order_id: order?.shiprocket_order_id ?? "",
+        remarks: `Order remark ${order?.order_reference_id}`,
+        recipient_GST: null,
+        to_pay_amount: "0",
+        mode_id: order?.mode_id,
+        delivery_partner_id: courier?.carrierID,
+        pickup_date_time: body.pickupDateTime,
+        eway_bill_no: body.eway_bill_no ?? "",
+        invoice_value: order?.amount ?? 0,
+        invoice_number: order?.invoiceNumber ?? "",
+        invoice_date: body.invoiceDate,
+        source: "API",
+        supporting_docs: [`${hostUrl}/api${order?.invoiceImage}`]
+      };
+
+      let config = {
+        method: "post",
+        maxBodyLength: Infinity,
+        url: `${envConfig.SHIPROCKET_B2B_API_BASEURL}/${APIs.B2B_SHIPMENT_CREATE}`,
+        headers: {
+          Authorization: `${shiprocketB2BConfig.token}`,
+          'Content-Type': 'application/json'
+        },
+        data: JSON.stringify(data)
+      };
+
+      try {
+        const axiosRes = await axios.request(config);
+        console.log(axiosRes, 'axiosRes')
+        const shiprocketResponse = axiosRes.data;
+
+        let orderAWB = shiprocketResponse?.eway_bill_no;
+
+        order.awb = orderAWB;
+        order.shipmentCharges = body.charge;
+        order.carrierName = courier?.name + " " + (vendorName?.nickName);
+
+        if (orderAWB) {
+          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
+          order.orderStages.push({
+            stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
+            action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
+            stageDateTime: new Date(),
+          });
+          await order.save();
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+          return res.status(200).send({ valid: true, order });
+        }
+        return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });
+
+      } catch (error: any) {
+        console.error("Error creating SHIPROCKET shipment:", error.response.data);
+        return next(error);
+      }
+    }
+    return res.status(500).send({ valid: false, message: "Error" });
   } catch (error) {
     return next(error);
   }

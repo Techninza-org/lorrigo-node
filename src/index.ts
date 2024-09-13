@@ -27,12 +27,14 @@ import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
 import { getOrderInvoiceById, getSpecificOrder } from "./controllers/order.controller";
 import apicache from "apicache";
+import path from "path";
 
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 const cache = apicache.middleware;
 
+app.use('/api/public', express.static(path.join(__dirname, 'public')));
 //@ts-ignore
 morgan.token("reqbody", (req, res) => JSON.stringify(req.body));
 app.use(morgan(":method :url :status - :response-time ms - :reqbody"));
@@ -94,7 +96,7 @@ app.post("/api/shopify", (req, res) => {
 });
 
 //@ts-ignore
-app.get("/invoice/:id", getOrderInvoiceById);
+app.get("/api/invoice/:id", getOrderInvoiceById);
 //@ts-ignore
 app.post("/api/ratecalculator", AuthMiddleware, ratecalculatorController);
 //@ts-ignore

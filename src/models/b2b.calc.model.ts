@@ -23,6 +23,9 @@ const B2BCalcSchema = new mongoose.Schema(
         docketCharge: { type: Number, required: true, min: 0 }, //100rs
         zoneMatrix: { type: Map, of: Map }, // Stores the rate matrix
         zoneMapping: { type: Map, of: [String] }, // Maps zone names to regions
+
+        transporter_id: { type: String, required: false },
+        transporter_name: { type: String, required: false },
     },
     { timestamps: true }
 );

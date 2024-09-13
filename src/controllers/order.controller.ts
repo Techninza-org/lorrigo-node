@@ -11,7 +11,7 @@ import {
   rateCalculation,
 } from "../utils/helpers";
 import { isValidObjectId } from "mongoose";
-import type { ObjectId } from "mongoose";
+import { ObjectId } from "mongoose";
 import envConfig from "../utils/config";
 import axios from "axios";
 import APIs from "../utils/constants/third_party_apis";
@@ -919,7 +919,6 @@ export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: 
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const invoice = files?.invoice?.[0];
     const supporting_document = files?.supporting_document?.[0];
-    console.log(invoice, supporting_document, 'invoice, supporting_document')
 
     const boxes = JSON.parse(body?.boxes);
 
@@ -973,8 +972,8 @@ export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: 
       product_description: body?.product_description,
       packageDetails: boxes,
       customer: body?.customerDetails,
-      invoiceImage: invoice ? invoice.buffer.toString('base64') : undefined,
-      supporting_document: supporting_document ? supporting_document.buffer.toString('base64') : undefined,
+      invoiceImage: invoice ? `/public/${invoice.filename}` : undefined,
+      supporting_document: supporting_document ? `/public/${supporting_document.filename}` : undefined,
     };
 
     try {
@@ -1054,8 +1053,8 @@ export const updateB2BOrder = async (req: ExtendedRequest, res: Response, next: 
       product_description: body?.product_description,
       packageDetails: boxes,
       customer: body?.customerDetails,
-      invoiceImage: invoice ? invoice.buffer.toString('base64') : orderDetails.invoiceImage,
-      supporting_document: supporting_document ? supporting_document.buffer.toString('base64') : orderDetails.supporting_document,
+      invoiceImage: invoice ? `/public/${invoice.filename}` : undefined,
+      supporting_document: supporting_document ? `/public/${supporting_document.filename}` : undefined,
     };
 
     try {
@@ -1139,31 +1138,33 @@ export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: N
     delete orderDetails.freightType;
 
     //order_id, mode_id, delivery_partner_id
-    // const registerOrder = await registerB2BShiprocketOrder(orderDetails, req.seller.name);
-    // const updateOrder = await B2BOrderModel.findByIdAndUpdate(orderId, { shiprocket_order_id: registerOrder?.order_id, mode_id: registerOrder.mode_id, delivery_partner_id: registerOrder.delivery_partner_id });
+    const registerOrder = await registerB2BShiprocketOrder(orderDetails, req.seller.name);
+    const updateOrder = await B2BOrderModel.findByIdAndUpdate(orderId, { shiprocket_order_id: registerOrder?.order_id, mode_id: registerOrder.mode_id, delivery_partner_id: registerOrder.delivery_partner_id });
 
-    // const b2bShiprocketServicableOrders = await getB2BShiprocketServicableOrder({
-    //   from_pincode: orderDetails.pickupAddress.pincode,
-    //   from_city: orderDetails.pickupAddress.city,
-    //   from_state: orderDetails.pickupAddress.state,
-    //   to_pincode: orderDetails.customerDetails.pincode,
-    //   to_city: orderDetails.customerDetails.city,
-    //   to_state: orderDetails.customerDetails.state,
-    //   quantity: orderDetails.quantity,
-    //   invoice_value: orderDetails.amount,
-    //   packaging_unit_details: orderDetails.packageDetails.map((packageDetail: any) => ({
-    //     units: packageDetail?.qty || 1,
-    //     length: packageDetail?.orderBoxLength || 0,
-    //     width: packageDetail?.orderBoxWidth || 0,
-    //     height: packageDetail?.orderBoxHeight || 0,
-    //     weight: packageDetail?.orderBoxWeight || 0,
-    //     unit: "cm"
-    //   })),
-    // });
+    const b2bShiprocketServicableOrders = await getB2BShiprocketServicableOrder({
+      from_pincode: orderDetails.pickupAddress.pincode,
+      from_city: orderDetails.pickupAddress.city,
+      from_state: orderDetails.pickupAddress.state,
+      to_pincode: orderDetails.customerDetails.pincode,
+      to_city: orderDetails.customerDetails.city,
+      to_state: orderDetails.customerDetails.state,
+      quantity: orderDetails.quantity,
+      invoice_value: orderDetails.amount,
+      packaging_unit_details: orderDetails.packageDetails.map((packageDetail: any) => ({
+        units: packageDetail?.qty || 1,
+        length: packageDetail?.orderBoxLength || 0,
+        width: packageDetail?.orderBoxWidth || 0,
+        height: packageDetail?.orderBoxHeight || 0,
+        weight: packageDetail?.orderBoxWeight || 0,
+        unit: "cm"
+      })),
+    });
 
-    // console.log(b2bShiprocketServicableOrders, 'b2bShiprocketServicableOrders')
+    // Logic is incorrect
+    const mergedArray = ['665ef71c95b70be4d1e5efc7', ...(b2bShiprocketServicableOrders || [])];
+    const uniqueCouriers = Array.from(new Set(mergedArray.map((id) => id.toString()))).map(id => id?.toString());
 
-    const data2send = await calculateB2BPriceCouriers(orderId, users_vendors, req.seller._id);
+    const data2send = await calculateB2BPriceCouriers(orderId, uniqueCouriers, req.seller._id);
     if (data2send.length < 1) return res.status(200).send({ valid: false, message: "No courier partners found" });
     return res.status(200).send({ valid: true, orderDetails, courierPartner: data2send });
   } catch (error) {
@@ -1368,23 +1369,21 @@ export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next
   }
 };
 
-
 export const getOrderInvoiceById = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const orderId = req.params.id;
     const order = await B2BOrderModel.findById(orderId).select("invoiceImage").lean();
-    if (!order) {
+    if (!order || !order.invoiceImage) {
       return res.status(404).send({ valid: false, message: "Invoice not found" });
     }
-
+    const pdfBuffer = Buffer.from(order.invoiceImage, 'base64');
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline; filename=generated.pdf');
-    const pdfBuffer = Buffer.from(order?.invoiceImage ?? '', 'base64');
-    res.send(pdfBuffer);
+    res.setHeader('Content-Disposition', 'inline; filename=invoice.pdf');
+    return res.send(pdfBuffer);
   } catch (error) {
     return next(error);
   }
-}
+};
 
 type PickupAddress = {
   name: string;
