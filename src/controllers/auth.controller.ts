@@ -27,7 +27,7 @@ export const signup = async (req: Request, res: Response, next: NextFunction) =>
       });
     }
 
-    const isValidEmail = validateEmail(body?.email);
+    const isValidEmail: boolean = validateEmail(body?.email);
 
     if (!isValidEmail) {
       return res.status(200).send({

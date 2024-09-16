@@ -56,7 +56,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     const seller = req.seller;
     const sellerId = req.seller._id;
 
-    if (seller.config.isPrepaid && (body.charge >= seller.walletBalance || seller.walletBalance < 0)) {
+    if (seller.config.isPrepaid && (body.charge >= seller.walletBalance || seller.walletBalance <= 0)) {
       return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
     }
 
@@ -117,8 +117,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       const client_order_reference_id = isReshipedOrder ? newString : `${order?.order_reference_id}`;
 
       let orderWeight = order?.orderWeight * 1000;
-
-      console.log(smartShipCourier?.carrierID)
 
 
       const shipmentAPIBody = {
@@ -1451,7 +1449,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
       const shipmentAPIConfig = { headers: { Authorization: smartshipToken } };
 
       const requestBody = {
-        client_order_reference_ids: [order._id + "_" + order.order_reference_id],
+        client_order_reference_ids: [order.client_order_reference_id],
         preferred_pickup_date: pickupDate.replaceAll(" ", "-"),
         shipment_type: (order.isReverseOrder ? 2 : 1),
       };
@@ -1516,8 +1514,8 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
             },
           }
         );
-      } catch (error) {
-        return next(error);
+      } catch (error: any) {
+        if (error?.response?.data?.message !== "Already in Pickup Queue.") return next(error);
       }
 
       try {
@@ -1532,6 +1530,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
 
         return res.status(200).send({ valid: true, message: "Order manifest request generated" });
       } catch (error) {
+        console.log(error)
         return next(error);
       }
     } else if (vendorName?.name === "SMARTR") {
@@ -1888,7 +1887,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         invoice_number: order?.invoiceNumber ?? "",
         invoice_date: body.invoiceDate,
         source: "API",
-        supporting_docs: [`${hostUrl}/api${order?.invoiceImage}`]
+        supporting_docs: [`${envConfig.SHIPROCKET_B2B_API_BASEURL}/api${order?.invoiceImage}`]
       };
 
       let config = {

@@ -31,13 +31,20 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
     }
 
     const [couriers, customPricings] = await Promise.all([
-      CourierModel.find({ _id: { $in: seller?.vendors } }).populate("vendor_channel_id").lean(),
+      CourierModel.find({ _id: { $in: seller?.vendors } })
+        .populate({
+          path: "vendor_channel_id",
+          select: { name: 1, _id: 1, nickName: 1 }
+        })
+        .lean(),
+
       CustomPricingModel.find({ sellerId, vendorId: { $in: seller?.vendors } })
         .populate({
           path: 'vendorId',
           populate: {
-            path: 'vendor_channel_id'
-          }
+            path: 'vendor_channel_id',
+            select: { name: 1, _id: 1, nickName: 1  }
+          },
         })
         .lean(),
     ]);

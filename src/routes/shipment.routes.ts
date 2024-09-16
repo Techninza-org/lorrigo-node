@@ -35,7 +35,7 @@ shipmentRouter.post("/order-reattempt", orderReattempt);
 shipmentRouter.post("/b2b", createB2BShipment);
 
 //@ts-ignore
-shipmentRouter.post("/b2b/cancel", cancelB2BShipment);
+shipmentRouter.post("/b2b/cancel", cancelB2BShipment); // Not in use
 
 //@ts-ignore
 shipmentRouter.get("/b2b/track", trackB2BShipment);

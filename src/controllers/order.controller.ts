@@ -719,7 +719,7 @@ export const updateB2CBulkShopifyOrders = async (req: ExtendedRequest, res: Resp
     const {
       orderIds,
       pickupAddressId,
-      orderSizeUnit,
+      orderSizeUnit = "cm",
       orderBoxHeight,
       orderBoxWidth,
       orderBoxLength,
@@ -996,7 +996,6 @@ export const updateB2BOrder = async (req: ExtendedRequest, res: Response, next: 
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const invoice = files?.invoice?.[0];
     const supporting_document = files?.supporting_document?.[0];
-    console.log(invoice, supporting_document, 'invoice, supporting_document');
 
     if (
       !isValidPayload(body, [

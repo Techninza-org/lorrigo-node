@@ -39,7 +39,7 @@ const orderRouter = Router();
 orderRouter.get("/", getOrders);
 
 // @ts-ignore
-orderRouter.get("/b2c/channels", cache("10 minutes"), getChannelOrders);
+orderRouter.get("/b2c/channels", cache("2 minutes"), getChannelOrders);
 
 // @ts-ignore
 orderRouter.post("/b2c", createB2COrder);

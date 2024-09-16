@@ -96,7 +96,7 @@ app.post("/api/shopify", (req, res) => {
 });
 
 //@ts-ignore
-app.get("/api/invoice/:id", getOrderInvoiceById);
+// app.get("/api/invoice/:id", getOrderInvoiceById);
 //@ts-ignore
 app.post("/api/ratecalculator", AuthMiddleware, ratecalculatorController);
 //@ts-ignore
