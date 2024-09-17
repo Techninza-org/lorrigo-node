@@ -1102,6 +1102,7 @@ export const getB2BOrders = async (req: ExtendedRequest, res: Response, next: Ne
         .find(query)
         .populate("customer")
         .populate("pickupAddress")
+        .select("-invoiceImage")
         .lean()).reverse();
 
     } catch (err) {
