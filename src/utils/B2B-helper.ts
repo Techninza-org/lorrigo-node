@@ -146,7 +146,7 @@ export const getB2BShiprocketServicableOrder = async (orderDetails: any) => {
 }
 
 export async function calculateB2BPriceCouriers(orderId: string, allowedCourierIds: any[], sellerId: string) {
-    const order: any = await B2BOrderModel.findById(orderId).populate(['customer', 'pickupAddress']);
+    const order: any = await B2BOrderModel.findById(orderId).populate(['customer', 'pickupAddress']).select("pickupAddress customer total_weight");
     if (!order) {
         throw new Error('Order not found');
     }

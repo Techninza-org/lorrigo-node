@@ -1139,7 +1139,7 @@ export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: N
 
     //order_id, mode_id, delivery_partner_id
     const registerOrder = await registerB2BShiprocketOrder(orderDetails, req.seller.name);
-    const updateOrder = await B2BOrderModel.findByIdAndUpdate(orderId, { shiprocket_order_id: registerOrder?.order_id, mode_id: registerOrder.mode_id, delivery_partner_id: registerOrder.delivery_partner_id });
+    const updateOrder = await B2BOrderModel.findByIdAndUpdate(orderId, { shiprocket_order_id: registerOrder?.order_id, mode_id: registerOrder.mode_id, delivery_partner_id: registerOrder.delivery_partner_id }).select("-__v -updatedAt -createdAt -invoiceImage -supporting_document");;
 
     const b2bShiprocketServicableOrders = await getB2BShiprocketServicableOrder({
       from_pincode: orderDetails.pickupAddress.pincode,
