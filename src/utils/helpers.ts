@@ -1435,10 +1435,11 @@ type DelhiveryBucket = {
   description: string;
 };
 
-export function getDelhiveryBucketing(scanDetail: { ScanType: string; Scan: string }): DelhiveryBucket {
+export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: string }): DelhiveryBucket {
   const forwardStatusMapping = {
     "In Transit": { bucket: IN_TRANSIT, description: "In Transit" },
     "Pending": { bucket: IN_TRANSIT, description: "In Transit" },
+    "Not Picked": { bucket: IN_TRANSIT, description: "In Transit" },
     "Delivered": { bucket: DELIVERED, description: "Delivered" },
     "Dispatched": { bucket: IN_TRANSIT, description: "Out for Delivery" },
     "RTO": { bucket: RTO, description: "Return to Origin (RTO)" },
@@ -1457,23 +1458,24 @@ export function getDelhiveryBucketing(scanDetail: { ScanType: string; Scan: stri
   };
 
   const deliveredStatusMapping = {
+    "RTO": { bucket: DELIVERED, description: "Delivered" },
     "Delivered": { bucket: DELIVERED, description: "Delivered" },
     "DTO": { bucket: RETURN_DELIVERED, description: "Delivered To Origin" },
     "RETURN Accepted": { bucket: RETURN_DELIVERED, description: "Delivered To Origin" },
     "Returned": { bucket: RETURN_CONFIRMED, description: "Returned" },
   };
 
-  const { ScanType, Scan } = scanDetail;
+  const { StatusType, Status } = scanDetail;
 
-  // Determine the correct mapping based on ScanType (UD for forward, RT for return, DL for delivered)
+  // Determine the correct mapping based on StatusType (UD for forward, RT for return, DL for delivered)
   const statusMapping =
-    ScanType === "UD" ? forwardStatusMapping :
-      ScanType === "RT" ? returnStatusMapping :
-        ScanType === "DL" ? deliveredStatusMapping : null;
+    StatusType === "UD" ? forwardStatusMapping :
+      StatusType === "RT" ? returnStatusMapping :
+        StatusType === "DL" ? deliveredStatusMapping : null;
 
-  // Return the bucket and description, or a default if not found
+  console.log(statusMapping && statusMapping[Status as keyof typeof statusMapping], "statusMapping")
   return (
-    statusMapping && statusMapping[Scan as keyof typeof statusMapping] || {
+    statusMapping && statusMapping[Status as keyof typeof statusMapping] || {
       bucket: -1,
       description: "Status code not found",
     }

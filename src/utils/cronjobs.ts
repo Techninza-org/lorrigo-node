@@ -125,7 +125,6 @@ export const CONNECT_SHIPROCKET = async (): Promise<void> => {
 
 export const CONNECT_SHIPROCKET_B2B = async (): Promise<void> => {
   try {
-    // Fetch the refresh token from the database or environment config
     const existingEnv = await EnvModel.findOne({ name: "SHIPROCKET_B2B" });
     const refreshToken = existingEnv ? existingEnv.refreshToken : null;
 
@@ -137,7 +136,6 @@ export const CONNECT_SHIPROCKET_B2B = async (): Promise<void> => {
       refresh: refreshToken,
     };
 
-    // Make the request to refresh the token
     const response = await axios.post(
       'https://api-cargo.shiprocket.in/api/token/refresh/',
       requestBody,
@@ -151,18 +149,16 @@ export const CONNECT_SHIPROCKET_B2B = async (): Promise<void> => {
 
     const responseBody = response.data;
 
-    // Check if the new token was received successfully
     if (!responseBody || !responseBody.access) {
       throw new Error('Failed to refresh token');
     }
 
-    // Save the new access token and refresh token
     await EnvModel.findOneAndUpdate(
       { name: "SHIPROCKET_B2B" },
       {
         $set: {
           nickName: "SR_B2B",
-          token: responseBody.access, 
+          token: responseBody.access,
           refreshToken: responseBody.refresh,  // assuming refresh token might get updated
         },
       },
@@ -171,8 +167,6 @@ export const CONNECT_SHIPROCKET_B2B = async (): Promise<void> => {
 
     const token = `Bearer ${responseBody.access}`;
 
-    console.log(token, "token")
-    
     Logger.plog("Shiprocket token refreshed successfully");
   } catch (err) {
     console.error(err);
@@ -180,10 +174,6 @@ export const CONNECT_SHIPROCKET_B2B = async (): Promise<void> => {
   }
 };
 
-/**
- * function to get SMARTR token and save it into the database
- * @return void
- */
 export const CONNECT_SMARTR = async (): Promise<void> => {
   const requestBody = {
     username: config.SMARTR_USERNAME,
@@ -479,7 +469,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
       const ordersGroupedByDate: { [key: string]: OrderDocument[] } = unremittedOrders.reduce((acc: { [key: string]: OrderDocument[] }, order) => {
         const length = order?.orderStages?.length
         const deliveryDate = order?.orderStages[length - 1]?.stageDateTime;
-        
+
         const deliveryDateOnly = format(deliveryDate, 'yyyy-MM-dd');
 
         if (!acc[deliveryDateOnly]) {
@@ -596,7 +586,7 @@ export const track_delivery = async () => {
           if (!shipmentData || !shipmentData.Shipment?.Status) continue;
 
           const shipment_status = shipmentData.Shipment.Status;
-          const bucketInfo = getDelhiveryBucketing(shipment_status.Status);
+          const bucketInfo = getDelhiveryBucketing(shipment_status);
 
           const orderStages = order?.orderStages || [];
           const lastStageActivity = orderStages[orderStages.length - 1]?.activity;
@@ -610,9 +600,9 @@ export const track_delivery = async () => {
             order.orderStages.push({
               stage: bucketInfo.bucket,
               action: shipment_status.Status,
-              stageDateTime: new Date(),
+              stageDateTime: new Date(shipment_status.StatusDateTime),
               activity: shipment_status.Instructions,
-              location: shipment_status.ScannedLocation,
+              location: shipment_status.StatusLocation,
             });
 
             try {
@@ -621,11 +611,14 @@ export const track_delivery = async () => {
               console.log("Error occurred while saving order status:", saveError);
             }
 
-            // if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.bucket !== RTO) {
-            //   const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-            //   await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
-            //   if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
-            // }
+            if (bucketInfo.bucket === RTO
+              && ![RTO, RETURN_IN_TRANSIT, RETURN_ORDER_MANIFESTED, RETURN_OUT_FOR_PICKUP, RETURN_DELIVERED, RETURN_DELIVERED]
+                .includes(orderWithOrderReferenceId?.bucket
+                )) {
+              const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
+              await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
+              if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
+            }
           }
         } catch (orderError) {
           console.log("Error processing order:", orderError);
