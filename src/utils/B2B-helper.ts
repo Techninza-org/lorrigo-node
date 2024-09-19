@@ -71,7 +71,7 @@ export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: 
     }
 }
 
-export const getB2BShiprocketServicableOrder = async (orderDetails: any) => {
+export const getB2BShiprocketServicableOrder = async (orderDetails: any, allwedCouriers: any[]) => {
     try {
         const {
             from_pincode,
@@ -139,7 +139,9 @@ export const getB2BShiprocketServicableOrder = async (orderDetails: any) => {
 
         const courierIds = couriers.map((courier: any) => courier._id);
 
-        return courierIds;
+        const allowedCourierIds = courierIds.filter((courierId: any) => allwedCouriers.includes(courierId.toString()));
+
+        return allowedCourierIds;
     } catch (error) {
         console.log(error)
     }

@@ -1158,10 +1158,11 @@ export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: N
         weight: packageDetail?.orderBoxWeight || 0,
         unit: "cm"
       })),
-    });
+    },
+      users_vendors,
+    );
 
-    // Logic is incorrect
-    const mergedArray = ['665ef71c95b70be4d1e5efc7', ...(b2bShiprocketServicableOrders || [])];
+    const mergedArray = [...users_vendors, ...(b2bShiprocketServicableOrders || [])];
     const uniqueCouriers = Array.from(new Set(mergedArray.map((id) => id.toString()))).map(id => id?.toString());
 
     const data2send = await calculateB2BPriceCouriers(orderId, uniqueCouriers, req.seller._id);

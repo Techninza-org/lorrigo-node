@@ -453,6 +453,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         const axisoRes = await axios.request(config);
         const smartRShipmentResponse = axisoRes.data;
 
+        console.log("smartRShipmentResponse", smartRShipmentResponse);
+
 
         let orderAWB = smartRShipmentResponse.total_success[0]?.awbNumber;
         if (orderAWB === undefined) {
@@ -1887,7 +1889,8 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         invoice_number: order?.invoiceNumber ?? "",
         invoice_date: body.invoiceDate,
         source: "API",
-        supporting_docs: [`${envConfig.SHIPROCKET_B2B_API_BASEURL}/api${order?.invoiceImage}`]
+        supporting_docs: [`${envConfig.LORRIGO_DOMAIN}/api${order?.invoiceImage}`]
+        // supporting_docs: [`https://xz0zv40s-4000.inc1.devtunnels.ms/api${order?.invoiceImage}`]
       };
 
       let config = {
