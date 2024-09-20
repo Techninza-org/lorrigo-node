@@ -522,7 +522,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
           }
         } else {
           // If less than 7 days since delivery, schedule for future Friday
-          const nextToNextFriday = addDays(nextFriday(currentDate), 7);
+          const futureRemittanceDate = format(getNextToNextFriday(), 'yyyy-MM-dd');
 
           if (futureRemittanceDate <= deliveryDate) {
             continue; // Skip orders delivered in the future
@@ -541,6 +541,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
             );
             await RemittanceModel.updateOne({ _id: existingFutureRemittance._id }, existingFutureRemittance);
           } else {
+
             const remittanceId = generateRemittanceId(companyName, seller._id.toString(), futureRemittanceDate);
             const remittanceAmount = ordersOnSameDate.reduce((sum, order) => sum + Number(order.amount2Collect), 0);
             const remittanceStatus = 'pending';
@@ -737,6 +738,8 @@ export const track_B2B_SHIPROCKET = async () => {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
+
+  calculateRemittanceEveryDay()
 
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
