@@ -850,9 +850,9 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
       if (!orderDetails) {
 
         const product2save = new ProductModel({
-          name: order.line_items[0]?.name,
-          category: order.line_items[0]?.name || order.line_items[0]?.sku,
-          quantity: order.line_items[0]?.quantity,
+          name: order.line_items?.map((item: any) => item.name).join(", "),
+          category: order.line_items?.map((item: any) => item.name).join(", "),
+          quantity: order.line_items?.reduce((acc: number, item: any) => acc + item.quantity, 0),
           tax_rate: 0,
           taxable_value: order?.total_price,
         });
@@ -865,10 +865,10 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
           bucket: NEW,
           channelName: "shopify",
           orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
-          order_reference_id: order.name || 'SHOPIFY-' + Math.round(Math.random() * 10000),
+          order_reference_id: order?.name || 'SHOPIFY-' + Math.round(Math.random() * 10000),
           order_invoice_date: order.created_at,
           order_invoice_number: order.name,
-          orderWeight: order.line_items[0]?.grams / 1000,
+          orderWeight: order?.line_items?.reduce((acc: number, item: any) => acc + item.grams / 1000, 0),
           orderWeightUnit: "kg",
 
           // hard coded values
