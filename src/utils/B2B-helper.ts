@@ -222,7 +222,7 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
                 rtoCharges: result.finalAmount,
                 minWeight: 0.5,
                 type: courier.type,
-                carrierID: courier?._id || courier?.B2BVendorId?._id,
+                carrierID: courier?.B2BVendorId?._id || courier?._id,
                 order_zone: `${Fzone}-${Tzone}`,
                 charge: result.finalAmount,
                 transportId: courier.transporter_id,

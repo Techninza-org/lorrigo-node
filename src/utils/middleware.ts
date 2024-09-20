@@ -123,16 +123,25 @@ export const ErrorHandler = (err: any, req: Request, res: Response, next: NextFu
         message: "Invalid Id",
       });
     }
+
     Logger.log(err);
-    return res.status(400).send({
+    
+    // Handle specific 400 and 401 status codes
+    // @ts-ignore
+    const message = err?.response?.status === 400 || err?.response?.status === 401
+    ? "Sorry, something went wrong"
+    // @ts-ignore
+    : err?.response?.data?.message ?? err?.message ?? "Something went wrong";
+    
+    // @ts-ignore
+    return res.status(err?.response?.status ?? 400).send({
       valid: false,
-      // @ts-ignore
-      message: err?.response?.data?.message ?? err?.message ?? "Something went wrong",
+      message,
     });
   } else {
     return res.status(400).send({
       valid: false,
-      message: "Something went wrong",
+      message: "Sorry, something went wrong",
     });
   }
 };

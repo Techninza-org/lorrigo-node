@@ -1473,7 +1473,6 @@ export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: 
       StatusType === "RT" ? returnStatusMapping :
         StatusType === "DL" ? deliveredStatusMapping : null;
 
-  console.log(statusMapping && statusMapping[Status as keyof typeof statusMapping], "statusMapping")
   return (
     statusMapping && statusMapping[Status as keyof typeof statusMapping] || {
       bucket: -1,
@@ -1482,6 +1481,27 @@ export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: 
   );
 }
 
+export function getB2BShiprocketBucketing(status: string) {
+  const shiprocketStatusMapping = {
+    "Not Picked": { bucket: READY_TO_SHIP, description: "In Transit" },
+    "In Transit": { bucket: IN_TRANSIT, description: "In Transit" },
+    "Pending": { bucket: IN_TRANSIT, description: "In Transit" },
+    "Picked Up": { bucket: IN_TRANSIT, description: "In Transit" },
+    "Out For Delivery": { bucket: IN_TRANSIT, description: "Out for Delivery" },
+    "Reached At Destination": { bucket: DELIVERED, description: "Delivered" },
+    "Delivered": { bucket: DELIVERED, description: "Delivered" },
+    "RTO": { bucket: RTO, description: "Return to Origin (RTO)" },
+    "DTO": { bucket: DELIVERED, description: "Return Delivered" },
+    "Returned": { bucket: RETURN_CONFIRMED, description: "Return Delivered" },
+    "LOST": { bucket: LOST_DAMAGED, description: "Lost or Damaged" },
+  };
+  return (
+    shiprocketStatusMapping[status as keyof typeof shiprocketStatusMapping] || {
+      bucket: -1,
+      description: "Status code not found",
+    }
+  );
+}
 
 export async function isSmartr_surface_servicable(pincode: number): Promise<boolean> {
   /*

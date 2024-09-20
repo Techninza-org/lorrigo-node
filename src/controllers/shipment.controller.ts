@@ -55,6 +55,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     const body = req.body;
     const seller = req.seller;
     const sellerId = req.seller._id;
+    const carrierId = body.carrierId;
 
     if (seller.config.isPrepaid && (body.charge >= seller.walletBalance || seller.walletBalance <= 0)) {
       return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
@@ -210,6 +211,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           const carrierName = smartShipCourier?.name + " " + vendorName?.nickName;
           order.client_order_reference_id = client_order_reference_id;
           order.shipmentCharges = body.charge;
+          order.carrierId = carrierId;
           order.bucket = order.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
           order.orderStages.push({
             stage: SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS,
@@ -308,6 +310,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           order.awb = awb;
           order.carrierName = (shiprocketCourier?.name) + " " + (vendorName?.nickName);
           order.shipmentCharges = body.charge;
+          order.carrierId = carrierId;
           order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
           order.orderStages.push({
             stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
@@ -462,6 +465,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         }
         order.awb = orderAWB;
         order.shipmentCharges = body.charge;
+        order.carrierId = carrierId;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
 
 
@@ -600,6 +604,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         order.awb = delhiveryRes?.waybill;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
         order.shipmentCharges = body.charge;
+        order.carrierId = carrierId;
         order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
         order.orderStages.push({
           stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
@@ -740,6 +745,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         order.awb = delhiveryRes?.waybill;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
         order.shipmentCharges = body.charge;
+        order.carrierId = carrierId;
         order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
         order.orderStages.push({
           stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
@@ -883,6 +889,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         order.awb = delhiveryRes?.waybill;
         order.carrierName = deliveryCourier?.name + " " + (vendorName?.nickName);
         order.shipmentCharges = body.charge;
+        order.carrierId = carrierId;
         order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
         order.orderStages.push({
           stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
@@ -1853,6 +1860,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         }
         order.awb = orderAWB;
         order.shipmentCharges = body.charge;
+        order.carrierId = carrierId;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
 
         if (orderAWB) {
@@ -1913,6 +1921,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
 
         order.awb = orderAWB;
         order.shipmentCharges = body.charge;
+        order.carrierId = carrierId;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
 
         if (orderAWB) {
