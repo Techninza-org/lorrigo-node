@@ -432,22 +432,18 @@ export const trackOrder_Smartr = async () => {
 export const calculateRemittanceEveryDay = async (): Promise<void> => {
   try {
     const companyName = 'L';
-    const currentDate = new Date(); // Current date when the function runs
     const currMonth = new Date();
     currMonth.setDate(1);
     currMonth.setHours(0, 0, 0, 0);
 
     const sellerIds = await SellerModel.find({}).select('_id').lean();
 
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
     for (const seller of sellerIds) {
       const orders = await B2COrderModel.find({
         sellerId: seller._id,
         bucket: DELIVERED, // Assuming 1 represents DELIVERED
         payment_mode: 1, // COD
-        createdAt: { $gte: currMonth, $lte: sevenDaysAgo }, // Filter for current month's orders, delivered at least 7 days ago
+        createdAt: { $gte: currMonth }, // Filter for current month's orders
       }).populate('productId').lean() as OrderDocument[];
 
       // Check for orders already included in any remittance
@@ -457,10 +453,8 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
           .map((order) => order._id.toString())
       );
 
-      // Filter out already remitted orders
       const unremittedOrders = orders.filter((order) => !remittedOrderIds.has(order._id.toString()));
 
-      // Group unremitted orders by delivery date
       const ordersGroupedByDate: { [key: string]: OrderDocument[] } = unremittedOrders.reduce(
         (acc: { [key: string]: OrderDocument[] }, order) => {
           const length = order?.orderStages?.length;
@@ -477,90 +471,44 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
       );
 
       for (const [deliveryDateStr, ordersOnSameDate] of Object.entries(ordersGroupedByDate)) {
-        console.log('deliveryDateStr', deliveryDateStr, ordersOnSameDate.flatMap((order) => order.awb.toString()));
         const deliveryDate = parseISO(deliveryDateStr);
 
-        const daysSinceDelivery = differenceInCalendarDays(currentDate, deliveryDate);
+        // Calculate the date exactly 7 days after delivery
+        const sevenDaysAfterDelivery = addDays(deliveryDate, 7);
 
-        console.log('daysSinceDelivery', daysSinceDelivery, ordersOnSameDate.flatMap((order) => order.awb.toString()));
+        // Find the nearest upcoming Friday after the 7th day
+        const remittanceDate = nextFriday(sevenDaysAfterDelivery);
 
-        if (daysSinceDelivery >= 7) {
-          const remittanceDate = nextFriday(deliveryDate);
+        // Check if a remittance already exists for this seller and remittance date
+        const existingRemittance = await RemittanceModel.findOne({
+          sellerId: seller._id,
+          remittanceDate,
+        }).lean();
 
-          // Check if a remittance already exists for this seller and remittance date
-          const existingRemittance = await RemittanceModel.findOne({
-            sellerId: seller._id,
-            remittanceDate,
-          }).lean();
-
-          if (existingRemittance) {
-            existingRemittance.orders.push(...ordersOnSameDate);
-            existingRemittance.remittanceAmount += ordersOnSameDate.reduce(
-              (sum, order) => sum + Number(order.amount2Collect),
-              0
-            );
-            await RemittanceModel.updateOne({ _id: existingRemittance._id }, existingRemittance);
-          } else {
-            const remittanceId = generateRemittanceId(companyName, seller._id.toString(), remittanceDate);
-            const remittanceAmount = ordersOnSameDate.reduce((sum, order) => sum + Number(order.amount2Collect), 0);
-            const remittanceStatus = 'pending';
-            const BankTransactionId = 'xxxxxxxxxxxxx';
-
-            console.log(remittanceId, "remittanceId [EXISTING]")
-
-            const remittance = new RemittanceModel({
-              sellerId: seller._id,
-              remittanceId: remittanceId,
-              remittanceDate: remittanceDate,
-              remittanceAmount: remittanceAmount,
-              remittanceStatus: remittanceStatus,
-              orders: ordersOnSameDate,
-              BankTransactionId: BankTransactionId,
-            });
-
-            await remittance.save();
-          }
+        if (existingRemittance) {
+          existingRemittance.orders.push(...ordersOnSameDate);
+          existingRemittance.remittanceAmount += ordersOnSameDate.reduce(
+            (sum, order) => sum + Number(order.amount2Collect),
+            0
+          );
+          await RemittanceModel.updateOne({ _id: existingRemittance._id }, existingRemittance);
         } else {
-          // If less than 7 days since delivery, schedule for future Friday
-          const futureRemittanceDate = format(getNextToNextFriday(), 'yyyy-MM-dd');
+          const remittanceId = generateRemittanceId(companyName, seller._id.toString(), remittanceDate);
+          const remittanceAmount = ordersOnSameDate.reduce((sum, order) => sum + Number(order.amount2Collect), 0);
+          const remittanceStatus = 'pending';
+          const BankTransactionId = 'xxxxxxxxxxxxx'; // Static or replace as needed
 
-          if (futureRemittanceDate <= deliveryDate) {
-            continue; // Skip orders delivered in the future
-          }
-
-          const existingFutureRemittance = await RemittanceModel.findOne({
+          const remittance = new RemittanceModel({
             sellerId: seller._id,
-            remittanceDate: futureRemittanceDate,
-          }).lean();
+            remittanceId: remittanceId,
+            remittanceDate: remittanceDate,
+            remittanceAmount: remittanceAmount,
+            remittanceStatus: remittanceStatus,
+            orders: ordersOnSameDate,
+            BankTransactionId: BankTransactionId,
+          });
 
-          if (existingFutureRemittance) {
-            existingFutureRemittance.orders.push(...ordersOnSameDate);
-            existingFutureRemittance.remittanceAmount += ordersOnSameDate.reduce(
-              (sum, order) => sum + Number(order.amount2Collect),
-              0
-            );
-            await RemittanceModel.updateOne({ _id: existingFutureRemittance._id }, existingFutureRemittance);
-          } else {
-
-            const remittanceId = generateRemittanceId(companyName, seller._id.toString(), futureRemittanceDate);
-            const remittanceAmount = ordersOnSameDate.reduce((sum, order) => sum + Number(order.amount2Collect), 0);
-            const remittanceStatus = 'pending';
-            const BankTransactionId = '1234567890';
-
-            console.log(remittanceId, "remittanceId [NEW]")
-
-            const remittance = new RemittanceModel({
-              sellerId: seller._id,
-              remittanceId: remittanceId,
-              remittanceDate: futureRemittanceDate,
-              remittanceAmount: remittanceAmount,
-              remittanceStatus: remittanceStatus,
-              orders: ordersOnSameDate,
-              BankTransactionId: BankTransactionId,
-            });
-
-            await remittance.save();
-          }
+          await remittance.save();
         }
       }
     }
@@ -739,7 +687,7 @@ export const track_B2B_SHIPROCKET = async () => {
 export default async function runCron() {
   console.log("Running cron scheduler");
 
-  calculateRemittanceEveryDay()
+  // calculateRemittanceEveryDay()
 
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";

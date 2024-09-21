@@ -224,8 +224,7 @@ export const nextFriday = (currentDate: Date) => {
   const dayOfWeek = currentDate.getDay();
   const daysUntilFriday = (5 - dayOfWeek + 7) % 7 || 7; // 5 represents Friday
   const date = addDays(startOfDay(currentDate), daysUntilFriday);
-  const formattedDate = format(date, 'yy-MM-dd'); // Formats date as 'YYYY-MM-DD'
-  console.log("Next Friday:", formattedDate);
+  const formattedDate = format(date, 'yyyy-MM-dd'); // Formats date as 'YYYY-MM-DD'
   return formattedDate;
 };
 

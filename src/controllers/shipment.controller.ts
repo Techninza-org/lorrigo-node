@@ -1914,7 +1914,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
 
       try {
         const axiosRes = await axios.request(config);
-        console.log(axiosRes, 'axiosRes')
+        console.log(axiosRes.data, 'axiosRes')
         const shiprocketResponse = axiosRes.data;
 
         let orderAWB = shiprocketResponse?.eway_bill_no;

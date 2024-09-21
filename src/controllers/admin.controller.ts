@@ -230,24 +230,31 @@ export const getAllRemittances = async (req: ExtendedRequest, res: Response, nex
       }
     }
 
-    const remittanceOrders = await RemittanceModel.find({}, {
-      BankTransactionId: 1,
-      remittanceStatus: 1,
-      remittanceDate: 1,
-      remittanceId: 1,
-      remittanceAmount: 1,
-      sellerId: 1,
-      orders: {
-        $map: {
-          input: "$orders",
-          as: "order",
-          in: {
-            orderStages: "$$order.orderStages",
-            awb: "$$order.awb"
-          }
-        }
+    const remittanceOrders = await RemittanceModel.find(
+      {},
+      {
+        BankTransactionId: 1,
+        remittanceStatus: 1,
+        remittanceDate: 1,
+        remittanceId: 1,
+        remittanceAmount: 1,
+        sellerId: 1,
+        orders: {
+          $map: {
+            input: "$orders",
+            as: "order",
+            in: {
+              orderStages: "$$order.orderStages",
+              awb: "$$order.awb",
+            },
+          },
+        },
       }
-    }).populate("sellerId").lean();
+    )
+      .populate("sellerId")
+      .lean()
+      .sort({ remittanceDate: -1 });
+
     if (!remittanceOrders) return res.status(200).send({ valid: false, message: "No Remittance found" });
     return res.status(200).send({
       valid: true,
@@ -288,7 +295,7 @@ export const getFutureRemittances = async (req: ExtendedRequest, res: Response, 
     )
       .populate("sellerId", "name email")
       .lean()
-      .exec();
+      .sort({ remittanceDate: -1 })
 
     return res.status(200).send({
       valid: true,
@@ -809,11 +816,11 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     const isForwardApplicable = Boolean(bill["Forward Applicable"]?.toUpperCase() === "YES");
     const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "YES");
     return {
-      billingDate: convertToISO(bill["Date"]),
+      // billingDate: convertToISO(bill["Date"]),
       awb: bill["Awb"],
       rtoAwb: Number(bill["RTO Awb"]),
       codValue: Number(bill["COD Value"] || 0),
-      orderRefId: bill["Order id"],
+      // orderRefId: bill["Order id"],
       recipientName: bill["Recipient Name"],
       shipmentType: bill["Shipment Type"] === "COD" ? 1 : 0,
       fromCity: bill["Origin City"],
@@ -865,7 +872,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       return res.end();
     }
 
-    const orderRefIds = bills.map(bill => bill.orderRefId);
+    const orderRefIds = bills.map(bill => bill.awb);
     const orders = await B2COrderModel.find({
       $or: [
         { order_reference_id: { $in: orderRefIds } },
@@ -879,14 +886,20 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     });
 
     const billsWithCharges = await Promise.all(bills.map(async (bill) => {
-      const order: any = orders.find(o => o.order_reference_id === bill.orderRefId || o.client_order_reference_id === bill.orderRefId);
+      const order: any = orders.find(o => o.awb === bill.awb);
       if (!order) {
-        throw new Error(`Order not found for Order Ref Id: ${bill.orderRefId}`);
+        throw new Error(`Order not found for Order Ref Id: ${bill.awb}`);
       }
 
-      console.log("body.carrierId", bill.carrierID);
+      let vendor: any = await CustomPricingModel.findOne({
+        sellerId: order.sellerId,
+        vendorId: bill.carrierID
+      }).populate("vendor_channel_id");
 
-      const vendor: any = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
+      if (!vendor) {
+        vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
+      }
+
       const pickupDetails = {
         District: bill.fromCity,
         StateName: order.pickupAddress.state,
@@ -906,7 +919,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
       return {
         updateOne: {
-          filter: { orderRefId: bill.orderRefId },
+          filter: { awb: bill.awb },
           update: {
             $set: {
               ...bill,

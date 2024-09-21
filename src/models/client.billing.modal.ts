@@ -13,12 +13,12 @@ const modal = new mongoose.Schema({
   zone: { type: String, required: true },
   isForwardApplicable: { type: Boolean, required: true },
   isRTOApplicable: { type: Boolean, required: true },
-  billingDate: { type: Date, required: true },
+  billingDate: { type: Date, default: Date.now },
   billingAmount: { type: String, required: false },
-  incrementPrice : { type: String, required: false },
-  basePrice : { type: String, required: false },
-  baseWeight : { type: String, required: false },
-  incrementWeight : { type: String, required: false },
+  incrementPrice: { type: String, required: false },
+  basePrice: { type: String, required: false },
+  baseWeight: { type: String, required: false },
+  incrementWeight: { type: String, required: false },
   vendorWNickName: { type: String, required: false },
 });
 
