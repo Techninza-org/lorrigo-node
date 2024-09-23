@@ -432,16 +432,6 @@ export function getNextToNextFriday() {
 
 export const validateClientBillingFeilds = (value: any, fieldName: string, bill: any, alreadyExistingBills: any): string | null => {
   switch (fieldName) {
-    case 'orderRefId':
-      if (!value || alreadyExistingBills.find((item: any) => item.orderRefId.includes(value))) {
-        return "Order ID / Order Reference ID must be unique and cannot be empty";
-      }
-      break;
-    case 'billingDate':
-      if (!value) {
-        return "Billing date is required";
-      }
-      break;
     case 'awb':
       if (!value) {
         return "AWB is required";
@@ -452,24 +442,9 @@ export const validateClientBillingFeilds = (value: any, fieldName: string, bill:
     //     return "RTO AWB is required";
     //   }
     //   break;
-    case 'recipientName':
-      if (!value) {
-        return "Recipient name is required";
-      }
-      break;
     case 'shipmentType':
       if (value !== 0 && value !== 1) {
         return "Shipment type is required and must be either 0 or 1";
-      }
-      break;
-    case 'fromCity':
-      if (!value) {
-        return "Origin city is required";
-      }
-      break;
-    case 'toCity':
-      if (!value) {
-        return "Destination city is required";
       }
       break;
     case 'chargedWeight':
@@ -627,8 +602,7 @@ export async function sendMailToScheduleShipment({ orders, pickupDate }: { order
 }
 
 export async function calculateShippingCharges(
-  pickupDetails: PickupDetails,
-  deliveryDetails: DeliveryDetails,
+  zone: string,
   body: Body,
   vendor: any
 ): Promise<{
@@ -638,8 +612,7 @@ export async function calculateShippingCharges(
 }> {
   const orderWeight = body.weight
 
-  const increment_price = getIncrementPrice(pickupDetails, deliveryDetails, MetroCitys, NorthEastStates, vendor);
-  console.log(increment_price)
+  const increment_price = getIncrementPriceByZone(zone, vendor);
   if (!increment_price) {
     throw new Error("Invalid increment price");
   }
@@ -650,6 +623,23 @@ export async function calculateShippingCharges(
     incrementPrice: increment_price,
     orderWeight,
   };
+}
+
+function getIncrementPriceByZone(
+  zone: string,
+  vendor: any
+): IncrementPrice | null {
+  if (zone.toUpperCase() === "A") {
+    return vendor.withinCity;
+  } else if (zone.toUpperCase() === "B") {
+    return vendor.withinZone;
+  } else if (zone.toUpperCase() === "C") {
+    return vendor.withinMetro;
+  } else if (zone.toUpperCase() === "E") {
+    return vendor?.northEast;
+  } else {
+    return vendor?.withinRoi;
+  }
 }
 
 function getIncrementPrice(

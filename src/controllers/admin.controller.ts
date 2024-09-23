@@ -812,26 +812,29 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
   const alreadyExistingBills = await ClientBillingModal.find({}).select(["orderRefId", "awb", "rtoAwb"]);
   const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
 
-  const bills = json.map((bill: any) => {
+  const csvBills = json.map((bill: any) => {
     const isForwardApplicable = Boolean(bill["Forward Applicable"]?.toUpperCase() === "YES");
     const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "YES");
     return {
-      // billingDate: convertToISO(bill["Date"]),
       awb: bill["Awb"],
-      rtoAwb: Number(bill["RTO Awb"]),
       codValue: Number(bill["COD Value"] || 0),
-      // orderRefId: bill["Order id"],
-      recipientName: bill["Recipient Name"],
       shipmentType: bill["Shipment Type"] === "COD" ? 1 : 0,
-      fromCity: bill["Origin City"],
-      toCity: bill["Destination City"],
       chargedWeight: Number(bill["Charged Weight"]),
       zone: bill["Zone"],
       carrierID: bill["Carrier ID"],
       isForwardApplicable,
       isRTOApplicable,
+
+      // billingDate: convertToISO(bill["Date"]),
+      // rtoAwb: Number(bill["RTO Awb"]),
+      // orderRefId: bill["Order id"],
+      // recipientName: bill["Recipient Name"],
+      // fromCity: bill["Origin City"],
+      // toCity: bill["Destination City"],
     };
   });
+
+  const bills = csvBills.filter((bill: any) => !!bill.awb);
 
   if (bills.length < 1) {
     return res.status(200).send({ valid: false, message: "empty payload" });
@@ -872,11 +875,10 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       return res.end();
     }
 
-    const orderRefIds = bills.map(bill => bill.awb);
+    const orderAwbs = bills.map(bill => bill.awb);
     const orders = await B2COrderModel.find({
       $or: [
-        { order_reference_id: { $in: orderRefIds } },
-        { client_order_reference_id: { $in: orderRefIds } }
+        { awb: { $in: orderAwbs } },
       ]
     }).populate(["productId", "pickupAddress"]);
 
@@ -888,7 +890,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     const billsWithCharges = await Promise.all(bills.map(async (bill) => {
       const order: any = orders.find(o => o.awb === bill.awb);
       if (!order) {
-        throw new Error(`Order not found for Order Ref Id: ${bill.awb}`);
+        throw new Error(`Order not found for Order awb: ${bill.awb}`);
       }
 
       let vendor: any = await CustomPricingModel.findOne({
@@ -900,20 +902,20 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
       }
 
-      const pickupDetails = {
-        District: bill.fromCity,
-        StateName: order.pickupAddress.state,
-      };
-      const deliveryDetails = {
-        District: bill.toCity,
-        StateName: order.customerDetails.get("state"),
-      };
+      // const pickupDetails = {
+      //   District: bill.fromCity,
+      //   StateName: order.pickupAddress.state,
+      // };
+      // const deliveryDetails = {
+      //   District: bill.toCity,
+      //   StateName: order.customerDetails.get("state"),
+      // };
       const body = {
         weight: bill.chargedWeight,
         paymentType: bill.shipmentType,
         collectableAmount: bill.codValue,
       };
-      const { incrementPrice, totalCharge } = await calculateShippingCharges(pickupDetails, deliveryDetails, body, vendor);
+      const { incrementPrice, totalCharge } = await calculateShippingCharges(bill.zone, body, vendor);
       const baseWeight = vendor?.weightSlab || 0;
       const incrementWeight = Number(order.orderWeight) - baseWeight;
 
@@ -924,12 +926,18 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
             $set: {
               ...bill,
               sellerId: order.sellerId,
-              billingAmount: totalCharge,
+              billingAmount: totalCharge - order.shipmentCharges,
               incrementPrice: incrementPrice.incrementPrice,
               basePrice: incrementPrice.basePrice,
               incrementWeight: incrementWeight.toString(),
               baseWeight: baseWeight.toString(),
               vendorWNickName: `${vendor.name} ${vendor.vendor_channel_id.nickName}`,
+              billingDate: format(new Date(), 'yyyy-MM-dd'),
+              rtoAwb: "",
+              orderRefId: order.order_reference_id,
+              recipientName: order.customerDetails.get("name"),
+              fromCity: order.pickupAddress.city,
+              toCity: order.customerDetails.get("city"),
             }
           },
           upsert: true
@@ -941,7 +949,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     await ClientBillingModal.bulkWrite(billsWithCharges);
 
     await Promise.all(billsWithCharges.map(async (bill: any) => {
-      if (bill.sellerId && bill.billingAmount) {
+      if (bill.sellerId && bill.billingAmount && bill.billingAmount > 0) { 
         await updateSellerWalletBalance(bill.sellerId, bill.billingAmount, false, `AWB: ${bill.awb}, Revised`);
       }
     }));
