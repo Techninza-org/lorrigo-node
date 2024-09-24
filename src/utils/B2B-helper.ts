@@ -340,6 +340,7 @@ export const regionToZoneMapping = {
     "diu & daman": "West 2",
     "mp": "West 2",
     "BHOPAL": "West 2",
+    "Madhya Pradesh": "West 2",
     "INDORE": "West 2",
     "chhattisgarh": "West 2",
     "gujarat": "West 2",
