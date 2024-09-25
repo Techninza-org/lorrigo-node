@@ -11,6 +11,23 @@ export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: 
     try {
         const b2bVol = orderDetails?.packageDetails?.reduce((sum: any, box: any) => sum + parseFloat(String(box.orderBoxHeight * box.orderBoxLength * box.orderBoxWidth) || '0'), 0);
 
+        const breakAddressInto50Char = (address: string) => {
+            if (address.length > 50) {
+                const addressArray = address.split(" ");
+                let firstLine = "";
+                let secondLine = "";
+                for (let i = 0; i < addressArray.length; i++) {
+                    if (firstLine.length + addressArray[i].length <= 50) {
+                        firstLine += addressArray[i] + " ";
+                    } else {
+                        secondLine += addressArray[i] + " ";
+                    }
+                }
+                return [firstLine.trim(), secondLine.trim()];
+            }
+            return [address, ""];
+        }
+
         const shiprocketB2BConfig = await getShiprocketB2BConfig()
         const payload = {
             no_of_packages: orderDetails.quantity || 1,
@@ -19,8 +36,8 @@ export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: 
             is_to_pay: false, ///
             to_pay_amount: orderDetails.toPayAmount || null,
             source_warehouse_name: orderDetails.pickupAddress?.name,
-            source_address_line1: orderDetails.pickupAddress?.address1,
-            source_address_line2: orderDetails.pickupAddress?.address2 || "",
+            source_address_line1: breakAddressInto50Char(orderDetails.pickupAddress?.address1)[0],
+            source_address_line2: breakAddressInto50Char(orderDetails.pickupAddress?.address1)[1] || "",
             source_pincode: orderDetails.pickupAddress?.pincode,
             source_city: orderDetails.pickupAddress?.city,
             source_state: orderDetails.pickupAddress?.state,
@@ -28,8 +45,8 @@ export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: 
             sender_contact_person_email: orderDetails.pickupAddress?.contactPersonEmail || "",
             sender_contact_person_contact_no: orderDetails.pickupAddress?.phone,
             destination_warehouse_name: orderDetails.customerDetails?.name,
-            destination_address_line1: orderDetails.customerDetails?.address,
-            destination_address_line2: "",
+            destination_address_line1: breakAddressInto50Char(orderDetails.customerDetails?.address)[0],
+            destination_address_line2: breakAddressInto50Char(orderDetails.customerDetails?.address)[1] || "",
             destination_pincode: orderDetails.customerDetails?.pincode,
             destination_city: orderDetails.customerDetails?.city,
             destination_state: orderDetails.customerDetails?.state,
@@ -56,6 +73,7 @@ export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: 
             client_order_id: orderDetails.order_reference_id
         };
 
+        console.log(payload, "payload b2b")
         const response = await fetch(`${envConfig.SHIPROCKET_B2B_API_BASEURL}${APIs.REGISTER_ORDER_B2B_SHIPROCKET}`, {
             method: 'POST',
             headers: {
@@ -65,6 +83,7 @@ export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: 
             body: JSON.stringify(payload)
         });
         const result = await response.json();
+        console.log(result, "result b2b")
         return result;
     } catch (error) {
         console.log(error, 'error in registerB2BShiprocketOrder')
@@ -137,9 +156,20 @@ export const getB2BShiprocketServicableOrder = async (orderDetails: any, allwedC
             await B2BCalcModel.bulkWrite(courierUpdates);
         }
 
-        const courierIds = couriers.map((courier: any) => courier._id);
+        const servicableCouriers = couriers.map((courier: any) => {
+            const carrierData: any = Object.values(result).find(
+                (x: any) => x.id === courier.carrierID
+            );
+            console.log(carrierData, "carrierData")
+            if (carrierData?.id) {
+                return courier._id;
+            }
+        });
 
-        const allowedCourierIds = courierIds.filter((courierId: any) => allwedCouriers.includes(courierId.toString()));
+        console.log(servicableCouriers, "servicableCouriers")
+
+        const allowedCourierIds = servicableCouriers.filter((courierId: any) => allwedCouriers.includes(courierId.toString()));
+        console.log(allowedCourierIds, "allowedCourierIds")
 
         return allowedCourierIds;
     } catch (error) {
