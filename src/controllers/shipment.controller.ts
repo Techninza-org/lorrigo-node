@@ -1739,8 +1739,13 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
     // const hostUrl = "https://xz0zv40s-4000.inc1.devtunnels.ms";
 
     const body = req.body;
+    const sellerConfig = req.seller;
     const sellerId = req.seller._id;
     const carrierId = body.carrierId;
+
+    if (body.charge >= sellerConfig.walletBalance || sellerConfig.walletBalance <= 0) {
+      return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
+    }
 
     const seller = await SellerModel.findById(sellerId).select("gst").lean();
 
@@ -1912,6 +1917,8 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         data: JSON.stringify(data)
       };
 
+      console.log(JSON.stringify(data), "JSON.stringify(data)")
+
       try {
         const axiosRes = await axios.request(config);
         console.log(axiosRes.data, 'axiosRes')
@@ -1938,7 +1945,10 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });
 
       } catch (error: any) {
-        console.error("Error creating SHIPROCKET shipment:", error.response.data);
+        console.error("Error creating SHIPROCKET shipment:",error.response?.data);
+        if (error.response?.data?.non_field_errors?.[0]?.includes("JPEG, JPG, PNG, PDF, GIF, BIN File formats")) {
+          return res.status(200).send({ valid: false, message: "Please upload the invoice" });
+        }
         return next(error);
       }
     }

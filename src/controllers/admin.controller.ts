@@ -816,7 +816,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     const isForwardApplicable = Boolean(bill["Forward Applicable"]?.toUpperCase() === "YES");
     const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "YES");
     return {
-      awb: bill["Awb"],
+      awb: Number(bill["Awb"]).toString(),
       codValue: Number(bill["COD Value"] || 0),
       shipmentType: bill["Shipment Type"] === "COD" ? 1 : 0,
       chargedWeight: Number(bill["Charged Weight"]),
@@ -824,13 +824,6 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       carrierID: bill["Carrier ID"],
       isForwardApplicable,
       isRTOApplicable,
-
-      // billingDate: convertToISO(bill["Date"]),
-      // rtoAwb: Number(bill["RTO Awb"]),
-      // orderRefId: bill["Order id"],
-      // recipientName: bill["Recipient Name"],
-      // fromCity: bill["Origin City"],
-      // toCity: bill["Destination City"],
     };
   });
 
@@ -851,6 +844,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
     const errorRows: any = [];
 
+    // Validate each bill and collect errors for invalid fields
     bills.forEach((bill) => {
       const errors: string[] = [];
       Object.entries(bill).forEach(([fieldName, value]) => {
@@ -865,6 +859,24 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       }
     });
 
+    const orderAwbs = bills.map(bill => bill.awb);
+    const orders = await B2COrderModel.find({
+      $or: [{ awb: { $in: orderAwbs } }],
+    }).populate(["productId", "pickupAddress"]);
+
+    const orderRefIdToSellerIdMap = new Map();
+    orders.forEach(order => {
+      orderRefIdToSellerIdMap.set(order.order_reference_id || order.client_order_reference_id, order.sellerId);
+    });
+
+    // Handling missing awbs: collect awbs not found in the database
+    bills.forEach(bill => {
+      const order = orders.find(o => o.awb === bill.awb);
+      if (!order) {
+        errorRows.push({ awb: bill.awb, errors: "AWB not found in the database" });
+      }
+    });
+
     if (errorRows.length > 0) {
       errorWorksheet.addRows(errorRows);
 
@@ -875,22 +887,10 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       return res.end();
     }
 
-    const orderAwbs = bills.map(bill => bill.awb);
-    const orders = await B2COrderModel.find({
-      $or: [
-        { awb: { $in: orderAwbs } },
-      ]
-    }).populate(["productId", "pickupAddress"]);
-
-    const orderRefIdToSellerIdMap = new Map();
-    orders.forEach(order => {
-      orderRefIdToSellerIdMap.set(order.order_reference_id || order.client_order_reference_id, order.sellerId);
-    });
-
     const billsWithCharges = await Promise.all(bills.map(async (bill) => {
       const order: any = orders.find(o => o.awb === bill.awb);
       if (!order) {
-        throw new Error(`Order not found for Order awb: ${bill.awb}`);
+        throw new Error(`Order not found for AWB: ${bill.awb}`);
       }
 
       let vendor: any = await CustomPricingModel.findOne({
@@ -902,19 +902,12 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
       }
 
-      // const pickupDetails = {
-      //   District: bill.fromCity,
-      //   StateName: order.pickupAddress.state,
-      // };
-      // const deliveryDetails = {
-      //   District: bill.toCity,
-      //   StateName: order.customerDetails.get("state"),
-      // };
       const body = {
         weight: bill.chargedWeight,
         paymentType: bill.shipmentType,
         collectableAmount: bill.codValue,
       };
+
       const { incrementPrice, totalCharge } = await calculateShippingCharges(bill.zone, body, vendor);
       const baseWeight = vendor?.weightSlab || 0;
       const incrementWeight = Number(order.orderWeight) - baseWeight;
@@ -929,7 +922,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
               billingAmount: totalCharge - order.shipmentCharges,
               incrementPrice: incrementPrice.incrementPrice,
               basePrice: incrementPrice.basePrice,
-              incrementWeight: incrementWeight.toString(),
+              incrementWeight: incrementWeight > 0 ? incrementWeight.toString() : "0",
               baseWeight: baseWeight.toString(),
               vendorWNickName: `${vendor.name} ${vendor.vendor_channel_id.nickName}`,
               billingDate: format(new Date(), 'yyyy-MM-dd'),
@@ -949,7 +942,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     await ClientBillingModal.bulkWrite(billsWithCharges);
 
     await Promise.all(billsWithCharges.map(async (bill: any) => {
-      if (bill.sellerId && bill.billingAmount && bill.billingAmount > 0) { 
+      if (bill.sellerId && bill.billingAmount && bill.billingAmount > 0) {
         await updateSellerWalletBalance(bill.sellerId, bill.billingAmount, false, `AWB: ${bill.awb}, Revised`);
       }
     }));
@@ -1053,8 +1046,12 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
       const fromRegionName = pickupPincodeData.District.toLowerCase(); // convert to lowercase
       const toRegionName = deliveryPincodeData.District.toLowerCase(); // convert to lowercase
 
-      const Fzone = regionToZoneMappingLowercase[fromRegionName];
-      const Tzone = regionToZoneMappingLowercase[toRegionName];
+      const Fzone = await regionToZoneMappingLowercase(fromRegionName);
+      const Tzone = await regionToZoneMappingLowercase(toRegionName);
+
+      if (!Fzone || !Tzone) {
+        throw new Error('Zone not found for the given region');
+      }
 
       const result = await calculateRateAndPrice(courier, Fzone, Tzone, bill.orderWeight, courier?._id?.toString(), fromRegionName, toRegionName, order.amount, bill.otherCharges, bill.isODAApplicable);
 

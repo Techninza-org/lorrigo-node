@@ -6,6 +6,7 @@ import { CustomB2BPricingModel } from "../models/custom_pricing.model";
 import { getShiprocketB2BConfig } from "./helpers";
 import envConfig from "./config";
 import APIs from "./constants/third_party_apis";
+import RegionToZone from "../models/RegionToZone.modal";
 
 export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: string) => {
     try {
@@ -160,17 +161,12 @@ export const getB2BShiprocketServicableOrder = async (orderDetails: any, allwedC
             const carrierData: any = Object.values(result).find(
                 (x: any) => x.id === courier.carrierID
             );
-            console.log(carrierData, "carrierData")
             if (carrierData?.id) {
                 return courier._id;
             }
         });
 
-        console.log(servicableCouriers, "servicableCouriers")
-
         const allowedCourierIds = servicableCouriers.filter((courierId: any) => allwedCouriers.includes(courierId.toString()));
-        console.log(allowedCourierIds, "allowedCourierIds")
-
         return allowedCourierIds;
     } catch (error) {
         console.log(error)
@@ -196,8 +192,8 @@ export async function calculateB2BPriceCouriers(orderId: string, allowedCourierI
     const fromRegionName = pickupPincodeData.StateName.toLowerCase(); // convert to lowercase
     const toRegionName = deliveryPincodeData.StateName.toLowerCase(); // convert to lowercase
 
-    const Fzone = regionToZoneMappingLowercase[fromRegionName];
-    const Tzone = regionToZoneMappingLowercase[toRegionName];
+    const Fzone = await regionToZoneMappingLowercase(fromRegionName);
+    const Tzone = await regionToZoneMappingLowercase(toRegionName);
 
     if (!Fzone || !Tzone) {
         throw new Error('Zone not found for the given region');
@@ -425,11 +421,16 @@ export const regionToZoneMapping = {
     "JAMMU": "Northeast",
 };
 
-// Ensure all keys are lowercase for case-insensitive matching
-export const regionToZoneMappingLowercase = Object.fromEntries(
-    Object.entries(regionToZoneMapping).map(([key, value]) => [key.toLowerCase(), value])
-);
-// Note: Adjust the mapping keys to match your data structure accurately.
-// export const zoneToRegionMapping = Object.fromEntries(
-//     Object.entries(regionToZoneMapping).map(([region, zone]) => [zone, region])
-// );
+export const regionToZoneMappingLowercase = async (region: string): Promise<string | null> => {
+    try {
+        const regionData = await RegionToZone.findOne({ region: { $regex: new RegExp(`^${region}$`, 'i') } }).lean();
+        if (regionData) {
+            return regionData.zone;
+        } else {
+            return null;
+        }
+    } catch (error) {
+        console.error('Error searching for region in the database:', error);
+        throw error;
+    }
+};

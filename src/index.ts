@@ -28,6 +28,7 @@ import adminRouter from "./routes/admin.routes";
 import { getOrderInvoiceById, getSpecificOrder } from "./controllers/order.controller";
 import apicache from "apicache";
 import path from "path";
+import RegionToZone from "./models/RegionToZone.modal";
 
 app.use(cors({ origin: "*" }));
 app.use(express.json());
@@ -46,28 +47,6 @@ app.get("/ping", (_req, res: Response) => {
 if (!config.MONGODB_URI) {
   Logger.log("MONGODB_URI doesn't exists: " + config.MONGODB_URI);
   process.exit(0);
-}
-
-async function processChunk() {
-  // try {
-  //   for (const user of sellers) {
-  //     // Find user by email and update their contact_name to ContactId
-  //     const updatedUser = await SellerModel.findOneAndUpdate(
-  //       { email: user.Email }, // Find condition
-  //       { $set: { zoho_contact_id: user.ContactId } }, // Update operation
-  //       { new: true } // Return the updated document
-  //     );
-
-  //     if (updatedUser) {
-  //       console.log(`Updated user: ${updatedUser.email} with contact_name: ${updatedUser.zoho_contact_id}`);
-  //     } else {
-  //       console.log(`User with email ${user.Email} not found.`);
-  //     }
-  //   }
-  // } catch (error) {
-  //   console.log("Error in processChunk[ZOHO]", error);
-  // }
-
 }
 
 mongoose

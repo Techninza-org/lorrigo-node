@@ -423,8 +423,12 @@ export const B2BRatecalculatorController = async (req: ExtendedRequest, res: Res
   const fromRegionName = pickupPincodeData.District.toLowerCase(); // convert to lowercase
   const toRegionName = deliveryPincodeData.District.toLowerCase(); // convert to lowercase
 
-  const Fzone = regionToZoneMappingLowercase[fromRegionName];
-  const Tzone = regionToZoneMappingLowercase[toRegionName];
+  const Fzone = await regionToZoneMappingLowercase(fromRegionName);
+  const Tzone = await regionToZoneMappingLowercase(toRegionName);
+
+  if (!Fzone || !Tzone) {
+    throw new Error('Zone not found for the given region');
+  }
 
   let query: {
     _id: { $in: (Types.ObjectId | null)[] };
