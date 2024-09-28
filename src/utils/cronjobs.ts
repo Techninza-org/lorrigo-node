@@ -609,8 +609,7 @@ export const track_B2B_SHIPROCKET = async () => {
       try {
         let b2bShiprocketConfig = await getShiprocketB2BConfig();
 
-        // const apiUrl = `${config.SHIPROCKET_API_BASEURL}${APIs.B2B_SHIPMENT_TRACK}${order?.awb}`;
-        const apiUrl = `${config.SHIPROCKET_B2B_API_BASEURL}${APIs.B2B_SHIPMENT_TRACK}350977704`;
+        const apiUrl = `${config.SHIPROCKET_API_BASEURL}${APIs.B2B_SHIPMENT_TRACK}${order?.awb}`;
         const res = (await axios.get(apiUrl, { headers: { authorization: b2bShiprocketConfig.token } })).data;
 
         const history = res.status_history;
@@ -686,8 +685,6 @@ export const track_B2B_SHIPROCKET = async () => {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
-
-  // calculateRemittanceEveryDay()
 
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
