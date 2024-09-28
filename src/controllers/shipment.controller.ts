@@ -1463,22 +1463,6 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
         shipment_type: (order.isReverseOrder ? 2 : 1),
       };
 
-      order.bucket = READY_TO_SHIP;
-      order.orderStages.push({
-        stage: SMARTSHIP_MANIFEST_ORDER_STATUS,
-        action: MANIFEST_ORDER_DESCRIPTION,
-        stageDateTime: new Date(),
-      });
-
-      order.bucket = READY_TO_SHIP;
-      order.orderStages.push({
-        stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
-        action: PICKUP_SCHEDULED_DESCRIPTION,
-        stageDateTime: new Date(),
-      });
-
-      await order.save();
-
       try {
         const externalAPIResponse = await axios.post(
           config.SMART_SHIP_API_BASEURL + APIs.ORDER_MANIFEST,
@@ -1489,6 +1473,26 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
         if (externalAPIResponse.data.status === "403") {
           return res.status(500).send({ valid: false, message: "Smartships ENVs expired" });
         }
+
+        if (externalAPIResponse.data?.data?.errors) {
+          return res.status(500).send({ valid: false, message: JSON.stringify(externalAPIResponse.data?.data?.errors) });
+        }
+
+        order.bucket = READY_TO_SHIP;
+        order.orderStages.push({
+          stage: SMARTSHIP_MANIFEST_ORDER_STATUS,
+          action: MANIFEST_ORDER_DESCRIPTION,
+          stageDateTime: new Date(),
+        });
+
+        order.bucket = READY_TO_SHIP;
+        order.orderStages.push({
+          stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
+          action: PICKUP_SCHEDULED_DESCRIPTION,
+          stageDateTime: new Date(),
+        });
+
+        await order.save();
 
         const order_manifest_details = externalAPIResponse.data?.data;
 
@@ -1894,7 +1898,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         remarks: `Order remark ${order?.order_reference_id}`,
         recipient_GST: null,
         to_pay_amount: "0",
-        mode_id: order?.mode_id,
+        mode_id: courier?.mode_id,
         delivery_partner_id: courier?.carrierID,
         pickup_date_time: body.pickupDateTime,
         eway_bill_no: body.eway_bill_no ?? "",
@@ -1905,6 +1909,8 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         supporting_docs: [`${envConfig.LORRIGO_DOMAIN}/api${order?.invoiceImage}`]
         // supporting_docs: [`https://xz0zv40s-4000.inc1.devtunnels.ms/api${order?.invoiceImage}`]
       };
+
+      console.log(data, 'data')
 
       let config = {
         method: "post",
@@ -1917,11 +1923,11 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         data: JSON.stringify(data)
       };
 
-      console.log(JSON.stringify(data), "JSON.stringify(data)")
+      console.log(JSON.stringify(data), "SHIPROCKET B2B PAYLOAD")
 
       try {
         const axiosRes = await axios.request(config);
-        console.log(axiosRes.data, 'axiosRes')
+        console.log(axiosRes.data, 'SHIPROCKET B2B RESPONSE')
         const shiprocketResponse = axiosRes.data;
 
         let orderAWB = shiprocketResponse?.eway_bill_no;
@@ -1945,7 +1951,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });
 
       } catch (error: any) {
-        console.error("Error creating SHIPROCKET shipment:",error.response?.data);
+        console.error("Error creating SHIPROCKET shipment:", error.response?.data);
         if (error.response?.data?.non_field_errors?.[0]?.includes("JPEG, JPG, PNG, PDF, GIF, BIN File formats")) {
           return res.status(200).send({ valid: false, message: "Please upload the invoice" });
         }

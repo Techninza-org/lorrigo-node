@@ -3,7 +3,7 @@ import B2BCalcModel from "../models/b2b.calc.model";
 import { B2BOrderModel } from "../models/order.model";
 import PincodeModel from "../models/pincode.model";
 import { CustomB2BPricingModel } from "../models/custom_pricing.model";
-import { getShiprocketB2BConfig } from "./helpers";
+import { getShiprocketB2BConfig, getZohoConfig } from "./helpers";
 import envConfig from "./config";
 import APIs from "./constants/third_party_apis";
 import RegionToZone from "../models/RegionToZone.modal";
@@ -74,7 +74,6 @@ export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: 
             client_order_id: orderDetails.order_reference_id
         };
 
-        console.log(payload, "payload b2b")
         const response = await fetch(`${envConfig.SHIPROCKET_B2B_API_BASEURL}${APIs.REGISTER_ORDER_B2B_SHIPROCKET}`, {
             method: 'POST',
             headers: {
@@ -84,7 +83,7 @@ export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: 
             body: JSON.stringify(payload)
         });
         const result = await response.json();
-        console.log(result, "result b2b")
+        console.log(result, "ORDER REGISTERED B2B SHIPROCKET")
         return result;
     } catch (error) {
         console.log(error, 'error in registerB2BShiprocketOrder')
@@ -136,6 +135,8 @@ export const getB2BShiprocketServicableOrder = async (orderDetails: any, allwedC
 
         const result = await response.json();
 
+        // console.log(result, "result b2b servicable")
+
         const couriers = await B2BCalcModel.find({ isActive: true, carrierID: { $in: Object?.values(result).map((x: any) => x?.id) } }).select('_id carrierID').lean();
 
         const courierUpdates = couriers.map((courier: any) => {
@@ -148,6 +149,7 @@ export const getB2BShiprocketServicableOrder = async (orderDetails: any, allwedC
                     update: {
                         transporter_id: carrierData.transporter_id,
                         transporter_name: carrierData.transporter_name,
+                        mode_id: carrierData.mode_id,
                     },
                 },
             };

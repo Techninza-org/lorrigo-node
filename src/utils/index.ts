@@ -669,8 +669,10 @@ function calculateTotalCharge(
   vendor: Vendor
 ): number {
   let totalCharge = incrementPrice.basePrice;
-  const adjustedOrderWeight = orderWeight - vendor.weightSlab;
-  const weightIncrementRatio = Math.ceil(adjustedOrderWeight / vendor.incrementWeight);
+  // @ts-ignore
+  const adjustedOrderWeight = orderWeight - (vendor.weightSlab || vendor.vendorId.weightSlab);
+  // @ts-ignore
+  const weightIncrementRatio = Math.ceil(adjustedOrderWeight / (vendor.incrementWeight || vendor.vendorId.incrementWeight));
   totalCharge += incrementPrice.incrementPrice * weightIncrementRatio;
 
   if (body.paymentType === 1) {

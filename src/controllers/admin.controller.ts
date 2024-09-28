@@ -21,6 +21,7 @@ import { isValidPayload } from "../utils/helpers";
 import PaymentTransactionModal from "../models/payment.transaction.modal";
 import B2BClientBillingModal from "../models/b2b-client.billing.modal";
 import { calculateRateAndPrice, regionToZoneMappingLowercase } from "../utils/B2B-helper";
+import { MonthlyBilledAWBModel } from "../models/billed-awbs-month";
 
 export const walletDeduction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -869,6 +870,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       orderRefIdToSellerIdMap.set(order.order_reference_id || order.client_order_reference_id, order.sellerId);
     });
 
+    const currentMonth = format(new Date(), 'yyyy-MM-dd');
+
     // Handling missing awbs: collect awbs not found in the database
     bills.forEach(bill => {
       const order = orders.find(o => o.awb === bill.awb);
@@ -896,7 +899,12 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       let vendor: any = await CustomPricingModel.findOne({
         sellerId: order.sellerId,
         vendorId: bill.carrierID
-      }).populate("vendor_channel_id");
+      }).populate({
+        path: 'vendorId',
+        populate: {
+          path: 'vendor_channel_id'
+        }
+      });
 
       if (!vendor) {
         vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
@@ -912,6 +920,21 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       const baseWeight = vendor?.weightSlab || 0;
       const incrementWeight = Number(order.orderWeight) - baseWeight;
 
+      const monthBill = await MonthlyBilledAWBModel.create({
+        sellerId: order.sellerId,
+        awb: order.awb,
+        billingDate: currentMonth,
+        billingAmount: (totalCharge - order.shipmentCharges).toFixed(2),
+        zone: bill.zone,
+        incrementPrice: incrementPrice.incrementPrice,
+        basePrice: incrementPrice.basePrice,
+        chargedWeight: incrementWeight > 0 ? incrementWeight.toString() : "0",
+        baseWeight: baseWeight.toString(),
+        isForwardApplicable: bill.isForwardApplicable,
+        isRTOApplicable: bill.isRTOApplicable,
+      })
+
+
       return {
         updateOne: {
           filter: { awb: bill.awb },
@@ -924,7 +947,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
               basePrice: incrementPrice.basePrice,
               incrementWeight: incrementWeight > 0 ? incrementWeight.toString() : "0",
               baseWeight: baseWeight.toString(),
-              vendorWNickName: `${vendor.name} ${vendor.vendor_channel_id.nickName}`,
+              vendorWNickName: `${vendor?.name || vendor?.vendorId?.name} ${vendor?.vendor_channel_id?.nickName || vendor?.vendorId?.vendor_channel_id.nickName}`.trim(),
               billingDate: format(new Date(), 'yyyy-MM-dd'),
               rtoAwb: "",
               orderRefId: order.order_reference_id,
@@ -956,7 +979,6 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     return next(error);
   }
 };
-
 
 export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   if (!req.file || !req.file.buffer) {

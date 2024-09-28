@@ -26,6 +26,7 @@ const B2BCalcSchema = new mongoose.Schema(
 
         transporter_id: { type: String, required: false },
         transporter_name: { type: String, required: false },
+        mode_id: { type: String, required: false },
     },
     { timestamps: true }
 );

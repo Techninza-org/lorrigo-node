@@ -53,10 +53,6 @@ mongoose
   .connect(config.MONGODB_URI)
   .then(() => {
     console.log("db connected successfully");
-    CONNECT_SHIPROCKET();
-    CONNECT_SMARTSHIP();
-    CONNECT_SMARTR();
-    // REFRESH_ZOHO_TOKEN();
   })
   .catch((err) => {
     Logger.log(err.message);
