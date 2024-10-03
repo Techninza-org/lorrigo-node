@@ -319,7 +319,7 @@ export const trackOrder_Smartship = async () => {
 
 export const trackOrder_Shiprocket = async () => {
   try {
-    const vendorNickname = await EnvModel.findOne({ name: "SHIPROCKET" }).select("nickName");
+    const vendorNickname = await EnvModel.findOne({ name: "SHIPROCKET" }).select("nickName _id");
     if (!vendorNickname) {
       console.error("Vendor nickname not found!");
       return;
@@ -327,7 +327,10 @@ export const trackOrder_Shiprocket = async () => {
     const orders = (
       await B2COrderModel.find({
         bucket: { $in: ORDER_TO_TRACK },
-        carrierName: { $regex: vendorNickname.nickName },
+        $or: [
+          { carrierName: { $regex: vendorNickname.nickName } },
+          { carrierId: vendorNickname._id },
+        ],
       })
     ).reverse();
 
@@ -749,7 +752,7 @@ const processShiprocketOrders = async (orders) => {
             action: bucketInfo.description,
             activity: response.data.tracking_data?.shipment_track_activities?.[0]?.activity,
             location: response.data.tracking_data?.shipment_track_activities?.[0]?.location,
-            stageDateTime: formatISO(parse(response?.data?.tracking_data?.shipment_track_activities?.[0]?.date, 'yyyy-MM-dd HH:mm:ss', new Date())),
+            stageDateTime: formatISO(parse(response?.data?.tracking_data?.shipment_track_activities?.[0]?.date, 'yyyy-MM-dd HH:mm:ss', new Date())) ?? new Date(),
           });
           try {
             await orderWithOrderReferenceId.save();
