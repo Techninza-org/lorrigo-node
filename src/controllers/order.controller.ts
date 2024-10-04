@@ -884,7 +884,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
             name: order.customer.first_name + " " + order.customer.last_name,
             phone: order?.customer?.default_address?.phone,
             email: order?.customer?.email,
-            address: order?.customer?.default_address?.address1,
+            address: order?.customer?.default_address?.address1 + order?.customer?.default_address?.address2,
             pincode: order?.customer?.default_address?.zip,
             city: order?.customer?.default_address?.city,
             state: order?.customer?.default_address?.province,
