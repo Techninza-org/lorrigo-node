@@ -1443,7 +1443,6 @@ export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: 
   const forwardStatusMapping = {
     "In Transit": { bucket: IN_TRANSIT, description: "In Transit" },
     "Pending": { bucket: IN_TRANSIT, description: "In Transit" },
-    "Not Picked": { bucket: IN_TRANSIT, description: "In Transit" },
     "Delivered": { bucket: DELIVERED, description: "Delivered" },
     "Dispatched": { bucket: IN_TRANSIT, description: "Out for Delivery" },
     "RTO": { bucket: RTO, description: "Return to Origin (RTO)" },
