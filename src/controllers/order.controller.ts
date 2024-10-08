@@ -1121,7 +1121,7 @@ export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: N
   try {
     const orderId = req.params.id;
     const users_vendors = req.seller.b2bVendors
-    const order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate(["pickupAddress", "customer"]).select("-__v -updatedAt -createdAt -invoiceImage -supporting_document");
+    const order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate(["pickupAddress", "customer"]).select("-__v -updatedAt -createdAt");
     if (!order) return res.status(200).send({ valid: false, message: "Order not found" });
 
     const orderDetails: OrderDetails = { ...order.toObject() };

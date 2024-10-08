@@ -776,3 +776,30 @@ const processShiprocketOrders = async (orders) => {
     }
   }
 };
+
+export const scheduleShipmentCheck = (gatiId, orderId, sellerId) => {
+    cron.schedule('*/20 * * * * *', async () => {
+    console.log(`Fetching shipment details for Gati ID: ${gatiId}`);
+    const shiprocketB2BConfig = await getShiprocketB2BConfig()
+    try {
+      const axiosRes = await axios.get(
+        `https://api-cargo.shiprocket.in/api/external/get_shipment/${gatiId}/`,
+        {
+          headers: {
+            Authorization: `Bearer ${shiprocketB2BConfig.token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      console.log(axiosRes.data, 'CARGO GET SHIPMENT RESPONSE');
+      const order: any | null = await B2BOrderModel.findOne({ _id: orderId, sellerId }) 
+      if (!order) return res.status(200).send({ valid: false, message: "order not found" });
+      console.log(order, 'old order');
+    } catch (err) {
+      console.error("Error fetching shipment details:", err);
+    }
+  }, {
+    scheduled: true,
+    once: true 
+  });
+}

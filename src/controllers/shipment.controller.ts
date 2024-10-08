@@ -48,6 +48,7 @@ import ClientBillingModal from "../models/client.billing.modal";
 import envConfig from "../utils/config";
 import SellerModel from "../models/seller.model";
 import B2BCalcModel from "../models/b2b.calc.model";
+import { scheduleShipmentCheck } from "../utils/cronjobs";
 
 // TODO: REMOVE THIS CODE: orderType = 0 ? "b2c" : "b2b"
 export async function createShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
@@ -1932,6 +1933,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
 
         let orderAWB = shiprocketResponse?.eway_bill_no;
 
+        order.gati_id = shiprocketResponse?.id
         order.awb = orderAWB;
         order.shipmentCharges = body.charge;
         order.carrierId = carrierId;
@@ -1946,6 +1948,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
           });
           await order.save();
           await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+          // scheduleShipmentCheck(order.gati_id, body?.orderId, sellerId);
           return res.status(200).send({ valid: true, order });
         }
         return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });

@@ -29,6 +29,9 @@ import { getOrderInvoiceById, getSpecificOrder } from "./controllers/order.contr
 import apicache from "apicache";
 import path from "path";
 import RegionToZone from "./models/RegionToZone.modal";
+import axios from "axios";
+const fs = require('fs');
+const { PDFDocument } = require('pdf-lib');
 
 app.use(cors({ origin: "*" }));
 app.use(express.json());
@@ -88,6 +91,89 @@ app.use("/api/order", AuthMiddleware, orderRouter);
 app.use("/api/shipment", AuthMiddleware, shipmentRouter);
 //@ts-ignore
 app.use("/api/admin", adminRouter);
+
+
+// async function downloadPDF(url: any, path: any) {
+//   try {
+//     const response = await axios({
+//       url,
+//       method: 'GET',
+//       responseType: 'stream',
+//       headers: {
+//         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+//                       'AppleWebKit/537.36 (KHTML, like Gecko) ' +
+//                       'Chrome/58.0.3029.110 Safari/537.3',
+//         'Accept': 'application/pdf,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+//         'Referer': 'https://www.orimi.com/',
+//         'Accept-Encoding': 'gzip, deflate, br',
+//         'Connection': 'keep-alive'
+//     }});
+
+//     return new Promise((resolve, reject) => {
+//       const writer = fs.createWriteStream(path);
+//       response.data.pipe(writer);
+
+//       writer.on('finish', resolve);
+//       writer.on('error', reject);
+//     });
+//   } catch (error) {
+//     console.error('Error downloading PDF');
+//     throw error;
+//   }
+// }
+
+// // Function to remove a line (or detect it) in a PDF
+// async function removeLineFromPDF(inputPath: any, searchText: any, outputPath: any) {
+//   // Load the existing PDF
+//   const existingPdfBytes = fs.readFileSync(inputPath);
+//   const pdfDoc = await PDFDocument.load(existingPdfBytes);
+
+//   // Get all the pages
+//   const pages = pdfDoc.getPages();
+//   let foundText = false;
+
+//   // Loop through all pages and detect the text
+//   for (const page of pages) {
+//     const textContent = page.getTextContent(); // Note: This won't give direct text extraction
+//     // pdf-lib doesn't support direct text extraction, so you would need a library like `pdf-parse` for accurate text extraction
+//     // But we can manipulate the page in other ways
+//     // Here, we'll just search for the term and notify
+//     if (textContent.includes(searchText)) {
+//       foundText = true;
+//       console.log(`Found text "${searchText}" on page ${page.getIndex() + 1}`);
+//       // You can't remove it directly with pdf-lib, but you could redact the area or create a new PDF with the content you want.
+//     }
+//   }
+
+//   if (foundText) {
+//     console.log(`"${searchText}" was found in the PDF.`);
+//   } else {
+//     console.log(`"${searchText}" was NOT found in the PDF.`);
+//   }
+
+//   // Write the updated PDF to the output path
+//   const pdfBytes = await pdfDoc.save();
+//   fs.writeFileSync(outputPath, pdfBytes);
+
+//   console.log('PDF processing complete.');
+// }
+
+// const url = 'https://s28.q4cdn.com/392171258/files/doc_downloads/test.pdf';
+// const downloadPath = './sample.pdf';
+// const outputPath = './output.pdf';
+
+// // Download and then process the PDF
+// downloadPDF(url, downloadPath)
+//   .then(() => {
+//     console.log('PDF ');
+//     return removeLineFromPDF(downloadPath, 'This', outputPath);
+//   })
+//   .then(() => {
+//     console.log('PDF line removal process completed.');
+//   })
+//   .catch((err: any) => {
+//     console.error('Error:', err);
+//   });
 
 app.use(ErrorHandler);
 app.use("*", (req: Request, res: Response) => {
