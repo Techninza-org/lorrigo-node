@@ -43,7 +43,7 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
           path: 'vendorId',
           populate: {
             path: 'vendor_channel_id',
-            select: { name: 1, _id: 1, nickName: 1  }
+            select: { name: 1, _id: 1, nickName: 1 }
           },
         })
         .lean(),
@@ -498,12 +498,11 @@ export const refetchLastTransactions = async (req: ExtendedRequest, res: Respons
   try {
     const sellerId = req.seller._id;
     const transactions = await PaymentTransactionModal.find({ sellerId }).sort({ _id: -1 });
-    const failedTxnTodayYesterday = transactions.filter(txn => txn.stage[txn.stage.length - 1].action === rechargeWalletInfo.PAYMENT_FAILED &&
+    const failedTxnTodayYesterday = transactions.filter(txn => txn?.desc?.includes("Wallet Recharge") && (txn.stage[txn.stage.length - 1].action === rechargeWalletInfo.PAYMENT_FAILED &&
       (new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate()
         ||
-        new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate() - 1))
+        new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate() - 1)))
       .slice(0, 5);
-
 
     failedTxnTodayYesterday.forEach(async txn => {
       const xVerify = crypto.createHash('sha256').update(`${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${txn.merchantTransactionId}` + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
@@ -524,7 +523,7 @@ export const refetchLastTransactions = async (req: ExtendedRequest, res: Respons
 
       const isPaymentSuccess = rechargeWalletViaPhoenpeData?.code?.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE);
 
-      const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId: txn.merchantTransactionId, sellerId }, {
+      const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId: txn.merchantTransactionId, sellerId, desc: { $regex: "Wallet Recharge" } }, {
         $set: {
           code: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE : rechargeWalletViaPhoenpeData.code,
           data: rechargeWalletViaPhoenpeData,

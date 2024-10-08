@@ -906,6 +906,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         }
       });
 
+
       if (!vendor) {
         vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
       }
@@ -919,6 +920,24 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       const { incrementPrice, totalCharge } = await calculateShippingCharges(bill.zone, body, vendor);
       const baseWeight = vendor?.weightSlab || 0;
       const incrementWeight = Number(order.orderWeight) - baseWeight;
+
+      // Kuch to gadbad hai, dekhna padega: aaj ki date: 04-10-2024
+      console.log({
+        ...bill,
+        sellerId: order.sellerId,
+        billingAmount: totalCharge - order.shipmentCharges,
+        incrementPrice: incrementPrice.incrementPrice,
+        basePrice: incrementPrice.basePrice,
+        incrementWeight: incrementWeight > 0 ? incrementWeight.toString() : "0",
+        baseWeight: baseWeight.toString(),
+        vendorWNickName: `${vendor?.name || vendor?.vendorId?.name} ${vendor?.vendor_channel_id?.nickName || vendor?.vendorId?.vendor_channel_id.nickName}`.trim(),
+        billingDate: format(new Date(), 'yyyy-MM-dd'),
+        rtoAwb: "",
+        orderRefId: order.order_reference_id,
+        recipientName: order.customerDetails.get("name"),
+        fromCity: order.pickupAddress.city,
+        toCity: order.customerDetails.get("city"),
+      })
 
       const monthBill = await MonthlyBilledAWBModel.create({
         sellerId: order.sellerId,
