@@ -1931,27 +1931,23 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         console.log(axiosRes.data, 'SHIPROCKET B2B RESPONSE')
         const shiprocketResponse = axiosRes.data;
 
-        let orderAWB = shiprocketResponse?.eway_bill_no;
+        let orderAWB = shiprocketResponse?.waybill_no;
 
-        order.gati_id = shiprocketResponse?.id
+        order.orderShipmentId = shiprocketResponse?.id
         order.awb = orderAWB;
         order.shipmentCharges = body.charge;
         order.carrierId = carrierId;
         order.carrierName = courier?.name + " " + (vendorName?.nickName);
 
-        if (orderAWB) {
-          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
-          order.orderStages.push({
-            stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
-            action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
-            stageDateTime: new Date(),
-          });
-          await order.save();
-          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-          // scheduleShipmentCheck(order.gati_id, body?.orderId, sellerId);
-          return res.status(200).send({ valid: true, order });
-        }
-        return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });
+        order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
+        order.orderStages.push({
+          stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
+          action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
+          stageDateTime: new Date(),
+        });
+        await order.save();
+        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+        return res.status(200).send({ valid: true, order });
 
       } catch (error: any) {
         console.error("Error creating SHIPROCKET shipment:", error.response?.data);
