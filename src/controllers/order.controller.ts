@@ -814,7 +814,7 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       orders = await B2COrderModel
         .find(query)
         .sort({ createdAt: -1 })
-        .populate("productId", "name category quantity taxable_value") // Fetch only required fields from productId
+        .populate("productId", "name category quantity taxable_value tax_rate") // Fetch only required fields from productId
         .populate("pickupAddress")    // Fetch only required fields from pickupAddress
         .lean();
 
