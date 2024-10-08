@@ -23,6 +23,8 @@ import PaymentTransactionModal from "../models/payment.transaction.modal";
 import InvoiceModel from "../models/invoice.model";
 import ClientBillingModal from "../models/client.billing.modal";
 import { updateSellerWalletBalance } from ".";
+const { PDFDocument, rgb } = require('pdf-lib');
+const fs = require('fs');
 
 export const validateEmail = (email: string): boolean => {
   return /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)*[a-zA-Z]{2,}))$/.test(
@@ -1773,5 +1775,129 @@ export async function addAllToZoho() {
     });
   } catch (err) {
     console.log(err);
+  }
+}
+
+//  =================           PDF EDIT            =====================
+// const pdfUrl = 'https://api.rocketbox.in/api/common/download_file?code=https://ltl-prod-docs.s3.amazonaws.com/media/shipment_labels/gati/352515065.pdf:k0Bo8KqpYgHKwcbuk8DHtONBGlZaCERNf-Rlcy23G8o'; 
+// const wordsToRemove = ['PICKRR', 'TECHNOLOGIES'];  
+// const replacementText = '';   
+// const outputFilePath = 'modified.pdf';    
+
+// modifyPdf(pdfUrl, wordsToRemove, replacementText, outputFilePath);
+
+async function modifyPdf(url: string, wordsToRemove: any, replacementText: any, outputFilePath: any) {
+  try {
+    const response = await axios.get(url, { responseType: 'arraybuffer' });
+    const pdfData = response.data;
+
+    const pdfDoc = await PDFDocument.load(pdfData);
+
+    const pages = pdfDoc.getPages();
+    const firstPage = pages[0];
+
+    // Coordinates where the text to be replaced is located
+    // You might need to manually find these coordinates for the text you want to replace
+    const { width, height } = firstPage.getSize();
+
+    firstPage.drawRectangle({
+      x: 10,
+      y: height - 64,
+      width: 180,
+      height: 10,
+      color: rgb(1, 1, 1),
+    });
+
+    firstPage.drawRectangle({
+      x: 10,
+      y: height - 350,
+      width: 180,
+      height: 10,
+      color: rgb(1, 1, 1),
+    });
+
+    firstPage.drawRectangle({
+      x: 12,
+      y: height - 636,
+      width: 180,
+      height: 10,
+      color: rgb(1, 1, 1),
+    });
+
+    /////allcargo logo remove
+    firstPage.drawRectangle({
+      x: 221,
+      y: height - 42,
+      width: 95,
+      height: 32,
+      color: rgb(1, 1, 1),
+    });
+    firstPage.drawRectangle({
+      x: 221,
+      y: height - 327,
+      width: 95,
+      height: 30,
+      color: rgb(1, 1, 1),
+    });
+    firstPage.drawRectangle({
+      x: 218,
+      y: height - 614,
+      width: 104,
+      height: 36,
+      color: rgb(1, 1, 1),
+    });
+
+    //email and gst remove
+    firstPage.drawRectangle({
+      x: 10,
+      y: height - 97,
+      width: 180,
+      height: 16,
+      color: rgb(1, 1, 1),
+    });
+
+    firstPage.drawRectangle({
+      x: 10,
+      y: height - 382,
+      width: 180,
+      height: 15,
+      color: rgb(1, 1, 1),
+    });
+
+    firstPage.drawRectangle({
+      x: 12,
+      y: height - 672,
+      width: 180,
+      height: 16,
+      color: rgb(1, 1, 1),
+    });
+
+    //write gst
+    firstPage.drawText(`Email: , GST: `, {
+      x: 10,
+      y: height - 97,
+      size: 7,
+      color: rgb(0, 0, 0),
+    });
+
+    firstPage.drawText(`Email: , GST: `, {
+      x: 10,
+      y: height - 382,
+      size: 7,
+      color: rgb(0, 0, 0),
+    });
+    firstPage.drawText(`Email: , GST: `, {
+      x: 10,
+      y: height - 672,
+      size: 7,
+      color: rgb(0, 0, 0),
+    });
+
+    const pdfBytes = await pdfDoc.save();
+
+    fs.writeFileSync(outputFilePath, pdfBytes);
+    console.log(`PDF modified and saved to ${outputFilePath}`);
+  } catch (err) {
+    console.error('Error modifying the PDF:', err);
   }
 }
