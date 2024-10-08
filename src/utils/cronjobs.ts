@@ -689,6 +689,7 @@ export const track_B2B_SHIPROCKET = async () => {
 export default async function runCron() {
   console.log("Running cron scheduler");
 
+  // scheduleShipmentCheck()
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
@@ -777,29 +778,53 @@ const processShiprocketOrders = async (orders) => {
   }
 };
 
-export const scheduleShipmentCheck = (gatiId, orderId, sellerId) => {
-    cron.schedule('*/20 * * * * *', async () => {
-    console.log(`Fetching shipment details for Gati ID: ${gatiId}`);
-    const shiprocketB2BConfig = await getShiprocketB2BConfig()
-    try {
-      const axiosRes = await axios.get(
-        `https://api-cargo.shiprocket.in/api/external/get_shipment/${gatiId}/`,
-        {
-          headers: {
-            Authorization: `Bearer ${shiprocketB2BConfig.token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      console.log(axiosRes.data, 'CARGO GET SHIPMENT RESPONSE');
-      const order: any | null = await B2BOrderModel.findOne({ _id: orderId, sellerId }) 
-      if (!order) return res.status(200).send({ valid: false, message: "order not found" });
-      console.log(order, 'old order');
-    } catch (err) {
-      console.error("Error fetching shipment details:", err);
+export const scheduleShipmentCheck = async () => {
+  // cron.schedule('*/20 * * * * *', async () => {
+  //   console.log(`Fetching shipment details for Gati ID: ${gatiId}`);
+  //   const shiprocketB2BConfig = await getShiprocketB2BConfig()
+  //   try {
+  //     const axiosRes = await axios.get(
+  //       `https://api-cargo.shiprocket.in/api/external/get_shipment/${gatiId}/`,
+  //       {
+  //         headers: {
+  //           Authorization: `Bearer ${shiprocketB2BConfig.token}`,
+  //           "Content-Type": "application/json",
+  //         },
+  //       }
+  //     );
+  //     console.log(axiosRes.data, 'CARGO GET SHIPMENT RESPONSE');
+  //     const order: any | null = await B2BOrderModel.findOne({ _id: orderId, sellerId })
+  //     if (!order) return res.status(200).send({ valid: false, message: "order not found" });
+  //     console.log(order, 'old order');
+  //   } catch (err) {
+  //     console.error("Error fetching shipment details:", err);
+  //   }
+  // }, {
+  //   scheduled: true,
+  //   once: true
+  // });
+
+  try {
+    const withoutAwbOrders = await B2BOrderModel.find({ _id: orderId, sellerId, awb: { $exists: false } });
+
+    for (const order of withoutAwbOrders) {
+      const shiprocketB2BConfig = await getShiprocketB2BConfig();
+      const apiUrl = `${config.SHIPROCKET_B2B_API_BASEURL}${APIs.B2B_GET_SHIPMENT}${orderShipmentId}`;
+
+      const response = await axios.get(apiUrl, {
+        headers: {
+          Authorization: shiprocketB2BConfig.token,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const shipmentData = response.data;
+      order.awb = shipmentData.waybill_no;
+      order.label = shipmentData.label_url;
+      await order.save();
     }
-  }, {
-    scheduled: true,
-    once: true 
-  });
+
+  } catch (error) {
+    console.error("Error fetching shipment details: B2B SHIPROCKET", error);
+  }
 }

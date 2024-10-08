@@ -67,6 +67,7 @@ const REGISTER_ORDER_B2B_SHIPROCKET = "/api/external/order_creation/";
 const CHECK_B2B_SERVICEABILITY = "/api/shipment/charges/";
 const B2B_SHIPMENT_CREATE = "api/order_shipment_association/";
 const B2B_SHIPMENT_TRACK = "/api/shipment/track/";
+const B2B_GET_SHIPMENT = "/api/external/get_shipment/";
 
 const APIs = {
   HUB_REGISTRATION,
@@ -130,6 +131,8 @@ const APIs = {
   REGISTER_ORDER_B2B_SHIPROCKET,
   CHECK_B2B_SERVICEABILITY,
   B2B_SHIPMENT_CREATE,
-  B2B_SHIPMENT_TRACK
+  B2B_SHIPMENT_TRACK,
+  B2B_GET_SHIPMENT,
+
 };
 export default APIs;
