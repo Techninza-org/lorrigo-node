@@ -844,8 +844,10 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
     });
     const orders = shopifyOrders.data.orders;
 
+    
     for (let i = orders.length - 1; i >= 0; i--) {
       const order = orders[i];
+      console.log(JSON.stringify(order, null, 2), "orders[orders.length - 1]")
       const orderDetails = await B2COrderModel.findOne({ sellerId, order_reference_id: order.name }).lean();
       if (!orderDetails) {
 
@@ -884,7 +886,7 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
             name: order.customer.first_name + " " + order.customer.last_name,
             phone: order?.customer?.default_address?.phone,
             email: order?.customer?.email,
-            address: order?.customer?.default_address?.address1 + order?.customer?.default_address?.address2,
+            address: (order?.customer?.default_address?.address1 + order?.customer?.default_address?.address2),
             pincode: order?.customer?.default_address?.zip,
             city: order?.customer?.default_address?.city,
             state: order?.customer?.default_address?.province,
