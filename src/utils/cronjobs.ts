@@ -822,6 +822,12 @@ export const scheduleShipmentCheck = async () => {
       order.awb = shipmentData.waybill_no;
       order.label = shipmentData.label_url;
       await order.save();
+      const pdfUrl = shipmentData.label_url
+      const wordsToRemove = ['PICKRR', 'TECHNOLOGIES'];  
+      const replacementText = '';   
+      const outputFilePath = 'modified.pdf'; 
+      const new_label = await modifyPdf(pdfUrl, wordsToRemove, replacementText, outputFilePath, sellerId);
+      //update in the order label.
     }
 
   } catch (error) {
