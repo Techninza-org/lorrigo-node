@@ -59,13 +59,13 @@ adminRouter.get("/order/:id", AdminAuthMiddleware, cache("10 minutes"), getSpeci
 //@ts-ignore
 adminRouter.get("/orders/seller/:id", AdminAuthMiddleware, cache("10 minutes"), getSellerSpecificOrderAdmin);
 //@ts-ignore
-adminRouter.get("/all-remittances", AdminAuthMiddleware, cache("1 day"), getAllRemittances);
+adminRouter.get("/all-remittances", AdminAuthMiddleware, getAllRemittances);
 
 //@ts-ignore
-adminRouter.get('/remittances/future', AdminAuthMiddleware, cache("1 day"), getFutureRemittances);
+adminRouter.get('/remittances/future', AdminAuthMiddleware, getFutureRemittances);
 
 //@ts-ignore
-adminRouter.get("/seller-remittance", AdminAuthMiddleware, cache("1 day"), getSellerRemittance);
+adminRouter.get("/seller-remittance", AdminAuthMiddleware, getSellerRemittance);
 
 //@ts-ignore
 adminRouter.put("/seller", AdminAuthMiddleware, updateSellerAdmin);
