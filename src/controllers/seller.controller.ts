@@ -239,7 +239,7 @@ export const deleteSeller = async (req: ExtendedRequest, res: Response, next: Ne
 
 export const getRemittaces = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const remittanceOrders = await RemittanceModel.find({ sellerId: req.seller._id }, {
+    const remittanceOrders = (await RemittanceModel.find({ sellerId: req.seller._id }, {
       BankTransactionId: 1,
       remittanceStatus: 1,
       remittanceDate: 1,
@@ -256,7 +256,7 @@ export const getRemittaces = async (req: ExtendedRequest, res: Response, next: N
           }
         }
       }
-    }).populate("sellerId").lean();;
+    })).reverse();;
     if (!remittanceOrders) return res.status(200).send({ valid: false, message: "No Remittance found" });
 
     return res.status(200).send({

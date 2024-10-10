@@ -62,10 +62,10 @@ sellerRouter.get("/invoice/:id", cache("1 day"), getInoviceById)
 sellerRouter.get('/cod-price', getCodPrice)
 
 //@ts-ignore
-sellerRouter.get("/remittance", cache("1 day"), getRemittaces);
+sellerRouter.get("/remittance", getRemittaces);
 
 //@ts-ignore
-sellerRouter.get("/remittance/:id", cache("1 day"), getRemittaceByID);
+sellerRouter.get("/remittance/:id", getRemittaceByID);
 
 //@ts-ignore
 sellerRouter.get("/billing",cache("50 minutes"), getSellerBilling);
