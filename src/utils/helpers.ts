@@ -1786,8 +1786,9 @@ export async function addAllToZoho() {
 
 // modifyPdf(pdfUrl, wordsToRemove, replacementText, outputFilePath);
 
-async function modifyPdf(url: string, wordsToRemove: any, replacementText: any, outputFilePath: any) {
+async function modifyPdf(url: string, wordsToRemove: any, replacementText: any, outputFilePath: any, sellerId: string) {
   try {
+    const seller = await SellerModel.findById(sellerId).lean();
     const response = await axios.get(url, { responseType: 'arraybuffer' });
     const pdfData = response.data;
 
@@ -1872,21 +1873,21 @@ async function modifyPdf(url: string, wordsToRemove: any, replacementText: any, 
       color: rgb(1, 1, 1),
     });
 
-    //write gst
-    firstPage.drawText(`Email: , GST: `, {
+    //write gst, email
+    firstPage.drawText(`Email: ${seller?.companyProfile?.companyEmail}, GST: ${seller?.gstInvoice?.gstin}`, {
       x: 10,
       y: height - 97,
       size: 7,
       color: rgb(0, 0, 0),
     });
 
-    firstPage.drawText(`Email: , GST: `, {
+    firstPage.drawText(`Email: ${seller?.companyProfile?.companyEmail}, GST: ${seller?.gstInvoice?.gstin}`, {
       x: 10,
       y: height - 382,
       size: 7,
       color: rgb(0, 0, 0),
     });
-    firstPage.drawText(`Email: , GST: `, {
+    firstPage.drawText(`Email: ${seller?.companyProfile?.companyEmail}, GST: ${seller?.gstInvoice?.gstin}`, {
       x: 10,
       y: height - 672,
       size: 7,
