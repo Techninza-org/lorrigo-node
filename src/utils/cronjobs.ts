@@ -294,7 +294,7 @@ export const trackOrder_Smartship = async () => {
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
             action: bucketInfo.description,
-            stageDateTime: formatISO(parse(requiredResponse.date_time, 'dd-MM-yyyy HH:mm:ss', new Date())),
+            stageDateTime: formatISO(parse(requiredResponse.date_time, 'yyyy-MM-dd HH:mm:ss', new Date())),
             activity: requiredResponse.action,
             location: requiredResponse.location,
           });
@@ -446,7 +446,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
         sellerId: seller._id,
         bucket: DELIVERED, // Assuming 1 represents DELIVERED
         payment_mode: 1, // COD
-        createdAt: { $gte: currMonth }, // Filter for current month's orders
+        // createdAt: { $gte: currMonth }, // Filter for current month's orders
       }).populate('productId').lean() as OrderDocument[];
 
       // Check for orders already included in any remittance
@@ -689,7 +689,6 @@ export const track_B2B_SHIPROCKET = async () => {
 export default async function runCron() {
   console.log("Running cron scheduler");
 
-  // scheduleShipmentCheck()
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
