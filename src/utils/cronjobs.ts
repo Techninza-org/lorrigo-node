@@ -258,20 +258,15 @@ export const trackOrder_Smartship = async () => {
 
   const vendorNickname = await EnvModel.findOne({ name: "SMARTSHIP" }).select("nickName")
   const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } });
-  // const orders = await B2COrderModel.find({ awb: "77148774953" });
 
-  // http://api.smartship.in/v1/Trackorder?tracking_numbers=${order.awb} 
+  const smartshipToken = await getSmartShipToken();
+  if (!smartshipToken) {
+    Logger.warn("FAILED TO RUN JOB, SMART SHIP TOKEN NOT FOUND");
+    return;
+  }
+  const shipmentAPIConfig = { headers: { Authorization: smartshipToken } };
 
   for (const orderWithOrderReferenceId of orders) {
-
-    const smartshipToken = await getSmartShipToken();
-    if (!smartshipToken) {
-      Logger.warn("FAILED TO RUN JOB, SMART SHIP TOKEN NOT FOUND");
-      return;
-    }
-
-    const shipmentAPIConfig = { headers: { Authorization: smartshipToken } };
-
     try {
       // const apiUrl = `${config.SMART_SHIP_API_BASEURL}${APIs.TRACK_SHIPMENT}=${orderWithOrderReferenceId.order_reference_id}`;
       const apiUrl = `http://api.smartship.in/v1/Trackorder?tracking_numbers=${orderWithOrderReferenceId.awb}`;
@@ -378,17 +373,18 @@ export const trackOrder_Smartr = async () => {
   const vendorNickname = await EnvModel.findOne({ name: "SMARTR" }).select("nickName") // Replace SMARTSHIP, SHIPROCKET etc with SMARTR
   const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } }); // vendorNickname.nickName: SS, SR, SMR etc
 
+  const smartRToken = await getSMARTRToken();
+  if (!smartRToken) {
+    console.log("FAILED TO RUN JOB, smartRToken TOKEN NOT FOUND");
+    return;
+  }
+
   for (let ordersReferenceIdOrders of orders) {
     try {
-
-      const smartRToken = await getSMARTRToken();
-      if (!smartRToken) {
-        console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
-        return;
-      }
       const apiUrl = `${config.SMARTR_API_BASEURL}${APIs.SMARTR_TRACKING}${ordersReferenceIdOrders.awb}`;
+
       try {
-        const res = await axios.get(apiUrl, { headers: { authorization: smartRToken } });
+        const res = await axios.get(apiUrl, { headers: { Authorization: `${smartRToken}` } });
         if (!res.data?.success) return;
         if (res.data.data[0]) {
 
@@ -399,6 +395,7 @@ export const trackOrder_Smartr = async () => {
           if (
             bucketInfo.bucket !== -1 &&
             orderStages.length > 0 &&
+            !orderStages[orderStages.length - 1].action?.includes(bucketInfo.description) &&
             !(orderStages[orderStages.length - 1].activity?.includes(shipment_status.remarks))
           ) {
             console.log("Updating order with bucket info:", bucketInfo);
