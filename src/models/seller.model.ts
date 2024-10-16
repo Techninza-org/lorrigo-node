@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const sellerSchema = new mongoose.Schema({
   name: { type: String, required: true },
   role: { type: String, default: "seller" },
+  rank: { type: Number, default: 0}, // 0 seller, 1 admin, 2-3 subadmins
   email: { type: String, required: true },
   zoho_contact_id: { type: String, required: false },
   invoices: [{ type: mongoose.Schema.Types.ObjectId, ref: "Invoice" }],

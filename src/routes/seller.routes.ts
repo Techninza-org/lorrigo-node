@@ -68,7 +68,7 @@ sellerRouter.get("/remittance", getRemittaces);
 sellerRouter.get("/remittance/:id", getRemittaceByID);
 
 //@ts-ignore
-sellerRouter.get("/billing",cache("50 minutes"), getSellerBilling);
+sellerRouter.get("/billing", getSellerBilling);  //,cache("50 minutes")
 
 //@ts-ignore
 sellerRouter.post("/channels", manageChannelPartner);
