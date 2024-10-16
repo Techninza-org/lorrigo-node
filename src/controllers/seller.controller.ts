@@ -352,9 +352,18 @@ export const updateChannelPartner = async (req: ExtendedRequest, res: Response, 
 
 export const getSellerBilling = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
+    console.log(1);
+    console.log(req.seller._id, 'id');
+    
     const bills = await ClientBillingModal.find({ sellerId: req.seller._id });
+    console.log(bills, 'bills');
+    
     const b2bBills = await B2BClientBillingModal.find({ sellerId: req.seller._id });
+    console.log(b2bBills, 'b2bbills');
+    
     if (!bills) return res.status(200).send({ valid: false, message: "No Seller found" });
+    console.log('bills found');
+    
 
     return res.status(200).send({
       valid: true,
