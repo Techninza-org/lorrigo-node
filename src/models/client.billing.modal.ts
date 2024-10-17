@@ -7,8 +7,11 @@ const modal = new mongoose.Schema({
   rtoAwb: { type: String, required: false },
   recipientName: { type: String, required: true },
   shipmentType: { type: Number, required: true },  // COD --> 1, Prepaid-->0
+  orderCharges: { type: String, required: false },
   fromCity: { type: String, required: true },
   toCity: { type: String, required: true },
+  codValue: { type: String, required: true },
+  orderWeight: { type: String, required: true },
   chargedWeight: { type: Number, required: true },
   zone: { type: String, required: true },
   isForwardApplicable: { type: Boolean, required: true },

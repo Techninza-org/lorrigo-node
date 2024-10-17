@@ -193,6 +193,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       console.log(smartShipResponseExpress.data, "smartship express response")
 
     } catch (err) {
+      console.log(err, 'error in smartship')
       return next(err);
     }
 
@@ -212,6 +213,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
     } catch (err: any) {
       const isExistingHub = err?.response?.data?.errors?.pickup_location?.[0].includes("Address nick name already in use")
       if (!isExistingHub) return next(err);
+      console.log(err.response.data, "error in shiprocket")
     }
 
     try {

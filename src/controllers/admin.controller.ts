@@ -872,7 +872,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
     const currentMonth = format(new Date(), 'yyyy-MM-dd');
 
-    // Handling missing awbs: collect awbs not found in the database
+    // Handling missing AWBs: collect AWBs not found in the database
     bills.forEach(bill => {
       const order = orders.find(o => o.awb === bill.awb);
       if (!order) {
@@ -906,7 +906,6 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         }
       });
 
-
       if (!vendor) {
         vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
       }
@@ -917,43 +916,33 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         collectableAmount: bill.codValue,
       };
 
-      const { incrementPrice, totalCharge } = await calculateShippingCharges(bill.zone, body, vendor);
-      const baseWeight = vendor?.weightSlab || 0;
-      const incrementWeight = Number(order.orderWeight) - baseWeight;
+      const { incrementPrice, totalCharge,codCharge } = await calculateShippingCharges(bill.zone, body, vendor);
+      const baseWeight = (vendor?.weightSlab || vendor?.vendorId?.weightSlab) || 0;
+      const incrementWeight = bill.chargedWeight - Number(order.orderWeight) - baseWeight;
 
-      // Kuch to gadbad hai, dekhna padega: aaj ki date: 04-10-2024
-      console.log({
-        ...bill,
-        sellerId: order.sellerId,
-        billingAmount: totalCharge - order.shipmentCharges,
-        incrementPrice: incrementPrice.incrementPrice,
-        basePrice: incrementPrice.basePrice,
-        incrementWeight: incrementWeight > 0 ? incrementWeight.toString() : "0",
-        baseWeight: baseWeight.toString(),
-        vendorWNickName: `${vendor?.name || vendor?.vendorId?.name} ${vendor?.vendor_channel_id?.nickName || vendor?.vendorId?.vendor_channel_id.nickName}`.trim(),
-        billingDate: format(new Date(), 'yyyy-MM-dd'),
-        rtoAwb: "",
-        orderRefId: order.order_reference_id,
-        recipientName: order.customerDetails.get("name"),
-        fromCity: order.pickupAddress.city,
-        toCity: order.customerDetails.get("city"),
-      })
+      const billingAmount = (totalCharge - order.shipmentCharges).toFixed(2);
 
-      const monthBill = await MonthlyBilledAWBModel.create({
-        sellerId: order.sellerId,
-        awb: order.awb,
-        billingDate: currentMonth,
-        billingAmount: (totalCharge - order.shipmentCharges).toFixed(2),
-        zone: bill.zone,
-        incrementPrice: incrementPrice.incrementPrice,
-        basePrice: incrementPrice.basePrice,
-        chargedWeight: incrementWeight > 0 ? incrementWeight.toString() : "0",
-        baseWeight: baseWeight.toString(),
-        isForwardApplicable: bill.isForwardApplicable,
-        isRTOApplicable: bill.isRTOApplicable,
-      })
-
-
+      const monthBill = await MonthlyBilledAWBModel.findOneAndUpdate(
+        { sellerId: order.sellerId, awb: order.awb },
+        {
+          sellerId: order.sellerId,
+          awb: order.awb,
+          billingDate: currentMonth,
+          billingAmount: billingAmount, // Updated to use the calculated value
+          zone: bill.zone,
+          incrementPrice: incrementPrice.incrementPrice,
+          basePrice: incrementPrice.basePrice,
+          chargedWeight: incrementWeight > 0 ? incrementWeight.toString() : "0",
+          baseWeight: baseWeight.toString(),
+          isForwardApplicable: bill.isForwardApplicable,
+          isRTOApplicable: bill.isRTOApplicable,
+        },
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true
+        }
+      );
       return {
         updateOne: {
           filter: { awb: bill.awb },
@@ -961,11 +950,14 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
             $set: {
               ...bill,
               sellerId: order.sellerId,
-              billingAmount: totalCharge - order.shipmentCharges,
-              incrementPrice: incrementPrice.incrementPrice,
-              basePrice: incrementPrice.basePrice,
-              incrementWeight: incrementWeight > 0 ? incrementWeight.toString() : "0",
-              baseWeight: baseWeight.toString(),
+              codValue: codCharge,
+              orderWeight: order.orderWeight,
+              orderCharges: order.shipmentCharges, // applied_weight charge
+              billingAmount: billingAmount, // Ensure this is set correctly
+              incrementPrice: incrementPrice.incrementPrice, // cc
+              basePrice: incrementPrice.basePrice, // cc
+              incrementWeight: incrementWeight >= 0 ? incrementWeight.toString() : 0,
+              baseWeight: baseWeight.toString(),  // cc
               vendorWNickName: `${vendor?.name || vendor?.vendorId?.name} ${vendor?.vendor_channel_id?.nickName || vendor?.vendorId?.vendor_channel_id.nickName}`.trim(),
               billingDate: format(new Date(), 'yyyy-MM-dd'),
               rtoAwb: "",
@@ -984,18 +976,19 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     await ClientBillingModal.bulkWrite(billsWithCharges);
 
     await Promise.all(billsWithCharges.map(async (bill: any) => {
-      if (bill.sellerId && bill.billingAmount && bill.billingAmount > 0) {
-        await updateSellerWalletBalance(bill.sellerId, bill.billingAmount, false, `AWB: ${bill.awb}, Revised`);
+      const sellerId = bill.updateOne.update.$set.sellerId
+      const amountToDeduct = Number(bill.updateOne.update.$set.billingAmount);
+      const awbToDeduct = bill.updateOne.filter.awb;
+
+      if (sellerId && amountToDeduct && amountToDeduct > 0) {
+        await updateSellerWalletBalance(sellerId, amountToDeduct, false, `AWB: ${awbToDeduct}, Revised`);
       }
     }));
 
-    return res.status(200).send({
-      valid: true,
-      message: "Billing uploaded successfully",
-    });
+    return res.status(200).send({ valid: true, message: "Billing data uploaded successfully" });
   } catch (error) {
-    console.error(error);
-    return next(error);
+    console.error("Error in uploadClientBillingCSV:", error);
+    return res.status(500).send({ valid: false, message: "An error occurred while processing the request" });
   }
 };
 

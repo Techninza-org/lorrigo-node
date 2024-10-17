@@ -607,6 +607,7 @@ export async function calculateShippingCharges(
   vendor: any
 ): Promise<{
   totalCharge: number;
+  codCharge: number;
   incrementPrice: IncrementPrice;
   orderWeight: number;
 }> {
@@ -617,9 +618,10 @@ export async function calculateShippingCharges(
     throw new Error("Invalid increment price");
   }
 
-  const totalCharge = calculateTotalCharge(orderWeight, increment_price, body, vendor);
+  const {totalCharge, codCharge} = calculateTotalCharge(orderWeight, increment_price, body, vendor);
   return {
     totalCharge,
+    codCharge,
     incrementPrice: increment_price,
     orderWeight,
   };
@@ -667,8 +669,12 @@ function calculateTotalCharge(
   incrementPrice: IncrementPrice,
   body: Body,
   vendor: Vendor
-): number {
+): {
+  totalCharge: number;
+  codCharge: number;
+} {
   let totalCharge = incrementPrice.basePrice;
+  let codCharge = 0;
   // @ts-ignore
   const adjustedOrderWeight = orderWeight - (vendor.weightSlab || vendor.vendorId.weightSlab);
   // @ts-ignore
@@ -676,12 +682,15 @@ function calculateTotalCharge(
   totalCharge += incrementPrice.incrementPrice * weightIncrementRatio;
 
   if (body.paymentType === 1) {
-    const codPrice = vendor.codCharge?.hard || 0;
-    const codAfterPercent = (vendor.codCharge?.percent ?? 0 / 100) * body.collectableAmount;
-    totalCharge += Math.max(codPrice, codAfterPercent);
+    // @ts-ignore
+    const codPrice = (vendor.codCharge?.hard || vendor?.vendorId?.codCharge?.hard) || 0;
+    // @ts-ignore
+    const codAfterPercent = ((vendor.codCharge?.percent || vendor?.vendorId?.codCharge?.percent) ?? 0 / 100) * body.collectableAmount;
+    codCharge = Math.max(codPrice, codAfterPercent);
+    totalCharge += codCharge;
   }
 
-  return totalCharge;
+  return {totalCharge, codCharge};
 }
 
 export async function updateSellerWalletBalance(sellerId: string, amount: number, isCredit: boolean, desc: string) {

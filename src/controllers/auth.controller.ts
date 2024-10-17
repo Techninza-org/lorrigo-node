@@ -360,7 +360,7 @@ export const handleAdminLogin = async (req: Request, res: Response, next: NextFu
         isVerified: false,
         token,
         role: "admin",
-        rank: existingUser.rank,
+        rank: existingUser?.rank,
       },
     });
   } catch (error) {
