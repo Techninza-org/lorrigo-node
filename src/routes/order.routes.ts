@@ -28,8 +28,11 @@ const storage = multer.diskStorage({
     cb(null, uniqueSuffix + '-' + file.originalname);
   }
 });
-
 const upload = multer({ storage: storage });
+
+// for updload bulk orders only
+const Orderstorage = multer.memoryStorage();
+const Orderupload = multer({ storage: Orderstorage });
 
 const cache = apicache.middleware;
 
@@ -45,7 +48,7 @@ orderRouter.get("/b2c/channels", cache("2 minutes"), getChannelOrders);
 orderRouter.post("/b2c", createB2COrder);
 
 // @ts-ignore
-orderRouter.put("/b2c/bulk", upload.single("file"), createBulkB2COrder);
+orderRouter.put("/b2c/bulk", Orderupload.single("file"), createBulkB2COrder);
 
 // @ts-ignore
 orderRouter.put("/b2c/bulk-pickup", updateBulkPickupOrder);

@@ -310,7 +310,8 @@ export const validateBulkOrderField = (value: any, fieldName: any, order: any, a
       }
       break;
     case "sellerDetails":
-      if (!value.name || value.name.trim().length === 0) {
+      if (!value.sellerName || value.sellerName.trim().length === 0) {
+        console.log(value, "seller");
         return "Invalid Seller details";
       }
       break;
@@ -319,11 +320,12 @@ export const validateBulkOrderField = (value: any, fieldName: any, order: any, a
         return "Invalid Amount to collect"
       }
       break;
-    case "payment_mode":
-      if (!value || (value !== 0 && value !== 1)) {
-        return "Invalid Payment mode";
-      }
-      break;
+    // case "payment_mode":
+    //   if (!value || (value !== 0 && value !== 1)) {
+    //     console.log(value);
+    //     return "Invalid Payment mode";
+    //   }
+    //   break;
     case "orderWeight":
       if (!value || isNaN(value)) {
         return "Invalid Order weight";
@@ -618,7 +620,7 @@ export async function calculateShippingCharges(
     throw new Error("Invalid increment price");
   }
 
-  const {totalCharge, codCharge} = calculateTotalCharge(orderWeight, increment_price, body, vendor);
+  const { totalCharge, codCharge } = calculateTotalCharge(orderWeight, increment_price, body, vendor);
   return {
     totalCharge,
     codCharge,
@@ -690,7 +692,7 @@ function calculateTotalCharge(
     totalCharge += codCharge;
   }
 
-  return {totalCharge, codCharge};
+  return { totalCharge, codCharge };
 }
 
 export async function updateSellerWalletBalance(sellerId: string, amount: number, isCredit: boolean, desc: string) {
