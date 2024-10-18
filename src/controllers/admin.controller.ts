@@ -916,11 +916,23 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         collectableAmount: bill.codValue,
       };
 
-      const { incrementPrice, totalCharge,codCharge } = await calculateShippingCharges(bill.zone, body, vendor);
+      const { incrementPrice, totalCharge, codCharge } = await calculateShippingCharges(bill.zone, body, vendor);
       const baseWeight = (vendor?.weightSlab || vendor?.vendorId?.weightSlab) || 0;
       const incrementWeight = bill.chargedWeight - Number(order.orderWeight) - baseWeight;
 
-      const billingAmount = (totalCharge - order.shipmentCharges).toFixed(2);
+      const rtoCharge = (totalCharge - (codCharge || 0))
+
+      const billingAmount =  bill.isRTOApplicable ? ((totalCharge - order.shipmentCharges) + rtoCharge).toFixed(2) : (totalCharge - order.shipmentCharges).toFixed(2);
+
+      const existingMonthBill: any = await MonthlyBilledAWBModel.findOne({
+        sellerId: order.sellerId,
+        awb: order.awb,
+      });
+
+      if (existingMonthBill && existingMonthBill.isRTOApplicable === true) {
+        errorRows.push({ awb: bill.awb, errors: "Not Allowd: Awb is already billed for forward and RTO" });
+        return;
+      }
 
       const monthBill = await MonthlyBilledAWBModel.findOneAndUpdate(
         { sellerId: order.sellerId, awb: order.awb },
@@ -928,7 +940,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
           sellerId: order.sellerId,
           awb: order.awb,
           billingDate: currentMonth,
-          billingAmount: billingAmount, // Updated to use the calculated value
+          billingAmount: billingAmount,
           zone: bill.zone,
           incrementPrice: incrementPrice.incrementPrice,
           basePrice: incrementPrice.basePrice,
@@ -938,9 +950,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
           isRTOApplicable: bill.isRTOApplicable,
         },
         {
-          upsert: true,
           new: true,
-          setDefaultsOnInsert: true
+          setDefaultsOnInsert: true,
         }
       );
       return {
@@ -951,6 +962,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
               ...bill,
               sellerId: order.sellerId,
               codValue: codCharge,
+              rtoCharge,
               orderWeight: order.orderWeight,
               orderCharges: order.shipmentCharges, // applied_weight charge
               billingAmount: billingAmount, // Ensure this is set correctly
@@ -972,10 +984,12 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       };
     }));
 
-    // @ts-ignore
-    await ClientBillingModal.bulkWrite(billsWithCharges);
 
-    await Promise.all(billsWithCharges.map(async (bill: any) => {
+    const validBills = billsWithCharges.filter(x => !!x)
+    // @ts-ignore
+    await ClientBillingModal.bulkWrite(validBills);
+
+    await Promise.all(validBills.map(async (bill: any) => {
       const sellerId = bill.updateOne.update.$set.sellerId
       const amountToDeduct = Number(bill.updateOne.update.$set.billingAmount);
       const awbToDeduct = bill.updateOne.filter.awb;
@@ -984,6 +998,14 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         await updateSellerWalletBalance(sellerId, amountToDeduct, false, `AWB: ${awbToDeduct}, Revised`);
       }
     }));
+
+    if (errorRows.length > 0) {
+      errorWorksheet.addRows(errorRows);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+      await errorWorkbook.csv.write(res);
+      return res.end();
+    }
 
     return res.status(200).send({ valid: true, message: "Billing data uploaded successfully" });
   } catch (error) {

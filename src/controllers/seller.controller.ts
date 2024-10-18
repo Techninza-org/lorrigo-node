@@ -16,6 +16,7 @@ import CustomPricingModel from "../models/custom_pricing.model";
 import CourierModel from "../models/courier.model";
 import { isValidObjectId } from "mongoose";
 import B2BClientBillingModal from "../models/b2b-client.billing.modal";
+import { MonthlyBilledAWBModel } from "../models/billed-awbs-month";
 
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -352,22 +353,31 @@ export const updateChannelPartner = async (req: ExtendedRequest, res: Response, 
 
 export const getSellerBilling = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    console.log(1);
-    console.log(req.seller._id, 'id');
-    
     const bills = await ClientBillingModal.find({ sellerId: req.seller._id });
-    console.log(bills, 'bills');
-    
     const b2bBills = await B2BClientBillingModal.find({ sellerId: req.seller._id });
-    console.log(b2bBills, 'b2bbills');
-    
+
+    const billedAwbs = bills.map(bill => bill.awb);
+    const billsStatus = await MonthlyBilledAWBModel.find({ awb: { $in: billedAwbs } });
+
+    const billsWStatus = bills.map((bill: any) => {
+      const statusEntry: any = billsStatus.find(status => status.awb === bill.awb);
+      let status = 'Forward Billed'
+      
+      if (statusEntry.isRTOApplicable) {
+        status = 'Forward + RTO Billed'
+      }
+
+      return {
+        ...bill._doc,
+        status
+      };
+    });
+
     if (!bills) return res.status(200).send({ valid: false, message: "No Seller found" });
-    console.log('bills found');
-    
 
     return res.status(200).send({
       valid: true,
-      billing: bills,
+      billing: billsWStatus,
       b2bBills
     });
   } catch (error) {

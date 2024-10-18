@@ -10,6 +10,7 @@ const modal = new mongoose.Schema({
   orderCharges: { type: String, required: false },
   fromCity: { type: String, required: true },
   toCity: { type: String, required: true },
+  rtoCharge: { type: String, required: true, default: 0 },
   codValue: { type: String, required: true },
   orderWeight: { type: String, required: true },
   chargedWeight: { type: Number, required: true },
