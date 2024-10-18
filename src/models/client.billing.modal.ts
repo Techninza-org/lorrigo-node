@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Mongoose } from "mongoose";
 
 const modal = new mongoose.Schema({
   sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true },
@@ -12,6 +12,7 @@ const modal = new mongoose.Schema({
   toCity: { type: String, required: true },
   rtoCharge: { type: String, required: true, default: 0 },
   codValue: { type: String, required: true },
+  carrierID: { type: mongoose.Types.ObjectId, ref: "Courier", required: true },
   orderWeight: { type: String, required: true },
   chargedWeight: { type: Number, required: true },
   zone: { type: String, required: true },

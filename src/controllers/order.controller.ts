@@ -19,7 +19,7 @@ import APIs from "../utils/constants/third_party_apis";
 import csvtojson from "csvtojson";
 import exceljs from "exceljs";
 
-import { DELIVERED, IN_TRANSIT, NDR, NEW, NEW_ORDER_DESCRIPTION, NEW_ORDER_STATUS, READY_TO_SHIP, RETURN_CANCELLATION, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_PICKED, RTO } from "../utils/lorrigo-bucketing-info";
+import { DELIVERED, IN_TRANSIT, NDR, NEW, NEW_ORDER_DESCRIPTION, NEW_ORDER_STATUS, READY_TO_SHIP, RETURN_CANCELLATION, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_PICKED, RTO, RTO_DELIVERED } from "../utils/lorrigo-bucketing-info";
 import { convertToISO, registerOrderOnShiprocket, validateBulkOrderField } from "../utils";
 import CourierModel from "../models/courier.model";
 import { calculateB2BPriceCouriers, getB2BShiprocketServicableOrder, registerB2BShiprocketOrder } from "../utils/B2B-helper";
@@ -768,7 +768,7 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       "in-transit": [IN_TRANSIT, RETURN_IN_TRANSIT],
       delivered: [DELIVERED, RETURN_DELIVERED],
       ndr: [NDR, RETURN_CANCELLATION],
-      rto: [RTO],
+      rto: [RTO, RTO_DELIVERED],
     };
 
     // limit = Number(limit);

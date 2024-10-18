@@ -6,6 +6,7 @@ export const IN_TRANSIT = 2;
 export const NDR = 3;
 export const DELIVERED = 4;
 export const RTO = 5;
+export const RTO_DELIVERED = 9;
 export const CANCELED = 6;
 export const LOST_DAMAGED = 7;
 export const DISPOSED = 8;

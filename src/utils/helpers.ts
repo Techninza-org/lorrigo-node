@@ -13,7 +13,7 @@ import { isValidObjectId } from "mongoose";
 import CustomPricingModel from "../models/custom_pricing.model";
 import envConfig from "./config";
 import { Types } from "mongoose";
-import { CANCELED, DELIVERED, IN_TRANSIT, LOST_DAMAGED, NDR, READY_TO_SHIP, RTO, RETURN_CANCELLATION, RETURN_CANCELLED_BY_CLIENT, RETURN_CANCELLED_BY_SMARTSHIP, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_ORDER_MANIFESTED, RETURN_OUT_FOR_PICKUP, RETURN_PICKED, RETURN_SHIPMENT_LOST, DISPOSED } from "./lorrigo-bucketing-info";
+import { CANCELED, DELIVERED, IN_TRANSIT, LOST_DAMAGED, NDR, READY_TO_SHIP, RTO, RETURN_CANCELLATION, RETURN_CANCELLED_BY_CLIENT, RETURN_CANCELLED_BY_SMARTSHIP, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_ORDER_MANIFESTED, RETURN_OUT_FOR_PICKUP, RETURN_PICKED, RETURN_SHIPMENT_LOST, DISPOSED, RTO_DELIVERED } from "./lorrigo-bucketing-info";
 import ChannelModel from "../models/channel.model";
 import HubModel from "../models/hub.model";
 import { calculateRateAndPrice, regionToZoneMappingLowercase } from "./B2B-helper";
@@ -1178,7 +1178,7 @@ export function getMarutiBucketing(status: number) {
     7: { bucket: DELIVERED, description: "Delivered" },
     8: { bucket: CANCELED, description: "Canceled" },
     9: { bucket: RTO, description: "RTO Initiated" },
-    10: { bucket: RTO, description: "RTO Delivered" },
+    10: { bucket: RTO_DELIVERED, description: "RTO Delivered" },
     12: { bucket: LOST_DAMAGED, description: "Lost" },
     13: { bucket: READY_TO_SHIP, description: "Pickup Error" },
     14: { bucket: RTO, description: "RTO Acknowledged" },
@@ -1242,7 +1242,7 @@ export function getShiprocketBucketing(status: number) {
     7: { bucket: DELIVERED, description: "Delivered" },
     8: { bucket: CANCELED, description: "Canceled" },
     9: { bucket: RTO, description: "RTO Initiated" },
-    10: { bucket: RTO, description: "RTO Delivered" },
+    10: { bucket: RTO_DELIVERED, description: "RTO Delivered" },
     12: { bucket: LOST_DAMAGED, description: "Lost" },
     14: { bucket: RTO, description: "RTO Acknowledged" },
     15: { bucket: READY_TO_SHIP, description: "Customer Not Available/Contactable" },
@@ -1312,7 +1312,7 @@ export function getSmartshipBucketing(status: number) {
     11: { bucket: DELIVERED, description: "Delivered" },
     48: { bucket: DELIVERED, description: "Delivery Confirmed by Customer" },
     18: { bucket: RTO, description: "Return To Origin" },
-    19: { bucket: RTO, description: "RTO Delivered To Shipper" },
+    19: { bucket: RTO_DELIVERED, description: "RTO Delivered To Shipper" },
     28: { bucket: RTO, description: "RTO In Transit" },
     118: { bucket: RTO, description: "RTO to be Refunded" },
     198: { bucket: RTO, description: "RTO-Rejected by Merchant" },
@@ -1424,7 +1424,7 @@ export function getSmartRBucketing(status: string, desc: string, reasonCode: str
     "RTL": [{ description: "RTO Locked", bucket: RTO }],
     "RTR": [{ description: "RTO Lock Revoked", bucket: IN_TRANSIT }],
     "RTS": [{ description: "Return to Shipper", bucket: RTO }],
-    "RTD": [{ description: "RTO Delivered", bucket: RTO }],
+    "RTD": [{ description: "RTO Delivered", bucket: RTO_DELIVERED }],
     "LST": [{ description: "Shipment Lost", bucket: LOST_DAMAGED }],
     "DMG": [{ description: "Damaged", bucket: LOST_DAMAGED }],
     "DSD": [{ description: "Destroyed", bucket: LOST_DAMAGED }],
@@ -1448,7 +1448,7 @@ export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: 
     "Delivered": { bucket: DELIVERED, description: "Delivered" },
     "Dispatched": { bucket: IN_TRANSIT, description: "Out for Delivery" },
     "RTO": { bucket: RTO, description: "Return to Origin (RTO)" },
-    "DTO": { bucket: DELIVERED, description: "Return Delivered" },
+    "DTO": { bucket: RTO_DELIVERED, description: "Return Delivered" },
     "Returned": { bucket: RETURN_CONFIRMED, description: "Return Delivered" },
     "LOST": { bucket: LOST_DAMAGED, description: "Lost or Damaged" },
   };
@@ -1496,7 +1496,7 @@ export function getB2BShiprocketBucketing(status: string) {
     "Reached At Destination": { bucket: DELIVERED, description: "Delivered" },
     "Delivered": { bucket: DELIVERED, description: "Delivered" },
     "RTO": { bucket: RTO, description: "Return to Origin (RTO)" },
-    "DTO": { bucket: DELIVERED, description: "Return Delivered" },
+    "DTO": { bucket: RTO_DELIVERED, description: "Return Delivered" },
     "Returned": { bucket: RETURN_CONFIRMED, description: "Return Delivered" },
     "LOST": { bucket: LOST_DAMAGED, description: "Lost or Damaged" },
   };
@@ -1600,7 +1600,8 @@ export const generateAccessToken = async () => {
 
 export const calculateSellerInvoiceAmount = async () => {
   try {
-    const sellers = await SellerModel.find({ zoho_contact_id: { $exists: true } });
+    // const sellers = await SellerModel.find({ zoho_contact_id: { $exists: true } });
+    const sellers = await SellerModel.find({ _id: "667906f9cfe0c27895758881" });
 
     const batchSize = 3;
     const delay = 5000;
@@ -1636,6 +1637,14 @@ export const calculateSellerInvoiceAmount = async () => {
         });
 
         const awbToBeInvoiced = orders.map((order: any) => order.awb);
+        const allWalletRecharge = await PaymentTransactionModal.find({ sellerId, desc: { $regex: "Wallet Recharge" }, createdAt: { $gt: lastInvoiceDate, $lt: today }, });
+
+        let totalWalletRecharge = allWalletRecharge.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+
+        console.log(totalWalletRecharge, "totalWalletRecharge")
+        if (totalWalletRecharge < 0) {
+          totalWalletRecharge = 0;
+        }
 
         let totalAmount = 0;
         for (let i = 0; i < awbToBeInvoiced.length; i++) {
@@ -1646,14 +1655,20 @@ export const calculateSellerInvoiceAmount = async () => {
           }
         }
 
+        totalAmount -= totalWalletRecharge;
+
         const invoiceAmount = Math.round(Number(totalAmount / 1.18));
 
-        if (seller.config?.isPrepaid) {
+        const isPrepaid = seller.config?.isPrepaid;
+
+        if (isPrepaid) {
           const spentAmount = Number((invoiceAmount * 1.18));
-          await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
+          console.log(spentAmount, "spentAmount")
+          // await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
         }
         if (invoiceAmount > 0) {
-          await createAdvanceAndInvoice(zoho_contact_id, invoiceAmount, awbToBeInvoiced);
+          console.log(invoiceAmount, "invoiceAmount")
+          // await createAdvanceAndInvoice(zoho_contact_id, invoiceAmount, awbToBeInvoiced, isPrepaid);
         }
       }
     };
@@ -1673,7 +1688,7 @@ export const calculateSellerInvoiceAmount = async () => {
   }
 };
 
-export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmount: any, awbToBeInvoiced: any) {
+export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmount: any, awbToBeInvoiced: any, isPrepaid: boolean) {
   try {
     const accessToken = await generateAccessToken();
     if (!accessToken) return;
@@ -1718,20 +1733,22 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmoun
     const seller = await SellerModel.findOne({ zoho_contact_id });
     if (!seller) return;
 
-    const creditsBody = {
-      "invoice_payments": [
-        {
-          "payment_id": paymentId,
-          "amount_applied": Number(invoiceAmount * 1.18)
-        }
-      ]
-    }
-    const applyCredits = await axios.post(`https://www.zohoapis.in/books/v3/invoices/${invoiceId}/credits?organization_id=60014023368`, creditsBody, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Zoho-oauthtoken ${accessToken}`
+    if (isPrepaid) {
+      const creditsBody = {
+        "invoice_payments": [
+          {
+            "payment_id": paymentId,
+            "amount_applied": Number(invoiceAmount * 1.18)
+          }
+        ]
       }
-    })
+      const applyCredits = await axios.post(`https://www.zohoapis.in/books/v3/invoices/${invoiceId}/credits?organization_id=60014023368`, creditsBody, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`
+        }
+      })
+    }
     const invoicePdf = await axios.get(`https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=60014023368&accept=pdf`, {
       headers: {
         "Content-Type": "application/json",

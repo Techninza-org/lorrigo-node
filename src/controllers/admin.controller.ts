@@ -960,6 +960,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
           update: {
             $set: {
               ...bill,
+              carrierID: bill.carrierID,
               sellerId: order.sellerId,
               codValue: codCharge,
               rtoCharge,
@@ -1194,14 +1195,33 @@ export const getClientBillingData = async (req: ExtendedRequest, res: Response, 
           select: '-kycDetails'
         })
     ]);
+    
 
     if (!data.length && !b2bData.length) {
       return res.status(200).send({ valid: false, message: "No Client Billing found" });
     }
 
+    const billedAwbs = data.map(bill => bill.awb);
+    const billsStatus = await MonthlyBilledAWBModel.find({ awb: { $in: billedAwbs } });
+
+    const billsWStatus = data.map((bill: any) => {
+      const statusEntry: any = billsStatus.find(status => status.awb === bill.awb);
+      let status = 'Forward Billed'
+      
+      if (statusEntry.isRTOApplicable) {
+        status = 'Forward + RTO Billed'
+      }
+
+      return {
+        ...bill._doc,
+        status
+      };
+    });
+
+
     return res.status(200).send({
       valid: true,
-      data: data.reverse(),
+      data: billsWStatus.reverse(),
       b2bData: b2bData.reverse()
     });
   } catch (error) {
