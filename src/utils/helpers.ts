@@ -23,6 +23,7 @@ import PaymentTransactionModal from "../models/payment.transaction.modal";
 import InvoiceModel from "../models/invoice.model";
 import ClientBillingModal from "../models/client.billing.modal";
 import { updateSellerWalletBalance } from ".";
+import { formatISO, parse } from "date-fns";
 const { PDFDocument, rgb } = require('pdf-lib');
 const fs = require('fs');
 
@@ -1918,4 +1919,19 @@ async function modifyPdf(url: string, wordsToRemove: any, replacementText: any, 
   } catch (err) {
     console.error('Error modifying the PDF:', err);
   }
+}
+
+
+export function handleDateFormat(dateTimeString: string) {
+  const ddMmYyyyRegex = /^\d{2}-\d{2}-\d{4}/;
+  
+  let parsedDate;
+
+  if (ddMmYyyyRegex.test(dateTimeString)) {
+      parsedDate = parse(dateTimeString, 'dd-MM-yyyy HH:mm:ss', new Date());
+  } else {
+      parsedDate = new Date(dateTimeString); 
+  }
+
+  return formatISO(parsedDate);
 }

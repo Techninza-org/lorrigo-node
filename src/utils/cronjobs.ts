@@ -3,7 +3,7 @@ import axios from "axios";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import config from "./config";
 import APIs from "./constants/third_party_apis";
-import { getB2BShiprocketBucketing, getDelhiveryBucketing, getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getSMARTRToken, getShiprocketB2BConfig, getShiprocketBucketing, getShiprocketToken, getSmartRBucketing, getSmartShipToken, getSmartshipBucketing } from "./helpers";
+import { getB2BShiprocketBucketing, getDelhiveryBucketing, getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getSMARTRToken, getShiprocketB2BConfig, getShiprocketBucketing, getShiprocketToken, getSmartRBucketing, getSmartShipToken, getSmartshipBucketing, handleDateFormat } from "./helpers";
 import * as cron from "node-cron";
 import EnvModel from "../models/env.model";
 import https from "node:https";
@@ -289,7 +289,7 @@ export const trackOrder_Smartship = async () => {
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
             action: bucketInfo.description,
-            stageDateTime: formatISO(parse(requiredResponse.date_time, 'yyyy-MM-dd HH:mm:ss', new Date())),
+            stageDateTime: handleDateFormat(requiredResponse.date_time),
             activity: requiredResponse.action,
             location: requiredResponse.location,
           });
@@ -321,6 +321,7 @@ export const trackOrder_Shiprocket = async () => {
     }
     const orders = (
       await B2COrderModel.find({
+        // awb: "141123464987917"
         bucket: { $in: ORDER_TO_TRACK },
         $or: [
           { carrierName: { $regex: vendorNickname.nickName } },
@@ -686,6 +687,7 @@ export const track_B2B_SHIPROCKET = async () => {
 export default async function runCron() {
   console.log("Running cron scheduler");
 
+  // trackOrder_Smartship()
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
@@ -757,9 +759,12 @@ const processShiprocketOrders = async (orders) => {
             console.log("Error occurred while saving order status:", error);
           }
 
-
+          // !orderWithOrderReferenceId.isRTOCharged && 
           if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.bucket !== RTO) {
+            // orderWithOrderReferenceId.isRTOCharged = true;
+            // await orderWithOrderReferenceId.save();
             const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb);
+            console.log(rtoCharges, "RTO CHARGES");
             await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges?.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`);
             if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`);
           }
@@ -806,6 +811,7 @@ export const scheduleShipmentCheck = async () => {
     for (const order of withoutAwbOrders) {
       const shiprocketB2BConfig = await getShiprocketB2BConfig();
       const apiUrl = `${config.SHIPROCKET_B2B_API_BASEURL}${APIs.B2B_GET_SHIPMENT}${orderShipmentId}`;
+      // const apiUrl = `${config.SHIPROCKET_B2B_API_BASEURL}${APIs.B2B_GET_SHIPMENT}435828`;
 
       const response = await axios.get(apiUrl, {
         headers: {
@@ -819,9 +825,9 @@ export const scheduleShipmentCheck = async () => {
       order.label = shipmentData.label_url;
       await order.save();
       const pdfUrl = shipmentData.label_url
-      const wordsToRemove = ['PICKRR', 'TECHNOLOGIES'];  
-      const replacementText = '';   
-      const outputFilePath = 'modified.pdf'; 
+      const wordsToRemove = ['PICKRR', 'TECHNOLOGIES'];
+      const replacementText = '';
+      const outputFilePath = 'modified.pdf';
       const new_label = await modifyPdf(pdfUrl, wordsToRemove, replacementText, outputFilePath, sellerId);
       //update in the order label.
     }
