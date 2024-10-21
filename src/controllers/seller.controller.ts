@@ -392,7 +392,7 @@ export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, 
   // working on it
   try {
     const uuid = randomUUID();
-    const merchantTransactionId = `LS-${uuid}`;
+    const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
 
     const payload = {
       "merchantId": envConfig.PHONEPE_MERCHENT_ID,

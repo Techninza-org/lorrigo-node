@@ -711,7 +711,7 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
 
   const uuid = randomUUID();
 
-  const merchantTransactionId = `LS-${uuid}`;
+  const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
 
   try {
     const seller = await SellerModel.findById(sellerId);
