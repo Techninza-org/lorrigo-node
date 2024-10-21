@@ -321,7 +321,6 @@ export const trackOrder_Shiprocket = async () => {
     }
     const orders = (
       await B2COrderModel.find({
-        // awb: "141123464987917"
         bucket: { $in: ORDER_TO_TRACK },
         $or: [
           { carrierName: { $regex: vendorNickname.nickName } },
@@ -329,12 +328,6 @@ export const trackOrder_Shiprocket = async () => {
         ],
       })
     ).reverse();
-
-    // const orders = (
-    //   await B2COrderModel.find({
-    //     awb: "78068454774"
-    //   })
-    // ).reverse();
 
     const batches = [];
     for (let i = 0; i < orders.length; i += BATCH_SIZE) {
@@ -430,6 +423,7 @@ export const trackOrder_Smartr = async () => {
   }
 }
 
+// limit the query required
 export const calculateRemittanceEveryDay = async (): Promise<void> => {
   try {
     const companyName = 'L';
@@ -577,15 +571,13 @@ export const track_delivery = async () => {
             } catch (saveError) {
               console.log("Error occurred while saving order status:", saveError);
             }
+          }
 
-            if (bucketInfo.bucket === RTO
-              && ![RTO, RETURN_IN_TRANSIT, RETURN_ORDER_MANIFESTED, RETURN_OUT_FOR_PICKUP, RETURN_DELIVERED, RETURN_DELIVERED]
-                .includes(orderWithOrderReferenceId?.bucket
-                )) {
-              const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-              await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
-              if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
-            }
+          if (bucketInfo.bucket === RTO && order?.rtoCharges === 0) {
+            const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb)
+            await updateSellerWalletBalance(order.sellerId, rtoCharges?.rtoCharges, false, `${order.awb} RTO charges`);
+            order.rtoCharges = rtoCharges?.rtoCharges;
+            await order.save();
           }
         } catch (orderError) {
           console.log("Error processing order:", orderError);
@@ -758,23 +750,19 @@ const processShiprocketOrders = async (orders) => {
           } catch (error) {
             console.log("Error occurred while saving order status:", error);
           }
-
-          // !orderWithOrderReferenceId.isRTOCharged && 
-          if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.bucket !== RTO) {
-            // orderWithOrderReferenceId.isRTOCharged = true;
-            // await orderWithOrderReferenceId.save();
-            const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb);
-            console.log(rtoCharges, "RTO CHARGES");
-            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges?.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`);
-            if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`);
-          }
         }
 
+        if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.rtoCharges === 0) {
+          const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb);
+          await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges?.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`);
+          orderWithOrderReferenceId.rtoCharges = rtoCharges?.rtoCharges;
+          await orderWithOrderReferenceId.save();
+        }
+        
         trackedOrders.add(orderWithOrderReferenceId.awb);
       }
     } catch (err: any) {
       console.log(err, "SHIPROCKET ERROR TRACKING ORDER");
-      // Logger.err(err);
     }
   }
 };

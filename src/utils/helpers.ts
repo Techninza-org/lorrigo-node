@@ -1317,7 +1317,7 @@ export function getSmartshipBucketing(status: number) {
     28: { bucket: RTO, description: "RTO In Transit" },
     118: { bucket: RTO, description: "RTO to be Refunded" },
     198: { bucket: RTO, description: "RTO-Rejected by Merchant" },
-    199: { bucket: RTO, description: "RTO-Delivered to FC" },
+    199: { bucket: RTO_DELIVERED, description: "RTO-Delivered to FC" },
     212: { bucket: RTO, description: "RTO - In Transit - Damaged" },
     189: { bucket: LOST_DAMAGED, description: "Forward Shipment Lost" },
 
@@ -1454,6 +1454,19 @@ export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: 
     "LOST": { bucket: LOST_DAMAGED, description: "Lost or Damaged" },
   };
 
+  // RTO Status Mapping
+  const rtoStatusMapping = {
+    "In Transit": { bucket: RTO, description: "In Transit" },
+    "Pending": { bucket: RTO, description: "In Transit" },
+    "Delivered": { bucket: RTO, description: "Delivered" },
+    "Dispatched": { bucket: RTO, description: "Out for Delivery" },
+    "RTO": { bucket: RTO, description: "Return to Origin (RTO)" },
+    "DTO": { bucket: RTO_DELIVERED, description: "Return Delivered" },
+    "Returned": { bucket: RTO, description: "Return Delivered" },
+    "LOST": { bucket: RTO, description: "Lost or Damaged" },
+  };
+
+  // Reverse Mapping
   const returnStatusMapping = {
     "In Transit": { bucket: RETURN_IN_TRANSIT, description: "In Transit (Return)" },
     "Pending": { bucket: RETURN_ORDER_MANIFESTED, description: "Pending (Return)" },
@@ -1476,8 +1489,9 @@ export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: 
   // Determine the correct mapping based on StatusType (UD for forward, RT for return, DL for delivered)
   const statusMapping =
     StatusType === "UD" ? forwardStatusMapping :
-      StatusType === "RT" ? returnStatusMapping :
-        StatusType === "DL" ? deliveredStatusMapping : null;
+      StatusType === "RT" ? rtoStatusMapping :
+        StatusType === "PP" ? returnStatusMapping :
+          StatusType === "DL" ? deliveredStatusMapping : null;
 
   return (
     statusMapping && statusMapping[Status as keyof typeof statusMapping] || {
