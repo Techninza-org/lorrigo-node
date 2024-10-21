@@ -7,7 +7,7 @@ import axios from "axios";
 import APIs from "../utils/constants/third_party_apis";
 import envConfig from "../utils/config";
 import ClientBillingModal from "../models/client.billing.modal";
-import crypto from "crypto";
+import crypto, { randomUUID } from "crypto";
 import PaymentTransactionModal from "../models/payment.transaction.modal";
 import { rechargeWalletInfo } from "../utils/recharge-wallet-info";
 import { generateAccessToken } from "../utils/helpers";
@@ -362,7 +362,7 @@ export const getSellerBilling = async (req: ExtendedRequest, res: Response, next
     const billsWStatus = bills.map((bill: any) => {
       const statusEntry: any = billsStatus.find(status => status.awb === bill.awb);
       let status = 'Forward Billed'
-      
+
       if (statusEntry.isRTOApplicable) {
         status = 'Forward + RTO Billed'
       }
@@ -391,7 +391,9 @@ export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, 
   // Phonepe Integration
   // working on it
   try {
-    const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
+    const uuid = randomUUID();
+    const merchantTransactionId = `LS-${uuid}`;
+
     const payload = {
       "merchantId": envConfig.PHONEPE_MERCHENT_ID,
       "merchantTransactionId": merchantTransactionId,

@@ -123,6 +123,7 @@ const B2BOrderSchema = new mongoose.Schema({
   mode_id: { type: String, required: false },
   delivery_partner_id: { type: String, required: false },
   orderShipmentId: {type: String, required: false},
+  label_url: { type: String, required: false },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 })

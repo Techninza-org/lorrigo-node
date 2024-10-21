@@ -1924,13 +1924,9 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         data: JSON.stringify(data)
       };
 
-      console.log(JSON.stringify(data), "SHIPROCKET B2B PAYLOAD")
-
       try {
         const axiosRes = await axios.request(config);
-        console.log(axiosRes.data, 'SHIPROCKET B2B RESPONSE')
         const shiprocketResponse = axiosRes.data;
-
         let orderAWB = shiprocketResponse?.waybill_no;
 
         order.orderShipmentId = shiprocketResponse?.id

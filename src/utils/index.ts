@@ -13,6 +13,7 @@ import axios from "axios";
 import envConfig from "./config";
 import APIs from "./constants/third_party_apis";
 import ShipmentResponseModel from "../models/shipment-response.model";
+import { randomUUID } from "crypto";
 
 
 
@@ -708,18 +709,28 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
     },
   };
 
-  const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
+  const uuid = randomUUID();
+
+  const merchantTransactionId = `LS-${uuid}`;
 
   try {
-    // Update seller's wallet balance atomically
-    const updatedSeller = await SellerModel.findOneAndUpdate(
-      { _id: sellerId.toString() },
-      update,
-      { new: true }
-    );
+    const seller = await SellerModel.findById(sellerId);
 
-    if (!updatedSeller) {
+    if (!seller) {
       throw new Error('Seller not found');
+    }
+
+    let updatedSeller;
+    if (seller.config?.isPrepaid) {
+      const updatedSeller = await SellerModel.findOneAndUpdate(
+        { _id: sellerId.toString() },
+        update,
+        { new: true }
+      );
+
+      if (!updatedSeller) {
+        throw new Error('Seller not found');
+      }
     }
 
     // Create payment transaction

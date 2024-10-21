@@ -3,7 +3,7 @@ import axios from "axios";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import config from "./config";
 import APIs from "./constants/third_party_apis";
-import { getB2BShiprocketBucketing, getDelhiveryBucketing, getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getSMARTRToken, getShiprocketB2BConfig, getShiprocketBucketing, getShiprocketToken, getSmartRBucketing, getSmartShipToken, getSmartshipBucketing, handleDateFormat } from "./helpers";
+import { getB2BShiprocketBucketing, getDelhiveryBucketing, getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getSMARTRToken, getShiprocketB2BConfig, getShiprocketBucketing, getShiprocketToken, getSmartRBucketing, getSmartShipToken, getSmartshipBucketing, handleDateFormat, modifyPdf } from "./helpers";
 import * as cron from "node-cron";
 import EnvModel from "../models/env.model";
 import https from "node:https";
@@ -687,7 +687,6 @@ export const track_B2B_SHIPROCKET = async () => {
 export default async function runCron() {
   console.log("Running cron scheduler");
 
-  // trackOrder_Smartship()
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   if (cron.validate(expression4every2Minutes)) {
@@ -697,6 +696,7 @@ export default async function runCron() {
     cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every2Minutes, trackOrder_Smartr);
+    cron.schedule(expression4every2Minutes, scheduleShipmentCheck);
 
     const expression4every5Minutes = "*/5 * * * *";
     const expression4every59Minutes = "59 * * * *";
@@ -780,38 +780,16 @@ const processShiprocketOrders = async (orders) => {
 };
 
 export const scheduleShipmentCheck = async () => {
-  // cron.schedule('*/20 * * * * *', async () => {
-  //   console.log(`Fetching shipment details for Gati ID: ${gatiId}`);
-  //   const shiprocketB2BConfig = await getShiprocketB2BConfig()
-  //   try {
-  //     const axiosRes = await axios.get(
-  //       `https://api-cargo.shiprocket.in/api/external/get_shipment/${gatiId}/`,
-  //       {
-  //         headers: {
-  //           Authorization: `Bearer ${shiprocketB2BConfig.token}`,
-  //           "Content-Type": "application/json",
-  //         },
-  //       }
-  //     );
-  //     console.log(axiosRes.data, 'CARGO GET SHIPMENT RESPONSE');
-  //     const order: any | null = await B2BOrderModel.findOne({ _id: orderId, sellerId })
-  //     if (!order) return res.status(200).send({ valid: false, message: "order not found" });
-  //     console.log(order, 'old order');
-  //   } catch (err) {
-  //     console.error("Error fetching shipment details:", err);
-  //   }
-  // }, {
-  //   scheduled: true,
-  //   once: true
-  // });
-
   try {
-    const withoutAwbOrders = await B2BOrderModel.find({ _id: orderId, sellerId, awb: { $exists: false } });
+    const shiprocketB2BVNickName = await EnvModel.findOne({ name: "SHIPROCKET_B2B" }).select("nickName");
+    const withoutAwbOrders = await B2BOrderModel.find({
+      awb: null,
+      carrierName: { $regex: shiprocketB2BVNickName?.nickName }
+    });
 
     for (const order of withoutAwbOrders) {
       const shiprocketB2BConfig = await getShiprocketB2BConfig();
-      const apiUrl = `${config.SHIPROCKET_B2B_API_BASEURL}${APIs.B2B_GET_SHIPMENT}${orderShipmentId}`;
-      // const apiUrl = `${config.SHIPROCKET_B2B_API_BASEURL}${APIs.B2B_GET_SHIPMENT}435828`;
+      const apiUrl = `${config.SHIPROCKET_B2B_API_BASEURL}${APIs.B2B_GET_SHIPMENT}${order.orderShipmentId}`;
 
       const response = await axios.get(apiUrl, {
         headers: {
@@ -822,14 +800,15 @@ export const scheduleShipmentCheck = async () => {
 
       const shipmentData = response.data;
       order.awb = shipmentData.waybill_no;
-      order.label = shipmentData.label_url;
+      order.label_url = shipmentData.label_url;
       await order.save();
+
       const pdfUrl = shipmentData.label_url
       const wordsToRemove = ['PICKRR', 'TECHNOLOGIES'];
       const replacementText = '';
-      const outputFilePath = 'modified.pdf';
-      const new_label = await modifyPdf(pdfUrl, wordsToRemove, replacementText, outputFilePath, sellerId);
-      //update in the order label.
+      const outputFilePath = path.join(__dirname, '../public/shipment_labels', `${order.orderShipmentId}.pdf`);
+
+      if (order.carrierName?.toLowerCase().includes("gati")) await modifyPdf(pdfUrl, wordsToRemove, replacementText, outputFilePath, order.sellerId);
     }
 
   } catch (error) {

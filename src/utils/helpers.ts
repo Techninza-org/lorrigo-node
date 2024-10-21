@@ -1601,8 +1601,8 @@ export const generateAccessToken = async () => {
 
 export const calculateSellerInvoiceAmount = async () => {
   try {
-    // const sellers = await SellerModel.find({ zoho_contact_id: { $exists: true } });
-    const sellers = await SellerModel.find({ _id: "667906f9cfe0c27895758881" });
+    const sellers = await SellerModel.find({ zoho_contact_id: { $exists: true } });
+    // const sellers = await SellerModel.find({ _id: "66791386cfe0c278957805af" });
 
     const batchSize = 3;
     const delay = 5000;
@@ -1642,7 +1642,6 @@ export const calculateSellerInvoiceAmount = async () => {
 
         let totalWalletRecharge = allWalletRecharge.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
 
-        console.log(totalWalletRecharge, "totalWalletRecharge")
         if (totalWalletRecharge < 0) {
           totalWalletRecharge = 0;
         }
@@ -1656,20 +1655,21 @@ export const calculateSellerInvoiceAmount = async () => {
           }
         }
 
-        totalAmount -= totalWalletRecharge;
+        const NextMonthCreditZoho = (totalAmount - (totalWalletRecharge || 0) - (seller.zoho_advance_amount || 0));
+
+        seller.zoho_advance_amount = NextMonthCreditZoho;
+        await seller.save();
 
         const invoiceAmount = Math.round(Number(totalAmount / 1.18));
 
         const isPrepaid = seller.config?.isPrepaid;
 
-        if (isPrepaid) {
-          const spentAmount = Number((invoiceAmount * 1.18));
-          console.log(spentAmount, "spentAmount")
-          // await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
-        }
         if (invoiceAmount > 0) {
-          console.log(invoiceAmount, "invoiceAmount")
-          // await createAdvanceAndInvoice(zoho_contact_id, invoiceAmount, awbToBeInvoiced, isPrepaid);
+          if (isPrepaid) {
+            const spentAmount = Number((invoiceAmount * 1.18));
+            await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
+          }
+          await createAdvanceAndInvoice(zoho_contact_id, invoiceAmount, awbToBeInvoiced, isPrepaid);
         }
       }
     };
@@ -1750,6 +1750,7 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmoun
         }
       })
     }
+
     const invoicePdf = await axios.get(`https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=60014023368&accept=pdf`, {
       headers: {
         "Content-Type": "application/json",
@@ -1804,7 +1805,7 @@ export async function addAllToZoho() {
 
 // modifyPdf(pdfUrl, wordsToRemove, replacementText, outputFilePath);
 
-async function modifyPdf(url: string, wordsToRemove: any, replacementText: any, outputFilePath: any, sellerId: string) {
+export async function modifyPdf(url: string, wordsToRemove: any, replacementText: any, outputFilePath: any, sellerId: string) {
   try {
     const seller = await SellerModel.findById(sellerId).lean();
     const response = await axios.get(url, { responseType: 'arraybuffer' });
@@ -1924,13 +1925,13 @@ async function modifyPdf(url: string, wordsToRemove: any, replacementText: any, 
 
 export function handleDateFormat(dateTimeString: string) {
   const ddMmYyyyRegex = /^\d{2}-\d{2}-\d{4}/;
-  
+
   let parsedDate;
 
   if (ddMmYyyyRegex.test(dateTimeString)) {
-      parsedDate = parse(dateTimeString, 'dd-MM-yyyy HH:mm:ss', new Date());
+    parsedDate = parse(dateTimeString, 'dd-MM-yyyy HH:mm:ss', new Date());
   } else {
-      parsedDate = new Date(dateTimeString); 
+    parsedDate = new Date(dateTimeString);
   }
 
   return formatISO(parsedDate);
