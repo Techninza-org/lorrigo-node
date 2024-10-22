@@ -25,7 +25,9 @@ import {
     getInoviceById,
     generateInvoices,
     getAllUserWalletTransaction,
-    uploadB2BClientBillingCSV
+    uploadB2BClientBillingCSV,
+    getSubAdmins,
+    updateSubadminPaths
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -130,5 +132,11 @@ adminRouter.get("/invoice/:id", AdminAuthMiddleware, cache("1 day"), getInoviceB
 
 // @ts-ignore
 adminRouter.get('/generate-invoice', AdminAuthMiddleware, cache("1 day"), generateInvoices);
+
+//@ts-ignore
+adminRouter.get('/subadmins', AdminAuthMiddleware, getSubAdmins)
+
+//@ts-ignore
+adminRouter.put("/subadmins/:id", AdminAuthMiddleware, updateSubadminPaths);
 
 export default adminRouter;

@@ -816,8 +816,9 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
   const csvBills = json.map((bill: any) => {
     const isForwardApplicable = Boolean(bill["Forward Applicable"]?.toUpperCase() === "YES");
     const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "YES");
+    
     return {
-      awb: Number(bill["Awb"]).toString(),
+      awb: (bill["Awb"]).toString(),
       codValue: Number(bill["COD Value"] || 0),
       shipmentType: bill["Shipment Type"] === "COD" ? 1 : 0,
       chargedWeight: Number(bill["Charged Weight"]),
@@ -1277,5 +1278,27 @@ export const generateInvoices = async (req: ExtendedRequest, res: Response, next
     return res.status(200).send({ valid: true, message: "Invoices generated successfully!" });
   } catch (err) {
     return next(err);
+  }
+}
+
+export const getSubAdmins = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try{
+    const subadmins = await SellerModel.find({issubadmin: true}).select(["name", "subadminpaths"])
+    return res.status(200).send({ valid: true, subadmins });
+  }catch(err){
+    return next(err)
+  }
+}
+
+export const updateSubadminPaths  = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try{
+    const {paths} = req.body 
+    const subadmin = await SellerModel.findById(req.params.id);
+    if (!subadmin) return res.status(200).send({ valid: false, message: "No Subadmin found" });
+    subadmin.subadminpaths = paths
+    await subadmin.save();
+    return res.status(200).send({ valid: true, message: "Subadmin paths updated successfully" });
+  }catch(err){
+    return next(err)
   }
 }
