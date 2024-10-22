@@ -367,3 +367,92 @@ export const handleAdminLogin = async (req: Request, res: Response, next: NextFu
     return next(error);
   }
 }
+
+
+export const createSubadmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body: SignupBodyType = req.body;
+    if (!(body?.password && body?.email && body.name)) {
+      return res.status(200).send({
+        valid: false,
+        message: "name, email, password is required",
+      });
+    }
+    if (!(typeof body.password === "string" && typeof body.email === "string" && typeof body.name === "string")) {
+      return res.status(200).send({
+        valid: false,
+        message: "invalid body properties type",
+      });
+    }
+
+    const isValidEmail: boolean = validateEmail(body?.email);
+
+    if (!isValidEmail) {
+      return res.status(200).send({
+        valid: false,
+        message: "invalid email address",
+      });
+    }
+
+    const isAvailable = (await SellerModel.findOne({ email: body.email.toLocaleLowerCase() }).lean()) !== null;
+
+    if (isAvailable) {
+      return res.send({
+        valid: false,
+        message: "user already exists",
+      });
+    }
+
+    const hashPassword = await bcrypt.hash(body?.password, config.SALT_ROUND!);
+
+    // const vendors = await CourierModel.find({});
+    // const vendorsId = vendors.reduce((acc: any, cv: any) => {
+    //   return acc.concat(cv._id);
+    // }, []);
+
+    const user = new SellerModel({ name: body?.name, email: body?.email.toLocaleLowerCase(), password: hashPassword, vendors: [], rank: 2, issubadmin: true, role: 'admin' });
+
+    let savedUser;
+    try {
+      savedUser = await user.save();
+    } catch (err) {
+      return next(err);
+    }
+
+    try {
+      const token = await generateAccessToken();
+      const data = {
+        contact_name: body?.name,
+      }
+
+      const dataJson = JSON.stringify(data);
+      const response = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, dataJson, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${token}`
+        }
+      });
+
+      savedUser.zoho_contact_id = response.data.contact.contact_id;
+      await savedUser.save();
+
+    } catch (err: any) {
+      console.log("ZOHO ERROR: ", err.response.data)
+    }
+
+    return res.send({
+      valid: true,
+      user: {
+        email: savedUser.email,
+        id: savedUser._id,
+        name: savedUser.name,
+        isVerified: false,
+        vendors: savedUser.vendors,
+        zoho_contact_id: savedUser.zoho_contact_id,
+        zoho_advance_amount: 0
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
