@@ -27,7 +27,8 @@ import {
     getAllUserWalletTransaction,
     uploadB2BClientBillingCSV,
     getSubAdmins,
-    updateSubadminPaths
+    updateSubadminPaths,
+    deleteSubadmin
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -138,5 +139,8 @@ adminRouter.get('/subadmins', AdminAuthMiddleware, getSubAdmins)
 
 //@ts-ignore
 adminRouter.put("/subadmins/:id", AdminAuthMiddleware, updateSubadminPaths);
+
+//@ts-ignore
+adminRouter.delete("/subadmins/delete/:id", AdminAuthMiddleware, deleteSubadmin)
 
 export default adminRouter;
