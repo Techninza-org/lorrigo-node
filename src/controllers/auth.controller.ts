@@ -332,7 +332,9 @@ export const handleAdminLogin = async (req: Request, res: Response, next: NextFu
       });
     }
 
-    const existingUser = await SellerModel.findOne({ email: body.email, role: "admin" }).select(["name", "email", "password", "walletBalance", "isVerified", "rank"]).lean();
+    const existingUser = await SellerModel.findOne({ email: body.email, role: "admin" }).select(["name", "email", "password", "walletBalance", "isVerified", "rank", "issubadmin", "subadminpaths"]).lean();
+    console.log(existingUser);
+    
     if (!existingUser) {
       return res.status(200).send({
         valid: false,
@@ -361,6 +363,8 @@ export const handleAdminLogin = async (req: Request, res: Response, next: NextFu
         token,
         role: "admin",
         rank: existingUser?.rank,
+        issubadmin: existingUser.issubadmin,
+        subadminpaths: existingUser.subadminpaths,
       },
     });
   } catch (error) {

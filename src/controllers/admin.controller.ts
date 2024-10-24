@@ -1290,15 +1290,41 @@ export const getSubAdmins = async (req: ExtendedRequest, res: Response, next: Ne
   }
 }
 
-export const updateSubadminPaths  = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  try{
-    const {paths} = req.body 
+export const updateSubadminPaths = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { paths } = req.body;
+    
+
+    if (!paths || !Array.isArray(paths)) {
+      return res.status(400).send({ valid: false, message: "Invalid paths array" });
+    }
+
     const subadmin = await SellerModel.findById(req.params.id);
-    if (!subadmin) return res.status(200).send({ valid: false, message: "No Subadmin found" });
-    subadmin.subadminpaths = paths
+    if (!subadmin) {
+      return res.status(404).send({ valid: false, message: "No Subadmin found" });
+    }
+
+    subadmin.subadminpaths = paths;
     await subadmin.save();
+
     return res.status(200).send({ valid: true, message: "Subadmin paths updated successfully" });
-  }catch(err){
-    return next(err)
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const deleteSubadmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try{
+    const subadmin = await SellerModel.findById(req.params.id);
+    if (!subadmin) {
+      return res.status(404).send({ valid: false, message: "No Subadmin found" });
+    }
+
+    const deleted =  await SellerModel.findByIdAndDelete(req.params.id); 
+
+    return res.status(200).send({ valid: true, message: "Subadmin deleted successfully", deleted });
+
+  } catch (err) {
+    return next(err);
   }
 }

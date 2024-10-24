@@ -23,6 +23,8 @@ import adminRouter from "./routes/admin.routes";
 import { getSpecificOrder } from "./controllers/order.controller";
 import apicache from "apicache";
 import path from "path";
+import PaymentTransactionModal from "./models/payment.transaction.modal";
+import SellerModel from "./models/seller.model";
 
 
 const app = express();
@@ -94,6 +96,38 @@ app.use("*", (req: Request, res: Response) => {
 });
 
 runCron();
+
+async function revertRevisedMoneyNTxnToday() {
+  const today = new Date();
+today.setHours(0, 0, 0, 0);  // Set the time to 00:00:00
+today.setDate(today.getDate() - 1); // Set today to yesterday
+
+const tomorrow = new Date(today);
+tomorrow.setDate(tomorrow.getDate() + 1); 
+
+  const revisedTxn = await PaymentTransactionModal.find({
+    createdAt: {
+      $gte: today,
+      $lt: tomorrow,
+    },
+    desc: {$regex: "Revised"}
+  });
+
+  for (const txn of revisedTxn) {
+    const seller = await SellerModel.findById(txn.sellerId);
+    console.log(seller?.name, txn.amount);
+    if (seller) {
+      seller.walletBalance += Number(txn.amount);
+      await seller.save();
+
+      const deletedTxn = await PaymentTransactionModal.findByIdAndDelete(txn._id);
+      console.log(deletedTxn);
+    }
+
+  }
+}
+
+// revertRevisedMoneyNTxnToday();
 
 // addAllToZoho();
 
