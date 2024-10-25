@@ -1745,11 +1745,16 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
 
     const body = req.body;
     const sellerConfig = req.seller;
+    const config = sellerConfig.config
+    const isPostpaid = !config.isPrepaid
+    
     const sellerId = req.seller._id;
     const carrierId = body.carrierId;
 
-    if (body.charge >= sellerConfig.walletBalance || sellerConfig.walletBalance <= 0) {
-      return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
+    if(!isPostpaid){
+      if (body.charge >= sellerConfig.walletBalance || sellerConfig.walletBalance <= 0) {
+        return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
+      }
     }
 
     const seller = await SellerModel.findById(sellerId).select("gst").lean();
@@ -1881,7 +1886,9 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
             stageDateTime: new Date(),
           });
           await order.save();
-          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+          if(!isPostpaid){
+            await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+          }
           return res.status(200).send({ valid: true, order });
         }
         return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });
