@@ -194,7 +194,7 @@ export const getSellers = async (req: Request, res: Response, next: NextFunction
       .sort({ _id: -1 }) // Sort by _id in descending order
       // .skip(skip)
       // .limit(limit)
-      .select('-kycDetails'); // Exclude the kycDetails field
+      .select('name isVerified email  billingAddress companyProfile bankDetails createdAt _id'); // Exclude the kycDetails field
 
     return res.status(200).json({
       valid: true,
