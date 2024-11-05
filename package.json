@@ -7,7 +7,8 @@
     "dev": "set NODE_ENV=DEVELOPMENT && npx ts-node-dev src/index.ts",
     "start": "set NODE_ENV=PRODUCTION && node dist/index.js",
     "startdev": "NODE_ENV=PRODUCTION ts-node-dev src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "startProd": "node dist/index.js"
   },
   "keywords": [],
   "author": "",
