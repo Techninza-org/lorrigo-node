@@ -253,7 +253,7 @@ export const getAllRemittances = async (req: ExtendedRequest, res: Response, nex
         },
       }
     )
-      .populate("sellerId")
+      .populate({path:"sellerId", select: "name"})
       .lean()
       .sort({ remittanceDate: -1 });
 

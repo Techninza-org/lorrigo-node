@@ -735,7 +735,7 @@ const processShiprocketOrders = async (orders) => {
         if (
           bucketInfo.bucket !== -1 &&
           orderWithOrderReferenceId.orderStages.length > 0 &&
-          !(orderWithOrderReferenceId.orderStages[orderWithOrderReferenceId.orderStages.length - 1].activity?.includes(response.data.tracking_data?.shipment_track_activities?.[0]?.activity))
+          (bucketInfo.bucket === DELIVERED || !(orderWithOrderReferenceId.orderStages[orderWithOrderReferenceId.orderStages.length - 1].activity?.includes(response.data.tracking_data?.shipment_track_activities?.[0]?.activity)))
         ) {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
@@ -758,7 +758,7 @@ const processShiprocketOrders = async (orders) => {
           orderWithOrderReferenceId.rtoCharges = rtoCharges?.rtoCharges;
           await orderWithOrderReferenceId.save();
         }
-        
+
         trackedOrders.add(orderWithOrderReferenceId.awb);
       }
     } catch (err: any) {
