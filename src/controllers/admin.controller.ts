@@ -22,6 +22,7 @@ import PaymentTransactionModal from "../models/payment.transaction.modal";
 import B2BClientBillingModal from "../models/b2b-client.billing.modal";
 import { calculateRateAndPrice, regionToZoneMappingLowercase } from "../utils/B2B-helper";
 import { MonthlyBilledAWBModel } from "../models/billed-awbs-month";
+import { addDays } from 'date-fns';
 
 export const walletDeduction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1113,6 +1114,8 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
 
       const result = await calculateRateAndPrice(courier, Fzone, Tzone, bill.orderWeight, courier?._id?.toString(), fromRegionName, toRegionName, order.amount, bill.otherCharges, bill.isODAApplicable);
 
+      const futureDate = addDays(new Date(), 7);
+
       return {
         updateOne: {
           filter: { awb: bill.awb },
@@ -1123,7 +1126,7 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
               awb: bill.awb,
               isODAApplicable: bill.isODAApplicable,
               orderWeight: bill.orderWeight,
-              billingDate: new Date()?.toISOString() ?? "",
+              billingDate: futureDate.toISOString(),
               billingAmount: result.finalAmount,
               otherCharges: result.otherExpensesTotal,
               vendorWNickName: `${courier.name} ${courier.vendor_channel_id.nickName}`,
@@ -1137,11 +1140,14 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
     // @ts-ignore
     await B2BClientBillingModal.bulkWrite(billsWithCharges);
 
-    await Promise.all(billsWithCharges.map(async (bill: any) => {
-      if (bill.sellerId && bill.billingAmount) {
-        await updateSellerWalletBalance(bill.sellerId, (bill.billingAmount), false, `AWB: ${bill.awb}, Revised B2B`);
-      }
-    }));
+    // Schedule wallet balance deduction after 7 days
+    setTimeout(async () => {
+      await Promise.all(billsWithCharges.map(async (bill: any) => {
+        if (bill.sellerId && bill.billingAmount) {
+          await updateSellerWalletBalance(bill.sellerId, (bill.billingAmount), false, `AWB: ${bill.awb}, Revised B2B`);
+        }
+      }));
+    }, 7 * 24 * 60 * 60 * 1000); 
 
     return res.status(200).send({
       valid: true,
