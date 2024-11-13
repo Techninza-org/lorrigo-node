@@ -1477,7 +1477,7 @@ export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: 
   };
 
   const deliveredStatusMapping = {
-    "RTO": { bucket: DELIVERED, description: "Delivered" },
+    "RTO": { bucket: RTO_DELIVERED, description: "RTO Delivered" },
     "Delivered": { bucket: DELIVERED, description: "Delivered" },
     "DTO": { bucket: RETURN_DELIVERED, description: "Delivered To Origin" },
     "RETURN Accepted": { bucket: RETURN_DELIVERED, description: "Delivered To Origin" },
