@@ -19,7 +19,8 @@ import {
     getInoviceById,
     confirmInvoicePayment,
     payInvoiceIntent,
-    refetchLastTransactions
+    refetchLastTransactions,
+    raiseDispute
 } from "../controllers/seller.controller";
 
 import multer from 'multer';
@@ -105,5 +106,8 @@ sellerRouter.post("/confirm-invoice-payment", confirmInvoicePayment);
 
 //@ts-ignore
 sellerRouter.delete("/", deleteSeller);
+
+//@ts-ignore
+sellerRouter.post("/raise-dispute", raiseDispute)
 
 export default sellerRouter;

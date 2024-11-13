@@ -23,6 +23,7 @@ import B2BClientBillingModal from "../models/b2b-client.billing.modal";
 import { calculateRateAndPrice, regionToZoneMappingLowercase } from "../utils/B2B-helper";
 import { MonthlyBilledAWBModel } from "../models/billed-awbs-month";
 import { addDays } from 'date-fns';
+import SellerDisputeModel from "../models/dispute.model";
 
 export const walletDeduction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -936,6 +937,9 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         return;
       }
 
+      console.log(bill.isRTOApplicable, 'bill.isRTOApplicable');
+      
+
       const monthBill = await MonthlyBilledAWBModel.findOneAndUpdate(
         { sellerId: order.sellerId, awb: order.awb },
         {
@@ -1332,5 +1336,57 @@ export const deleteSubadmin = async (req: ExtendedRequest, res: Response, next: 
 
   } catch (err) {
     return next(err);
+  }
+}
+
+export const getDisputes = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const disputes = await SellerDisputeModel.find({ accepted: false });
+    return res.status(200).send({ valid: true, disputes });
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export const getDisputeById = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const dispute = await SellerDisputeModel.findById(req.params.id);
+    if (!dispute) return res.status(200).send({ valid: false, message: "No Dispute found" });
+    const order = await B2COrderModel.findOne({ awb: dispute.awb });
+
+    return res.status(200).send({ valid: true, dispute, order });
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export const acceptDispute = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { disputeId } = req.body;
+    const dispute = await SellerDisputeModel.findById(disputeId);
+    if (!dispute) {
+      return res.status(404).send({ valid: false, message: "No Dispute found" });
+    }
+    dispute.accepted = true;
+    await dispute.save();
+    return res.status(200).send({ valid: true, message: "Dispute accepted successfully" });
+  }
+  catch (error) {
+    return next(error)
+  }
+}
+
+export const rejectDispute = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { disputeId } = req.body;
+    const dispute = await SellerDisputeModel.findById(disputeId);
+    if (!dispute) {
+      return res.status(404).send({ valid: false, message: "No Dispute found" });
+    }
+    const deletedDispute = await SellerDisputeModel.findByIdAndDelete(disputeId);
+    return res.status(200).send({ valid: true, message: "Dispute rejected successfully", deletedDispute });
+  }
+  catch (error) {
+    return next(error)
   }
 }

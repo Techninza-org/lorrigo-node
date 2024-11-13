@@ -17,6 +17,7 @@ import CourierModel from "../models/courier.model";
 import { isValidObjectId } from "mongoose";
 import B2BClientBillingModal from "../models/b2b-client.billing.modal";
 import { MonthlyBilledAWBModel } from "../models/billed-awbs-month";
+import SellerDisputeModel from "../models/dispute.model";
 
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -363,9 +364,9 @@ export const getSellerBilling = async (req: ExtendedRequest, res: Response, next
       const statusEntry: any = billsStatus.find(status => status.awb === bill.awb);
       let status = 'Forward Billed'
 
-      if (statusEntry.isRTOApplicable) {
-        status = 'Forward + RTO Billed'
-      }
+      // if (statusEntry.isRTOApplicable) {
+      //   status = 'Forward + RTO Billed'
+      // }
 
       return {
         ...bill._doc,
@@ -727,6 +728,18 @@ export const getCodPrice = async (req: ExtendedRequest, res: Response, next: Nex
     return res.status(200).send({ valid: true, codPrice: codPrice });
   }
   catch (error) {
+    return next(error)
+  }
+}
+
+export const raiseDispute = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { awb, image, description } = req.body;
+    const order = await ClientBillingModal.findOne({ awb });
+    if (!order) return res.status(200).send({ valid: false, message: "No Order found" });
+    const newDispute = await SellerDisputeModel.create({ sellerId: req.seller._id, awb, image, description, orderId: order._id });
+    return res.status(200).send({ valid: true, dispute: newDispute });
+  } catch (error) {
     return next(error)
   }
 }

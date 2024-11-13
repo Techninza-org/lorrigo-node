@@ -28,7 +28,11 @@ import {
     uploadB2BClientBillingCSV,
     getSubAdmins,
     updateSubadminPaths,
-    deleteSubadmin
+    deleteSubadmin,
+    getDisputes,
+    acceptDispute,
+    rejectDispute,
+    getDisputeById
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -142,5 +146,17 @@ adminRouter.put("/subadmins/:id", AdminAuthMiddleware, updateSubadminPaths);
 
 //@ts-ignore
 adminRouter.delete("/subadmins/delete/:id", AdminAuthMiddleware, deleteSubadmin)
+
+//@ts-ignore
+adminRouter.get("/disputes", AdminAuthMiddleware, getDisputes)
+
+//@ts-ignore
+adminRouter.get("/disputes/:id", AdminAuthMiddleware, getDisputeById)
+
+//@ts-ignore
+adminRouter.post("/disputes/accept", AdminAuthMiddleware, acceptDispute)
+
+//@ts-ignore
+adminRouter.post("/disputes/reject", AdminAuthMiddleware, rejectDispute)
 
 export default adminRouter;
