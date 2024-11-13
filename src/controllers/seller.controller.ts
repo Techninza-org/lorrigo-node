@@ -737,7 +737,10 @@ export const raiseDispute = async (req: ExtendedRequest, res: Response, next: Ne
     const { awb, image, description } = req.body;
     const order = await ClientBillingModal.findOne({ awb });
     if (!order) return res.status(200).send({ valid: false, message: "No Order found" });
+    if(order.isDisputeRaised) return res.status(200).send({ valid: false, message: "Dispute already raised" });
     const newDispute = await SellerDisputeModel.create({ sellerId: req.seller._id, awb, image, description, orderId: order._id });
+    order.isDisputeRaised = true;
+    await order.save();
     return res.status(200).send({ valid: true, dispute: newDispute });
   } catch (error) {
     return next(error)

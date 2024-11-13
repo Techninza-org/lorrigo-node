@@ -1341,7 +1341,7 @@ export const deleteSubadmin = async (req: ExtendedRequest, res: Response, next: 
 
 export const getDisputes = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const disputes = await SellerDisputeModel.find({ accepted: false });
+    const disputes = await SellerDisputeModel.find({ accepted: false}).populate("sellerId", "name").populate("orderId")
     return res.status(200).send({ valid: true, disputes });
   } catch (error) {
     return next(error)
