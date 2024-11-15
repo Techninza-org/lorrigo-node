@@ -683,6 +683,12 @@ export default async function runCron() {
 
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
+  const expression4every5Minutes = "*/5 * * * *";
+  const expression4every59Minutes = "59 * * * *";
+  const expression4every9_59Hr = "59 9 * * *";
+  const expression4everyFriday = "0 0 * * 5";
+  const expression4every12Hrs = "0 0,12 * * *";
+
   if (cron.validate(expression4every2Minutes)) {
     cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, track_delivery);  // Track order status every 30 minutes
@@ -694,11 +700,7 @@ export default async function runCron() {
     cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
     cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
 
-    const expression4every5Minutes = "*/5 * * * *";
-    const expression4every59Minutes = "59 * * * *";
-    const expression4every9_59Hr = "59 9 * * *";
-    const expression4everyFriday = "0 0 * * 5";
-    const expression4every12Hrs = "0 0,12 * * *";
+
 
     cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
     cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
@@ -743,7 +745,7 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
     });
 
     if (billedOrders.length > 0) {
-      for (const order of billedOrders){
+      for (const order of billedOrders) {
         await updateSellerWalletBalance(order.sellerId, order.billingAmount, false, `AWB: ${order.awb}, Revised`)
         order.paymentStatus = paymentStatusInfo.PAID;
         order.save();
