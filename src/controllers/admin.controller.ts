@@ -959,6 +959,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         {
           new: true,
           setDefaultsOnInsert: true,
+          upsert: true
         }
       );
       return {
@@ -1200,12 +1201,12 @@ export const getClientBillingData = async (req: ExtendedRequest, res: Response, 
       ClientBillingModal.find({})
         .populate({
           path: 'sellerId',
-          select: '-kycDetails'
+          select: 'name'
         }),
       B2BClientBillingModal.find({})
         .populate({
           path: 'sellerId',
-          select: '-kycDetails'
+          select: 'name'
         })
     ]);
     
