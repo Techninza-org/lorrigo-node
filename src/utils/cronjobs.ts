@@ -19,6 +19,8 @@ import fs from "fs"
 import path from "path"
 import { setTimeout } from 'timers/promises';
 import envConfig from "../utils/config";
+import ClientBillingModal from "../models/client.billing.modal";
+import { paymentStatusInfo } from "./recharge-wallet-info";
 
 const BATCH_SIZE = 130;
 const API_DELAY = 120000; // 2 minutes in milliseconds
@@ -689,6 +691,8 @@ export default async function runCron() {
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every2Minutes, trackOrder_Smartr);
     cron.schedule(expression4every2Minutes, scheduleShipmentCheck);
+    cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
+    cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
 
     const expression4every5Minutes = "*/5 * * * *";
     const expression4every59Minutes = "59 * * * *";
@@ -707,6 +711,47 @@ export default async function runCron() {
     Logger.log("Cron jobs scheduled successfully");
   } else {
     Logger.log("Invalid cron expression");
+  }
+}
+
+const disputeOrderWalletDeductionWhenRejectByAdmin = async () => {
+  try {
+    const disputeOrders = await ClientBillingModal.find({
+      isDisputeRaised: true,
+    }).populate("disputeId");
+    if (disputeOrders.length > 0) {
+      for (const order of disputeOrders) {
+        if (!order.disputeId.accepted) {
+          await updateSellerWalletBalance(order.sellerId, order.billingAmount, false, `AWB: ${order.awb}, Revised`)
+        }
+      }
+    }
+  } catch (error: any) {
+    console.log("Error disputeOrderWalletDeductionWhenRejectByAdmin:", error);
+  }
+}
+
+const walletDeductionForBilledOrderOnEvery7Days = async () => {
+  try {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const billedOrders = await ClientBillingModal.find({
+      billingDate: { $lt: sevenDaysAgo },
+      paymentStatus: paymentStatusInfo.NOT_PAID,
+      isDisputeRaised: false
+    });
+
+    if (billedOrders.length > 0) {
+      for (const order of billedOrders){
+        await updateSellerWalletBalance(order.sellerId, order.billingAmount, false, `AWB: ${order.awb}, Revised`)
+        order.paymentStatus = paymentStatusInfo.PAID;
+        order.save();
+      }
+    }
+
+  } catch (error) {
+    console.log("Error walletDeductionForBilledOrderOnEvery7Days:", error);
   }
 }
 
