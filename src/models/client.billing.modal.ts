@@ -1,4 +1,5 @@
 import mongoose, { Mongoose } from "mongoose";
+import { paymentStatusInfo } from "../utils/recharge-wallet-info";
 
 const modal = new mongoose.Schema({
   sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true },
@@ -26,6 +27,8 @@ const modal = new mongoose.Schema({
   incrementWeight: { type: String, required: false },
   vendorWNickName: { type: String, required: false },
   isDisputeRaised: { type: Boolean, default: false },
+  disputeId: { type: mongoose.Types.ObjectId, ref: "Dispute" },
+  paymentStatus: { type: String, default: paymentStatusInfo.NOT_PAID }
 });
 
 const ClientBillingModal = mongoose.model("ClientBilling", modal);

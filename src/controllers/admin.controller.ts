@@ -24,6 +24,7 @@ import { calculateRateAndPrice, regionToZoneMappingLowercase } from "../utils/B2
 import { MonthlyBilledAWBModel } from "../models/billed-awbs-month";
 import { addDays } from 'date-fns';
 import SellerDisputeModel from "../models/dispute.model";
+import { paymentStatusInfo } from "../utils/recharge-wallet-info";
 
 export const walletDeduction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -984,6 +985,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
               recipientName: order.customerDetails.get("name"),
               fromCity: order.pickupAddress.city,
               toCity: order.customerDetails.get("city"),
+              paymentStatus: paymentStatusInfo.NOT_PAID
             }
           },
           upsert: true

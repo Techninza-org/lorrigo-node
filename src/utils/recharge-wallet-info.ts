@@ -15,3 +15,12 @@ export const rechargeWalletInfo = {
     PAYMENT_REFUNDED,
     PAYMENT_SUCCESSFUL_PHONEPE
 }
+
+
+const NOT_PAID = 'NOT_PAID' 
+const PAID = 'PAID'
+
+export const paymentStatusInfo  = { 
+    NOT_PAID,
+    PAID,    
+}
