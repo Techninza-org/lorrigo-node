@@ -746,3 +746,12 @@ export const raiseDispute = async (req: ExtendedRequest, res: Response, next: Ne
     return next(error)
   }
 }
+
+export const getDisputes = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const disputes = await SellerDisputeModel.find({ accepted: false}).populate("sellerId", "name").populate("orderId")
+    return res.status(200).send({ valid: true, disputes });
+  } catch (error) {
+    return next(error)
+  }
+}

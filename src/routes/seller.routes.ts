@@ -20,7 +20,8 @@ import {
     confirmInvoicePayment,
     payInvoiceIntent,
     refetchLastTransactions,
-    raiseDispute
+    raiseDispute,
+    getDisputes
 } from "../controllers/seller.controller";
 
 import multer from 'multer';
@@ -109,5 +110,8 @@ sellerRouter.delete("/", deleteSeller);
 
 //@ts-ignore
 sellerRouter.post("/raise-dispute", raiseDispute)
+
+//@ts-ignore
+sellerRouter.get("/disputes", getDisputes)
 
 export default sellerRouter;
