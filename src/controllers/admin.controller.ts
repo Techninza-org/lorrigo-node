@@ -1004,9 +1004,9 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       const amountToDeduct = Number(bill.updateOne.update.$set.billingAmount);
       const awbToDeduct = bill.updateOne.filter.awb;
 
-      if (sellerId && amountToDeduct && amountToDeduct > 0) {
-        await updateSellerWalletBalance(sellerId, amountToDeduct, false, `AWB: ${awbToDeduct}, Revised`);
-      }
+      // if (sellerId && amountToDeduct && amountToDeduct > 0) {
+      //   await updateSellerWalletBalance(sellerId, amountToDeduct, false, `AWB: ${awbToDeduct}, Revised`);
+      // }
     }));
 
     if (errorRows.length > 0) {
