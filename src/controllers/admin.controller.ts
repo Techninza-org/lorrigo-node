@@ -255,7 +255,7 @@ export const getAllRemittances = async (req: ExtendedRequest, res: Response, nex
         },
       }
     )
-      .populate({path:"sellerId", select: "name"})
+      .populate({ path: "sellerId", select: "name" })
       .lean()
       .sort({ remittanceDate: -1 });
 
@@ -819,7 +819,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
   const csvBills = json.map((bill: any) => {
     const isForwardApplicable = Boolean(bill["Forward Applicable"]?.toUpperCase() === "YES");
     const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "YES");
-    
+
     return {
       awb: (bill["Awb"]).toString(),
       codValue: Number(bill["COD Value"] || 0),
@@ -926,7 +926,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
       const rtoCharge = (totalCharge - (codCharge || 0))
 
-      const billingAmount =  bill.isRTOApplicable ? ((totalCharge - order.shipmentCharges) + rtoCharge).toFixed(2) : (totalCharge - order.shipmentCharges).toFixed(2);
+      const billingAmount = bill.isRTOApplicable ? Math.max(0, ((totalCharge - order.shipmentCharges) + rtoCharge)).toFixed(2) : (Math.max(0, totalCharge - order.shipmentCharges)).toFixed(2);
 
       const existingMonthBill: any = await MonthlyBilledAWBModel.findOne({
         sellerId: order.sellerId,
@@ -937,9 +937,6 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         errorRows.push({ awb: bill.awb, errors: "Not Allowd: Awb is already billed for forward and RTO" });
         return;
       }
-
-      console.log(bill.isRTOApplicable, 'bill.isRTOApplicable');
-      
 
       const monthBill = await MonthlyBilledAWBModel.findOneAndUpdate(
         { sellerId: order.sellerId, awb: order.awb },
@@ -1154,7 +1151,7 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
           await updateSellerWalletBalance(bill.sellerId, (bill.billingAmount), false, `AWB: ${bill.awb}, Revised B2B`);
         }
       }));
-    }, 7 * 24 * 60 * 60 * 1000); 
+    }, 7 * 24 * 60 * 60 * 1000);
 
     return res.status(200).send({
       valid: true,
@@ -1209,7 +1206,7 @@ export const getClientBillingData = async (req: ExtendedRequest, res: Response, 
           select: 'name'
         })
     ]);
-    
+
 
     if (!data.length && !b2bData.length) {
       return res.status(200).send({ valid: false, message: "No Client Billing found" });
@@ -1221,7 +1218,7 @@ export const getClientBillingData = async (req: ExtendedRequest, res: Response, 
     const billsWStatus = data.map((bill: any) => {
       const statusEntry: any = billsStatus.find(status => status.awb === bill.awb);
       let status = 'Forward Billed'
-      
+
       if (statusEntry.isRTOApplicable) {
         status = 'Forward + RTO Billed'
       }
@@ -1295,10 +1292,10 @@ export const generateInvoices = async (req: ExtendedRequest, res: Response, next
 }
 
 export const getSubAdmins = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  try{
-    const subadmins = await SellerModel.find({issubadmin: true}).select(["name", "subadminpaths"])
+  try {
+    const subadmins = await SellerModel.find({ issubadmin: true }).select(["name", "subadminpaths"])
     return res.status(200).send({ valid: true, subadmins });
-  }catch(err){
+  } catch (err) {
     return next(err)
   }
 }
@@ -1306,7 +1303,7 @@ export const getSubAdmins = async (req: ExtendedRequest, res: Response, next: Ne
 export const updateSubadminPaths = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { paths } = req.body;
-    
+
 
     if (!paths || !Array.isArray(paths)) {
       return res.status(400).send({ valid: false, message: "Invalid paths array" });
@@ -1327,13 +1324,13 @@ export const updateSubadminPaths = async (req: ExtendedRequest, res: Response, n
 };
 
 export const deleteSubadmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  try{
+  try {
     const subadmin = await SellerModel.findById(req.params.id);
     if (!subadmin) {
       return res.status(404).send({ valid: false, message: "No Subadmin found" });
     }
 
-    const deleted =  await SellerModel.findByIdAndDelete(req.params.id); 
+    const deleted = await SellerModel.findByIdAndDelete(req.params.id);
 
     return res.status(200).send({ valid: true, message: "Subadmin deleted successfully", deleted });
 
@@ -1344,7 +1341,7 @@ export const deleteSubadmin = async (req: ExtendedRequest, res: Response, next: 
 
 export const getDisputes = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const disputes = await SellerDisputeModel.find({ accepted: false}).populate("sellerId", "name").populate("orderId")
+    const disputes = await SellerDisputeModel.find({ accepted: false }).populate("sellerId", "name").populate("orderId")
     return res.status(200).send({ valid: true, disputes });
   } catch (error) {
     return next(error)
