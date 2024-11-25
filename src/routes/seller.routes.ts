@@ -21,7 +21,8 @@ import {
     payInvoiceIntent,
     refetchLastTransactions,
     raiseDispute,
-    getDisputes
+    getDisputes,
+    acceptDisputeBySeller
 } from "../controllers/seller.controller";
 
 import multer from 'multer';
@@ -113,5 +114,8 @@ sellerRouter.post("/raise-dispute", raiseDispute)
 
 //@ts-ignore
 sellerRouter.get("/disputes", getDisputes)
+
+//@ts-ignore
+sellerRouter.post("/disputes/accept", acceptDisputeBySeller)
 
 export default sellerRouter;

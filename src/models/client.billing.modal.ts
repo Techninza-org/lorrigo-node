@@ -27,6 +27,7 @@ const modal = new mongoose.Schema({
   incrementWeight: { type: String, required: false },
   vendorWNickName: { type: String, required: false },
   isDisputeRaised: { type: Boolean, default: false },
+  disputeAcceptedBySeller: { type: Boolean, default: false },
   disputeId: { type: mongoose.Types.ObjectId, ref: "Dispute" },
   paymentStatus: { type: String, default: paymentStatusInfo.NOT_PAID }
 });

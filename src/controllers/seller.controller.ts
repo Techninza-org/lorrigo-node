@@ -734,11 +734,11 @@ export const getCodPrice = async (req: ExtendedRequest, res: Response, next: Nex
 
 export const raiseDispute = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const { awb, image, description } = req.body;
+    const { awb, image, description, orderBoxHeight, orderBoxWidth, orderBoxLength, orderWeight, orderSizeUnit, orderWeightUnit } = req.body;
     const order = await ClientBillingModal.findOne({ awb });
     if (!order) return res.status(200).send({ valid: false, message: "No Order found" });
     if(order.isDisputeRaised) return res.status(200).send({ valid: false, message: "Dispute already raised" });
-    const newDispute = await SellerDisputeModel.create({ sellerId: req.seller._id, awb, image, description, orderId: order._id });
+    const newDispute = await SellerDisputeModel.create({ sellerId: req.seller._id, awb, image, description, orderId: order._id, orderBoxHeight, orderBoxWidth, orderBoxLength, orderWeight});
     order.isDisputeRaised = true;
     await order.save();
     return res.status(200).send({ valid: true, dispute: newDispute });
@@ -749,9 +749,24 @@ export const raiseDispute = async (req: ExtendedRequest, res: Response, next: Ne
 
 export const getDisputes = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const disputes = await SellerDisputeModel.find({ accepted: false}).populate("sellerId", "name").populate("orderId")
+    const disputes = await SellerDisputeModel.find({ sellerId: req.seller._id ,accepted: false}).populate("sellerId", "name").populate("orderId")
     return res.status(200).send({ valid: true, disputes });
   } catch (error) {
+    return next(error)
+  }
+}
+
+export const acceptDisputeBySeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { awb } = req.body;
+    console.log(awb, 'awb');
+    const bill = await ClientBillingModal.findOne({ awb });
+    if (!bill) return res.status(200).send({ valid: false, message: "No Order found" });
+    bill.disputeAcceptedBySeller = true; 
+    await bill.save();
+    return res.status(200).send({ valid: true, message: "Dispute accepted successfully" });
+  }
+  catch (error) {
     return next(error)
   }
 }
