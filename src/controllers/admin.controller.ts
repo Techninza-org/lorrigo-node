@@ -823,7 +823,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     return {
       awb: (bill["Awb"]).toString(),
       codValue: Number(bill["COD Value"] || 0),
-      shipmentType: bill["Shipment Type"] === "COD" ? 1 : 0,
+      shipmentType: bill["Shipment Type"] === "Cod" || bill["Shipment Type"] === "COD" ? 1 : 0,
       chargedWeight: Number(bill["Charged Weight"]),
       zone: bill["Zone"],
       carrierID: bill["Carrier ID"],
