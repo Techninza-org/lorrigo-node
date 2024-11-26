@@ -51,13 +51,15 @@ if (!config.MONGODB_URI) {
 // async function revertRevisedMoneyNTxnToday() {
 //   const today = new Date();
 //   today.setHours(0, 0, 0, 0);
+//   const threeDaysAgo = new Date(today);
+//   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 //   const tomorrow = new Date(today);
 //   tomorrow.setDate(tomorrow.getDate() + 1);
 
 //   const revisedTxn = await PaymentTransactionModal.find({
 //     createdAt: {
-//       $gte: today,
-//       $lt: tomorrow,
+//       $gte: threeDaysAgo,
+//       $lt: today,
 //     },
 //     desc: { $regex: "Revised" }
 //   });
@@ -76,6 +78,9 @@ if (!config.MONGODB_URI) {
 //     }
 //   }
 // }
+
+// revertRevisedMoneyNTxnToday()
+
 
 mongoose
   .connect(config.MONGODB_URI)
