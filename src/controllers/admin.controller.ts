@@ -996,15 +996,32 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     // @ts-ignore
     await ClientBillingModal.bulkWrite(validBills);
 
-    await Promise.all(validBills.map(async (bill: any) => {
-      const sellerId = bill.updateOne.update.$set.sellerId
-      const amountToDeduct = Number(bill.updateOne.update.$set.billingAmount);
-      const awbToDeduct = bill.updateOne.filter.awb;
+    // await Promise.all(validBills.map(async (bill: any) => {
+    //   const sellerId = bill.updateOne.update.$set.sellerId
+    //   const amountToDeduct = Number(bill.updateOne.update.$set.billingAmount);
+    //   const awbToDeduct = bill.updateOne.filter.awb;
 
-      // if (sellerId && amountToDeduct && amountToDeduct > 0) {
-      //   await updateSellerWalletBalance(sellerId, amountToDeduct, false, `AWB: ${awbToDeduct}, Revised`);
-      // }
-    }));
+    //   // if (sellerId && amountToDeduct && amountToDeduct > 0) {
+    //   //   await updateSellerWalletBalance(sellerId, amountToDeduct, false, `AWB: ${awbToDeduct}, Revised`);
+    //   // }
+    // }));
+
+    // const sevenDaysAgo = new Date();
+    // sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    // const billedOrders = await ClientBillingModal.find({
+    //   billingDate: { $lt: sevenDaysAgo },
+    //   paymentStatus: paymentStatusInfo.NOT_PAID,
+    //   isDisputeRaised: false
+    // });
+
+    // if (billedOrders.length > 0) {
+    //   for (const order of billedOrders) {
+    //     await updateSellerWalletBalance(order.sellerId.toString(), Number(order.billingAmount), false, `AWB: ${order.awb}, Revised`)
+    //     order.paymentStatus = paymentStatusInfo.PAID;
+    //     order.save();
+    //   }
+    // }
 
     if (errorRows.length > 0) {
       errorWorksheet.addRows(errorRows);

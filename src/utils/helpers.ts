@@ -1679,10 +1679,10 @@ export const calculateSellerInvoiceAmount = async () => {
         const isPrepaid = seller.config?.isPrepaid;
 
         if (invoiceAmount > 0) {
-          if (isPrepaid) {
-            const spentAmount = Number((invoiceAmount * 1.18));
-            await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
-          }
+          // if (isPrepaid) {
+          //   const spentAmount = Number((invoiceAmount * 1.18));
+          //   await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
+          // }
           await createAdvanceAndInvoice(zoho_contact_id, invoiceAmount, awbToBeInvoiced, isPrepaid);
         }
       }

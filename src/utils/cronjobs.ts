@@ -746,7 +746,7 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
 
     if (billedOrders.length > 0) {
       for (const order of billedOrders) {
-        await updateSellerWalletBalance(order.sellerId, order.billingAmount, false, `AWB: ${order.awb}, Revised`)
+        await updateSellerWalletBalance(order.sellerId, Number(order.billingAmount), false, `AWB: ${order.awb}, Revised`)
         order.paymentStatus = paymentStatusInfo.PAID;
         order.save();
       }
