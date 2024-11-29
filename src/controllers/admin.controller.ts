@@ -823,7 +823,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     return {
       awb: (bill["Awb"]).toString(),
       codValue: Number(bill["COD Value"] || 0),
-      shipmentType: bill["Shipment Type"] === "Cod" || bill["Shipment Type"] === "COD" ? 1 : 0,
+      shipmentType: bill["Shipment Type"] === "COD" ? 1 : 0,
       chargedWeight: Number(bill["Charged Weight"]),
       zone: bill["Zone"],
       carrierID: bill["Carrier ID"],
@@ -916,8 +916,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
       const body = {
         weight: bill.chargedWeight,
-        paymentType: bill.shipmentType,
-        collectableAmount: bill.codValue,
+        paymentType: order.payment_mode,
+        collectableAmount: Math.max(0, order.amount2Collect),
       };
 
       const { incrementPrice, totalCharge, codCharge } = await calculateShippingCharges(bill.zone, body, vendor);
@@ -996,32 +996,21 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     // @ts-ignore
     await ClientBillingModal.bulkWrite(validBills);
 
-    // await Promise.all(validBills.map(async (bill: any) => {
-    //   const sellerId = bill.updateOne.update.$set.sellerId
-    //   const amountToDeduct = Number(bill.updateOne.update.$set.billingAmount);
-    //   const awbToDeduct = bill.updateOne.filter.awb;
+    await Promise.all(validBills.map(async (bill: any) => {
+      const awbToDeduct = bill.updateOne.filter.awb;
+      const sellerId = bill.updateOne.update.$set.sellerId
 
-    //   // if (sellerId && amountToDeduct && amountToDeduct > 0) {
-    //   //   await updateSellerWalletBalance(sellerId, amountToDeduct, false, `AWB: ${awbToDeduct}, Revised`);
-    //   // }
-    // }));
+      const amountToDeduct = Number(bill.updateOne.update.$set.billingAmount);
+      const returnCODCharge = Math.max((bill.updateOne.update.$set.codValue || 0), 0);
+      const isRTOApplied = bill.updateOne.update.$set.isRTOApplicable
 
-    // const sevenDaysAgo = new Date();
-    // sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    // const billedOrders = await ClientBillingModal.find({
-    //   billingDate: { $lt: sevenDaysAgo },
-    //   paymentStatus: paymentStatusInfo.NOT_PAID,
-    //   isDisputeRaised: false
-    // });
-
-    // if (billedOrders.length > 0) {
-    //   for (const order of billedOrders) {
-    //     await updateSellerWalletBalance(order.sellerId.toString(), Number(order.billingAmount), false, `AWB: ${order.awb}, Revised`)
-    //     order.paymentStatus = paymentStatusInfo.PAID;
-    //     order.save();
-    //   }
-    // }
+      if (sellerId && isRTOApplied && amountToDeduct && amountToDeduct > 0) {
+        if (returnCODCharge > 0) {
+          await updateSellerWalletBalance("663379872fc3a04d7cc1e7a1", returnCODCharge, true, `AWB: ${awbToDeduct}, COD Charge Revised`);
+        }
+        await updateSellerWalletBalance("663379872fc3a04d7cc1e7a1", amountToDeduct, false, `AWB: ${awbToDeduct}, RTO Charge Applied`);
+      }
+    }));
 
     if (errorRows.length > 0) {
       errorWorksheet.addRows(errorRows);

@@ -688,7 +688,7 @@ function calculateTotalCharge(
     // @ts-ignore
     const codPrice = (vendor.codCharge?.hard || vendor?.vendorId?.codCharge?.hard) || 0;
     // @ts-ignore
-    const codAfterPercent = ((vendor.codCharge?.percent || vendor?.vendorId?.codCharge?.percent) ?? 0 / 100) * body.collectableAmount;
+    const codAfterPercent = (Math.max(vendor.codCharge?.percent || vendor?.vendorId?.codCharge?.percent, 0) * body.collectableAmount)/100;
     codCharge = Math.max(codPrice, codAfterPercent);
     totalCharge += codCharge;
   }
