@@ -613,6 +613,7 @@ export async function calculateShippingCharges(
   codCharge: number;
   incrementPrice: IncrementPrice;
   orderWeight: number;
+  fwCharge: number;
 }> {
   const orderWeight = body.weight
 
@@ -621,12 +622,13 @@ export async function calculateShippingCharges(
     throw new Error("Invalid increment price");
   }
 
-  const { totalCharge, codCharge } = calculateTotalCharge(orderWeight, increment_price, body, vendor);
+  const { totalCharge, codCharge, fwCharge } = calculateTotalCharge(orderWeight, increment_price, body, vendor);
   return {
     totalCharge,
     codCharge,
     incrementPrice: increment_price,
     orderWeight,
+    fwCharge
   };
 }
 
@@ -674,7 +676,8 @@ function calculateTotalCharge(
   vendor: Vendor
 ): {
   totalCharge: number;
-  codCharge: number;
+  codCharge: number;  
+  fwCharge: number;
 } {
   let totalCharge = incrementPrice.basePrice;
   let codCharge = 0;
@@ -683,6 +686,7 @@ function calculateTotalCharge(
   // @ts-ignore
   const weightIncrementRatio = Math.ceil(adjustedOrderWeight / (vendor.incrementWeight || vendor.vendorId.incrementWeight));
   totalCharge += incrementPrice.incrementPrice * weightIncrementRatio;
+  const fwCharge = totalCharge;
 
   if (body.paymentType === 1) {
     // @ts-ignore
@@ -693,7 +697,7 @@ function calculateTotalCharge(
     totalCharge += codCharge;
   }
 
-  return { totalCharge, codCharge };
+  return { totalCharge, codCharge, fwCharge };
 }
 
 export async function updateSellerWalletBalance(sellerId: string, amount: number, isCredit: boolean, desc: string) {

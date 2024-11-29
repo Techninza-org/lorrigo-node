@@ -290,7 +290,7 @@ export const trackOrder_Smartship = async () => {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
-            action: bucketInfo.description,
+            action: bucketInfo.bucket === RTO ? `RTO ${bucketInfo.description}` : bucketInfo.description,
             stageDateTime: handleDateFormat(requiredResponse.date_time),
             activity: requiredResponse.action,
             location: requiredResponse.location,
@@ -302,8 +302,8 @@ export const trackOrder_Smartship = async () => {
           }
           if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.bucket !== RTO) {
             const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
-            if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
+            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb}, RTO charges`)
+            if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb}, RTO COD charges`)
           }
         }
       }
@@ -398,7 +398,7 @@ export const trackOrder_Smartr = async () => {
             ordersReferenceIdOrders.bucket = bucketInfo.bucket;
             ordersReferenceIdOrders.orderStages.push({
               stage: bucketInfo.bucket,
-              action: bucketInfo.description,
+              action: bucketInfo.bucket === RTO ? `RTO ${bucketInfo.description}` : bucketInfo.description,
               stageDateTime: new Date(),
               activity: shipment_status.remarks,
               location: shipment_status.state,
@@ -562,7 +562,7 @@ export const track_delivery = async () => {
             order.bucket = bucketInfo.bucket;
             order.orderStages.push({
               stage: bucketInfo.bucket,
-              action: shipment_status.Status,
+              action: bucketInfo.bucket == RTO ? `RTO ${shipment_status.Status}` : shipment_status.Status,
               stageDateTime: new Date(),
               activity: shipment_status.Instructions,
               location: shipment_status.StatusLocation,
@@ -622,7 +622,7 @@ export const track_B2B_SHIPROCKET = async () => {
           order.bucket = bucketInfo.bucket;
           order.orderStages.push({
             stage: bucketInfo.bucket,
-            action: lastStatus.reason || lastStatus.status,
+            action: bucketInfo.bucket == RTO ? `RTO ${lastStatus.reason || lastStatus.status}` : (lastStatus.reason || lastStatus.status),
             stageDateTime: new Date(lastStatus.timestamp),
             activity: lastStatus.remarks,
             location: lastStatus.location,
@@ -787,7 +787,7 @@ const processShiprocketOrders = async (orders) => {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
-            action: bucketInfo.description,
+            action: bucketInfo.bucket== RTO ? `RTO ${bucketInfo.description}` :  bucketInfo.description,
             activity: response.data.tracking_data?.shipment_track_activities?.[0]?.activity,
             location: response.data.tracking_data?.shipment_track_activities?.[0]?.location,
             stageDateTime: formatISO(parse(response?.data?.tracking_data?.shipment_track_activities?.[0]?.date, 'yyyy-MM-dd HH:mm:ss', new Date())) ?? new Date(),

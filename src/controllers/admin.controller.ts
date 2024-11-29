@@ -821,9 +821,9 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "YES");
 
     return {
-      awb: (bill["Awb"]).toString(),
+      awb: (bill["Awb"])?.toString(),
       codValue: Number(bill["COD Value"] || 0),
-      shipmentType: bill["Shipment Type"] === "COD" ? 1 : 0,
+      shipmentType: bill["Shipment Type"].toUpperCase() === "COD" ? 1 : 0,
       chargedWeight: Number(bill["Charged Weight"]),
       zone: bill["Zone"],
       carrierID: bill["Carrier ID"],
@@ -914,19 +914,35 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
       }
 
-      const body = {
+      const csvBody = {
         weight: bill.chargedWeight,
-        paymentType: order.payment_mode,
+        paymentType: bill.shipmentType,
         collectableAmount: Math.max(0, order.amount2Collect),
       };
 
-      const { incrementPrice, totalCharge, codCharge } = await calculateShippingCharges(bill.zone, body, vendor);
+      const orderBody = {
+        weight: order.orderWeight,
+        paymentType: order.payment_mode,
+        collectableAmount: Math.max(0, order.amount2Collect),
+      }
+
+      const { incrementPrice, totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor);
+
+      let orderShippingCalc: any;
+      let fwExcessCharge: any;
+      if (bill.chargedWeight > order.orderWeight) {
+        orderShippingCalc = await calculateShippingCharges(bill.zone, orderBody, vendor);
+        if (totalCharge > orderShippingCalc.totalCharge) {
+          fwExcessCharge = (totalCharge - orderShippingCalc.totalCharge).toFixed(2)
+        }
+      }
+
       const baseWeight = (vendor?.weightSlab || vendor?.vendorId?.weightSlab) || 0;
       const incrementWeight = bill.chargedWeight - Number(order.orderWeight) - baseWeight;
 
-      const rtoCharge = (totalCharge - (codCharge || 0))
+      const rtoCharge = (totalCharge - (codCharge || 0)).toFixed(2)
 
-      const billingAmount = bill.isRTOApplicable ? Math.max(0, ((totalCharge - order.shipmentCharges) + rtoCharge)).toFixed(2) : (Math.max(0, totalCharge - order.shipmentCharges)).toFixed(2);
+      const billingAmount = bill.isRTOApplicable ? Math.max(0, ((totalCharge - order.shipmentCharges) + Number(rtoCharge))).toFixed(2) : (Math.max(0, totalCharge - order.shipmentCharges)).toFixed(2);
 
       const existingMonthBill: any = await MonthlyBilledAWBModel.findOne({
         sellerId: order.sellerId,
@@ -968,10 +984,11 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
               carrierID: bill.carrierID,
               sellerId: order.sellerId,
               codValue: codCharge,
+              fwExcessCharge,
               rtoCharge,
               orderWeight: order.orderWeight,
               orderCharges: order.shipmentCharges, // applied_weight charge
-              billingAmount: billingAmount, // Ensure this is set correctly
+              billingAmount: billingAmount, // fw+RTO without COD Charge 
               incrementPrice: incrementPrice.incrementPrice, // cc
               basePrice: incrementPrice.basePrice, // cc
               incrementWeight: incrementWeight >= 0 ? incrementWeight.toString() : 0,
@@ -983,7 +1000,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
               recipientName: order.customerDetails.get("name"),
               fromCity: order.pickupAddress.city,
               toCity: order.customerDetails.get("city"),
-              paymentStatus: paymentStatusInfo.NOT_PAID
+              paymentStatus: paymentStatusInfo.NOT_PAID,
             }
           },
           upsert: true
@@ -997,18 +1014,45 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     await ClientBillingModal.bulkWrite(validBills);
 
     await Promise.all(validBills.map(async (bill: any) => {
-      const awbToDeduct = bill.updateOne.filter.awb;
       const sellerId = bill.updateOne.update.$set.sellerId
+      // const sellerId = "663379872fc3a04d7cc1e7a1" // for testing 
 
-      const amountToDeduct = Number(bill.updateOne.update.$set.billingAmount);
-      const returnCODCharge = Math.max((bill.updateOne.update.$set.codValue || 0), 0);
-      const isRTOApplied = bill.updateOne.update.$set.isRTOApplicable
+      const awb = bill.updateOne.filter.awb;
+      const returnCODCharge = Math.max((bill.updateOne.update.$set.codValue || 0), 0); // Reversed COD Charge
+      const fwExcessCharge = Math.max((bill.updateOne.update.$set.fwExcessCharge || 0), 0); // use as fw + RTO excess charge
+      const isRTOApplied = bill.updateOne.update.$set.isRTOApplicable // use to check RTO applied or not
+      const isForwardApplied = bill.updateOne.update.$set.isForwardApplicable // use to check RTO applied or not
+      const rtoCharge = bill.updateOne.update.$set.rtoCharge // use as fw/RTO
 
-      if (sellerId && isRTOApplied && amountToDeduct && amountToDeduct > 0) {
-        if (returnCODCharge > 0) {
-          await updateSellerWalletBalance("663379872fc3a04d7cc1e7a1", returnCODCharge, true, `AWB: ${awbToDeduct}, COD Charge Revised`);
+      if (sellerId) {
+        if (isForwardApplied) {
+          console.log("for Fw: ONLY")
+          if (fwExcessCharge > 0) {
+            console.log("Forward Excess Weight Charge ", fwExcessCharge)
+            await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, Forward Excess Weight Charge`);
+          }
         }
-        await updateSellerWalletBalance("663379872fc3a04d7cc1e7a1", amountToDeduct, false, `AWB: ${awbToDeduct}, RTO Charge Applied`);
+        if (isRTOApplied) {
+          console.log("\n\nfor RTO: ONLY")
+
+          const isRTOChargeAlreadyReversed = await PaymentTransactionModal.find({
+            desc: { $regex: `${awb} RTO` }
+          })
+
+          const isRTOCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO charges"))
+          const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges"))
+
+          if (!isRTOCharged && rtoCharge > 0) {
+            await updateSellerWalletBalance(sellerId, Number(rtoCharge), false, `AWB: ${awb}, RTO Charge Applied`);
+          }
+          if (!isRTOCODCharged && returnCODCharge > 0) {
+            await updateSellerWalletBalance(sellerId, Number(returnCODCharge), true, `AWB: ${awb}, COD Charge Reversed`);
+          }
+
+          if (fwExcessCharge > 0) {
+            await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, RTO Excess Weight Charge`);
+          }
+        }
       }
     }));
 
