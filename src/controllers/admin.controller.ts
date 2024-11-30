@@ -1037,7 +1037,6 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         // }
 
         if (isRTOApplied) {
-          console.log("for RTO: ONLY")
 
           const isRTOChargeAlreadyReversed = await PaymentTransactionModal.find({
             desc: { $regex: `${awb} RTO` }
@@ -1047,12 +1046,10 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
           const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges"))
 
           if (!isRTOCharged && rtoCharge > 0) {
-            console.log(rtoCharge, "rtoCharge")
-            // await updateSellerWalletBalance(sellerId, Number(rtoCharge), false, `AWB: ${awb}, RTO Charge Applied`);
+            await updateSellerWalletBalance(sellerId, Number(rtoCharge), false, `AWB: ${awb}, RTO Charge Applied`);
           }
           if (!isRTOCODCharged && returnCODCharge > 0) {
-            console.log(returnCODCharge, "returnCODCharge")
-            // await updateSellerWalletBalance(sellerId, Number(returnCODCharge), true, `AWB: ${awb}, COD Charge Reversed`);
+            await updateSellerWalletBalance(sellerId, Number(returnCODCharge), true, `AWB: ${awb}, COD Charge Reversed`);
           }
 
           // Excess weight charge
