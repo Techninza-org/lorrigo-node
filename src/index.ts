@@ -57,11 +57,11 @@ if (!config.MONGODB_URI) {
 //   tomorrow.setDate(tomorrow.getDate() + 1);
 
 //   const revisedTxn = await PaymentTransactionModal.find({
-//     createdAt: {
-//       $gte: threeDaysAgo,
-//       $lt: today,
-//     },
-//     desc: { $regex: "Revised" }
+//     // createdAt: {
+//     //   $gte: threeDaysAgo,
+//     //   $lt: today,
+//     // },
+//     desc: { $regex: "RTO Excess " }
 //   });
 
 //   console.log(revisedTxn.length, "revisedTxn")
@@ -79,12 +79,12 @@ if (!config.MONGODB_URI) {
 //   }
 // }
 
-// revertRevisedMoneyNTxnToday()
 
 
 mongoose
   .connect(config.MONGODB_URI)
   .then(() => {
+    // revertRevisedMoneyNTxnToday()
     console.log("db connected successfully");
   })
   .catch((err) => {

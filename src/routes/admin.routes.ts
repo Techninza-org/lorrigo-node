@@ -124,7 +124,7 @@ adminRouter.put("/billing/b2b/client-billing/upload-csv", AdminAuthMiddleware, u
 adminRouter.get("/billing/vendor", AdminAuthMiddleware, cache("3 minutes"), getVendorBillingData);
 
 //@ts-ignore
-adminRouter.get("/billing/client", AdminAuthMiddleware, cache("3 minutes"), getClientBillingData);
+adminRouter.get("/billing/client", AdminAuthMiddleware, getClientBillingData);
 
 //@ts-ignore
 adminRouter.post("/manage-remittance", AdminAuthMiddleware, manageSellerRemittance);

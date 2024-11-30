@@ -4,7 +4,7 @@ const disputeModel = new mongoose.Schema({
   sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },
   orderId: { type: mongoose.Schema.Types.ObjectId, ref: "ClientBilling" },
   awb: { type: String, required: true },
-  product: { type: String, required: true },
+  product: { type: String, required: false },
   description: { type: String, required: false },
   image: { type: String, required: false },
   accepted: { type: Boolean, default: false },
