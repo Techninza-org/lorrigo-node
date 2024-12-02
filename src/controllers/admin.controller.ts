@@ -1027,13 +1027,13 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
       if (sellerId) {
         // if (isForwardApplied) {
-          // console.log("for Fw: ONLY\n\n")
+        // console.log("for Fw: ONLY\n\n")
 
-          // // Excess weight charge
-          // if (fwExcessCharge > 0) {
-          //   console.log("Forward Excess Weight Charge ", fwExcessCharge)
-          //   // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, Forward Excess Weight Charge`);
-          // }
+        // // Excess weight charge
+        // if (fwExcessCharge > 0) {
+        //   console.log("Forward Excess Weight Charge ", fwExcessCharge)
+        //   // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, Forward Excess Weight Charge`);
+        // }
         // }
 
         if (isRTOApplied) {
@@ -1042,8 +1042,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
             desc: { $regex: `${awb} RTO` }
           })
 
-          const isRTOCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO charges"))
-          const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges"))
+          const isRTOCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO charges")) ? false : true
+          const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges")) ? false : true
 
           if (!isRTOCharged && rtoCharge > 0) {
             await updateSellerWalletBalance(sellerId, Number(rtoCharge), false, `AWB: ${awb}, RTO Charge Applied`);
