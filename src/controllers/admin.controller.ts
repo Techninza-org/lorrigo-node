@@ -1042,13 +1042,15 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
             desc: { $regex: `${awb} RTO` }
           })
 
-          const isRTOCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO charges")) ? false : true
-          const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges")) ? false : true
+          const isRTOCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO charges")) ? true : false 
+          const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges")) ? true : false 
 
           if (!isRTOCharged && rtoCharge > 0) {
+            // console.log(awb + "paise kt : RTO Charge \n\n ")
             await updateSellerWalletBalance(sellerId, Number(rtoCharge), false, `AWB: ${awb}, RTO Charge Applied`);
           }
           if (!isRTOCODCharged && returnCODCharge > 0) {
+            // console.log(awb + "paise Add : COD Charge \n\n ")
             await updateSellerWalletBalance(sellerId, Number(returnCODCharge), true, `AWB: ${awb}, COD Charge Reversed`);
           }
 
