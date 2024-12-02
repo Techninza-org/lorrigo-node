@@ -57,6 +57,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     const seller = req.seller;
     const sellerId = req.seller._id;
     const carrierId = body.carrierId;
+    const codCharge = body.codCharge
 
     if (seller.config.isPrepaid && (body.charge >= seller.walletBalance || seller.walletBalance <= 0)) {
       return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
@@ -74,6 +75,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     try {
       order = await B2COrderModel.findOne({ _id: body.orderId, sellerId: req.seller._id });
       if (!order) return res.status(200).send({ valid: false, message: "order not found" });
+      order.codCharge = codCharge;
     } catch (err) {
       return next(err);
     }

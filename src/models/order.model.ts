@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const B2COrderSchema = new mongoose.Schema({
   awb: { type: String },
   shipmentCharges: { type: Number, required: false },
+  codCharge: { type: Number, required: false },
   rtoCharges: { type: Number, required: true, default: 0 },
   isReverseOrder: { type: Boolean, required: true, default: false },
   channelOrderId: { type: String, required: false },
