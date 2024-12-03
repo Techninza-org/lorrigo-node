@@ -1749,11 +1749,11 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
     const sellerConfig = req.seller;
     const config = sellerConfig.config
     const isPostpaid = !config.isPrepaid
-    
+
     const sellerId = req.seller._id;
     const carrierId = body.carrierId;
 
-    if(!isPostpaid){
+    if (!isPostpaid) {
       if (body.charge >= sellerConfig.walletBalance || sellerConfig.walletBalance <= 0) {
         return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
       }
@@ -1852,8 +1852,6 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         },
       ];
 
-      console.log(data, "SMARTR Payload")
-
       let config = {
         method: "post",
         maxBodyLength: Infinity,
@@ -1888,7 +1886,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
             stageDateTime: new Date(),
           });
           await order.save();
-          if(!isPostpaid){
+          if (!isPostpaid) {
             await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           }
           return res.status(200).send({ valid: true, order });
@@ -1920,8 +1918,6 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         // supporting_docs: [`https://xz0zv40s-4000.inc1.devtunnels.ms/api${order?.invoiceImage}`]
       };
 
-      console.log(data, 'data')
-
       let config = {
         method: "post",
         maxBodyLength: Infinity,
@@ -1936,7 +1932,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
       try {
         const axiosRes = await axios.request(config);
         const shiprocketResponse = axiosRes.data;
-        let orderAWB = shiprocketResponse?.waybill_no;
+        let orderAWB = shiprocketResponse?.waybill_no || "";
 
         order.orderShipmentId = shiprocketResponse?.id
         order.awb = orderAWB;
@@ -1952,8 +1948,7 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
         });
         await order.save();
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-        return res.status(200).send({ valid: true, order });
-
+        return res.status(200).send({ valid: true, order, message: "Order Created Successfully, AWB will Reflect Soon!" });
       } catch (error: any) {
         console.error("Error creating SHIPROCKET shipment:", error.response?.data);
         if (error.response?.data?.non_field_errors?.[0]?.includes("JPEG, JPG, PNG, PDF, GIF, BIN File formats")) {

@@ -787,7 +787,7 @@ const processShiprocketOrders = async (orders) => {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
-            action: bucketInfo.bucket== RTO ? `RTO ${bucketInfo.description}` :  bucketInfo.description,
+            action: bucketInfo.bucket == RTO ? `RTO ${bucketInfo.description}` : bucketInfo.description,
             activity: response.data.tracking_data?.shipment_track_activities?.[0]?.activity,
             location: response.data.tracking_data?.shipment_track_activities?.[0]?.location,
             stageDateTime: formatISO(parse(response?.data?.tracking_data?.shipment_track_activities?.[0]?.date, 'yyyy-MM-dd HH:mm:ss', new Date())) ?? new Date(),
@@ -818,13 +818,14 @@ export const scheduleShipmentCheck = async () => {
   try {
     const shiprocketB2BVNickName = await EnvModel.findOne({ name: "SHIPROCKET_B2B" }).select("nickName");
     const withoutAwbOrders = await B2BOrderModel.find({
-      awb: null,
+      awb: { $in: [null, ""] },
       carrierName: { $regex: shiprocketB2BVNickName?.nickName }
     });
 
     for (const order of withoutAwbOrders) {
       const shiprocketB2BConfig = await getShiprocketB2BConfig();
       const apiUrl = `${config.SHIPROCKET_B2B_API_BASEURL}${APIs.B2B_GET_SHIPMENT}${order.orderShipmentId}`;
+      if (!order.orderShipmentId || order.orderShipmentId === undefined) continue;
 
       const response = await axios.get(apiUrl, {
         headers: {
