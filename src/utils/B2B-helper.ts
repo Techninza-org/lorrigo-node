@@ -303,7 +303,7 @@ export async function calculateRateAndPrice(calcData: any, zoneFrom: string, zon
 
         const totalCostBeforeGST = baseFreightCharge + fuelSurcharge + calcData.docketCharge + ODACharge + greenTax + baseFreightOne + (otherExpensesTotal ?? 0);
         const gst = (18 / 100) * totalCostBeforeGST;
-        const finalAmount = totalCostBeforeGST + gst;
+        const finalAmount = Number(totalCostBeforeGST) + Number(gst);
 
         return {
             baseFreightCharge,
