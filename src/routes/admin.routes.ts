@@ -32,7 +32,8 @@ import {
     getDisputes,
     acceptDispute,
     rejectDispute,
-    getDisputeById
+    getDisputeById,
+    uploadDisputeCSV
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -119,6 +120,9 @@ adminRouter.put("/billing/client-billing/upload-csv", AdminAuthMiddleware, uploa
 
 //@ts-ignore
 adminRouter.put("/billing/b2b/client-billing/upload-csv", AdminAuthMiddleware, upload.single('file'), uploadB2BClientBillingCSV);
+
+//@ts-ignore
+adminRouter.put("/dispute/upload-csv", AdminAuthMiddleware, upload.single('file'), uploadDisputeCSV);
 
 //@ts-ignore
 adminRouter.get("/billing/vendor", AdminAuthMiddleware, cache("3 minutes"), getVendorBillingData);

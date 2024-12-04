@@ -5,7 +5,7 @@ import { DELIVERED, IN_TRANSIT, NDR, NEW, READY_TO_SHIP, RTO } from "../utils/lo
 import { Types, isValidObjectId } from "mongoose";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
-import { calculateShippingCharges, convertToISO, csvJSON, updateSellerWalletBalance, validateB2BClientBillingFeilds, validateClientBillingFeilds } from "../utils";
+import { calculateShippingCharges, convertToISO, csvJSON, updateSellerWalletBalance, validateB2BClientBillingFeilds, validateClientBillingFeilds, validateDisputeFeilds } from "../utils";
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
 import CustomPricingModel, { CustomB2BPricingModel } from "../models/custom_pricing.model";
@@ -807,6 +807,160 @@ export const updateB2BVendor4Seller = async (req: ExtendedRequest, res: Response
   }
 };
 
+export const uploadDisputeCSV = async (req: ExtendedRequest, res: Response) => {
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).send({ valid: false, message: "No file uploaded" });
+  }
+
+  const alreadyExistingBills = await ClientBillingModal.find({}).select(["orderRefId", "awb", "rtoAwb"]);
+  const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
+
+  const csvdisputes = json.map((order: any) => {
+    return {
+      awb: (order["AWB"])?.toString(),
+      clientWeight: Number(order["Client Weight"] || 0),
+      chargedWeight: Number(order["Charged Weight"]),
+      isAccept: Boolean(order["Accept/Reject"].toLowerCase() === "accept")
+    };
+  });
+
+  const disputes = csvdisputes.filter((order: any) => !!order.awb);
+
+  if (disputes.length < 1) {
+    return res.status(200).send({ valid: false, message: "empty payload" });
+  }
+
+  try {
+    const errorWorkbook = new exceljs.Workbook();
+    const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
+
+    errorWorksheet.columns = [
+      { header: 'Awb', key: 'awb', width: 20 },
+      { header: 'Error Message', key: 'errors', width: 40 },
+    ];
+
+    const errorRows: any = [];
+
+    // Validate each order and collect errors for invalid fields
+    disputes.forEach((order) => {
+      const errors: string[] = [];
+      Object.entries(order).forEach(([fieldName, value]) => {
+        const error = validateDisputeFeilds(value, fieldName, order, alreadyExistingBills);
+        if (error) {
+          errors.push(error);
+        }
+      });
+
+      if (errors.length > 0) {
+        errorRows.push({ awb: order.awb, errors: errors.join(", ") });
+      }
+    });
+
+    const orderAwbs = disputes.map(order => order.awb);
+    const orders = await B2COrderModel.find({
+      $or: [{ awb: { $in: orderAwbs } }],
+    }).populate(["productId", "pickupAddress"]);
+
+    const updatedDispute = await Promise.all(disputes.map(async (dispute) => {
+      if (!dispute.isAccept) return {}
+
+      const order: any = orders.find(o => o.awb === dispute.awb);
+      if (!order) {
+        throw new Error(`Order not found for AWB: ${dispute.awb}`);
+      }
+
+      const bill = await ClientBillingModal.findOne({ awb: dispute.awb });
+
+      if (!bill) {
+        throw new Error("Billing Not Found!")
+      }
+
+      let vendor: any = await CustomPricingModel.findOne({
+        sellerId: order.sellerId,
+        vendorId: bill.carrierID
+      }).populate({
+        path: 'vendorId',
+        populate: {
+          path: 'vendor_channel_id'
+        }
+      });
+
+      if (!vendor) {
+        vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
+      }
+
+      const csvBody = {
+        weight: dispute.chargedWeight,
+        paymentType: bill.shipmentType,
+        collectableAmount: Math.max(0, order.amount2Collect),
+      };
+
+      const { totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor); // csv calc 
+
+      let fwExcessCharge: any = bill.fwExcessCharge;
+      if (Number(fwCharge) > Number(bill.rtoCharge)) {
+        fwExcessCharge = (fwCharge - Number(bill.rtoCharge)).toFixed(2)
+      }
+
+      const rtoCharge = (totalCharge - (codCharge || 0)).toFixed(2)
+
+      const billingAmount = bill.isRTOApplicable ? Math.max(0, ((totalCharge - order.shipmentCharges) + Number(rtoCharge))).toFixed(2) : (Math.max(0, totalCharge - order.shipmentCharges)).toFixed(2);
+
+      await Promise.all([
+        bill.updateOne({
+          codValue: codCharge,
+          fwExcessCharge,
+          rtoCharge,
+          orderWeight: order.orderWeight,
+          billingAmount: billingAmount, // fw+RTO without COD Charge
+          chargedWeight: dispute.chargedWeight,
+        }),
+
+        MonthlyBilledAWBModel.findOneAndUpdate(
+          { sellerId: order.sellerId, awb: order.awb },
+          {
+            billingAmount: billingAmount,
+            chargedWeight: dispute.chargedWeight,
+          },
+          {
+            new: true,
+            setDefaultsOnInsert: true,
+            upsert: true,
+          }
+        ),
+      ]);
+
+      return {
+        updateOne: {
+          filter: { awb: bill.awb },
+          update: {
+            $set: {
+              accepted: true
+            }
+          },
+          upsert: true
+        }
+      };
+    }));
+
+    const validDispute = updatedDispute.filter(x => !!x)
+    // @ts-ignore
+    await SellerDisputeModel.bulkWrite(validDispute);
+
+    if (errorRows.length > 0) {
+      errorWorksheet.addRows(errorRows);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+      await errorWorkbook.csv.write(res);
+      return res.end();
+    }
+
+    return res.status(200).send({ valid: true, message: "Dispute data uploaded successfully" });
+  } catch (error) {
+    console.error("Error in uploadDisputeCSV:", error);
+    return res.status(500).send({ valid: false, message: "An error occurred while processing the request" });
+  }
+}
 
 export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   if (!req.file || !req.file.buffer) {
@@ -1042,8 +1196,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
             desc: { $regex: `${awb} RTO` }
           })
 
-          const isRTOCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO charges")) ? true : false 
-          const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges")) ? true : false 
+          const isRTOCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO charges")) ? true : false
+          const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges")) ? true : false
 
           if (!isRTOCharged && rtoCharge > 0) {
             // console.log(awb + "paise kt : RTO Charge \n\n ")
@@ -1420,13 +1574,82 @@ export const getDisputeById = async (req: ExtendedRequest, res: Response, next: 
 
 export const acceptDispute = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const { disputeId } = req.body;
+    const { disputeId, chargedWeight } = req.body;
+    console.log(disputeId, chargedWeight, "disputeId, chargedWeight")
     const dispute = await SellerDisputeModel.findById(disputeId);
     if (!dispute) {
       return res.status(404).send({ valid: false, message: "No Dispute found" });
     }
+
+    const order: any = await B2COrderModel.find({ awb: dispute.awb })
+    if (!order) {
+      throw new Error(`Order not found for AWB: ${dispute.awb}`);
+    }
+
+    const bill = await ClientBillingModal.findOne({ awb: dispute.awb });
+
+    if (!bill) {
+      throw new Error("Billing Not Found!")
+    }
+
+    let vendor: any = await CustomPricingModel.findOne({
+      sellerId: order.sellerId,
+      vendorId: bill.carrierID
+    }).populate({
+      path: 'vendorId',
+      populate: {
+        path: 'vendor_channel_id'
+      }
+    });
+
+    if (!vendor) {
+      vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
+    }
+
+    const csvBody = {
+      weight: chargedWeight,
+      paymentType: bill.shipmentType,
+      collectableAmount: Math.max(0, order.amount2Collect),
+    };
+
+    const { totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor); // csv calc 
+
+    let fwExcessCharge: any = bill.fwExcessCharge;
+    if (Number(fwCharge) > Number(bill.rtoCharge)) {
+      fwExcessCharge = (fwCharge - Number(bill.rtoCharge)).toFixed(2)
+    }
+
+    const rtoCharge = (totalCharge - (codCharge || 0)).toFixed(2)
+
+    const billingAmount = bill.isRTOApplicable ? Math.max(0, ((totalCharge - order.shipmentCharges) + Number(rtoCharge))).toFixed(2) : (Math.max(0, totalCharge - order.shipmentCharges)).toFixed(2);
+
+    await Promise.all([
+      bill.updateOne({
+        codValue: codCharge,
+        fwExcessCharge,
+        rtoCharge,
+        orderWeight: order.orderWeight,
+        billingAmount: billingAmount, // fw+RTO without COD Charge
+        chargedWeight: dispute.chargedWeight,
+      }),
+
+      MonthlyBilledAWBModel.findOneAndUpdate(
+        { sellerId: order.sellerId, awb: order.awb },
+        {
+          billingAmount: billingAmount,
+          chargedWeight: dispute.chargedWeight,
+        },
+        {
+          new: true,
+          setDefaultsOnInsert: true,
+          upsert: true,
+        }
+      ),
+    ]);
+
     dispute.accepted = true;
     await dispute.save();
+
     return res.status(200).send({ valid: true, message: "Dispute accepted successfully" });
   }
   catch (error) {

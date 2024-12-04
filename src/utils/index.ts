@@ -476,6 +476,29 @@ export const validateClientBillingFeilds = (value: any, fieldName: string, bill:
   return null;
 };
 
+export const validateDisputeFeilds = (value: any, fieldName: string, bill: any, alreadyExistingBills: any): string | null => {
+  switch (fieldName) {
+    case 'awb':
+      if (!value) {
+        return "AWB is required";
+      }
+      break;
+    case 'clientWeight':
+      if (!value || isNaN(value)) {
+        return "Client Weight  is required and must be a number";
+      }
+      break;
+    case 'chargedWeight':
+      if (!value || isNaN(value)) {
+        return "Charged weight is required and must be a number";
+      }
+      break;
+    default:
+      break;
+  }
+  return null;
+};
+
 export const validateB2BClientBillingFeilds = (value: any, fieldName: string, bill: any, alreadyExistingBills: any): string | null => {
   switch (fieldName) {
     case 'orderRefId':
