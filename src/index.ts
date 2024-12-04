@@ -61,10 +61,8 @@ if (!config.MONGODB_URI) {
 //     //   $gte: threeDaysAgo,
 //     //   $lt: today,
 //     // },
-//     desc: { $regex: "RTO Excess " }
+//     desc: { $regex: " RTO Charge Applied" }
 //   });
-
-//   console.log(revisedTxn.length, "revisedTxn")
 
 //   for (const txn of revisedTxn) {
 //     const seller = await SellerModel.findById(txn.sellerId);
@@ -74,7 +72,6 @@ if (!config.MONGODB_URI) {
 //       await seller.save();
 
 //       const deletedTxn = await PaymentTransactionModal.findByIdAndDelete(txn._id);
-//       console.log(deletedTxn);
 //     }
 //   }
 // }
@@ -84,7 +81,6 @@ if (!config.MONGODB_URI) {
 mongoose
   .connect(config.MONGODB_URI)
   .then(() => {
-    // revertRevisedMoneyNTxnToday()
     console.log("db connected successfully");
   })
   .catch((err) => {

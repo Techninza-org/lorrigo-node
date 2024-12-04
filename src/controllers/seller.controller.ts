@@ -18,6 +18,7 @@ import { isValidObjectId } from "mongoose";
 import B2BClientBillingModal from "../models/b2b-client.billing.modal";
 import { MonthlyBilledAWBModel } from "../models/billed-awbs-month";
 import SellerDisputeModel from "../models/dispute.model";
+import { format } from "date-fns";
 
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -735,22 +736,28 @@ export const getCodPrice = async (req: ExtendedRequest, res: Response, next: Nex
 export const raiseDispute = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { awb, image, description, orderBoxHeight, orderBoxWidth, orderBoxLength, orderWeight, orderSizeUnit, orderWeightUnit } = req.body;
-    const order = await ClientBillingModal.findOne({ awb });
-    if (!order) return res.status(200).send({ valid: false, message: "No Order found" });
-    if (order.isDisputeRaised) return res.status(200).send({ valid: false, message: "Dispute already raised" });
+    const billing = await ClientBillingModal.findOne({ awb });
+    if (!billing) return res.status(200).send({ valid: false, message: "No Billing found" });
+
+    if (billing.isDisputeRaised) return res.status(200).send({ valid: false, message: "Dispute already raised" });
+
     const newDispute = await SellerDisputeModel.create({
       sellerId: req.seller._id,
       awb,
       image,
       description,
-      orderId: order._id,
+      clientBillingId: billing._id,
       orderBoxHeight,
       orderBoxWidth,
       orderBoxLength,
-      orderWeight
+      orderWeight, // client inp: from dispute
+      chargedWeight: billing.chargedWeight,
+      billingMonth: format(new Date(billing.billingDate), 'MMM-yyyy'),
     });
-    order.isDisputeRaised = true;
-    await order.save();
+
+    billing.isDisputeRaised = true;
+    await billing.save();
+
     return res.status(200).send({ valid: true, dispute: newDispute });
   } catch (error) {
     return next(error)
