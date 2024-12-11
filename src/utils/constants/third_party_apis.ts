@@ -25,6 +25,7 @@ const GENRATE_AWB_SHIPROCKET = "/v1/external/courier/assign/awb";
 const LIST_SHIPROCKET_COURIER = "/v1/external/courier/courierListWithCounts";
 const SHIPROCKET_ORDER_COURIER = "/v1/external/courier/serviceability";
 const CANCEL_SHIPMENT_SHIPROCKET = "/v1/external/orders/cancel/shipment/awbs";
+const CANCEL_ORDER_SHIPROCKET = "/v1/external/orders/cancel";
 const GET_MANIFEST_SHIPROCKET = "/v1/external/courier/generate/pickup"
 const SHIPROCKET_ORDER_TRACKING = "/v1/external/courier/track/awb";
 const SHIPROCKET_ORDER_NDR = "/v1/external/ndr";
@@ -95,6 +96,7 @@ const APIs = {
   SHIPROCKET_ORDER_TRACKING,
   SHIPROCKET_ORDER_NDR,
   CREATE_SHIPROCKET_RETURN_ORDER,
+  CANCEL_ORDER_SHIPROCKET,
 
   SHOPIFY_ORDER,
   SHOPIFY_CUSTOMER,

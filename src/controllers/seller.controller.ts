@@ -19,6 +19,7 @@ import B2BClientBillingModal from "../models/b2b-client.billing.modal";
 import { MonthlyBilledAWBModel } from "../models/billed-awbs-month";
 import SellerDisputeModel from "../models/dispute.model";
 import { format } from "date-fns";
+import { generateUniqueNumber } from "../utils";
 
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -388,13 +389,14 @@ export const getSellerBilling = async (req: ExtendedRequest, res: Response, next
 }
 
 export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  const seller = req.seller
   const sellerId = req.seller._id;
   const { amount, origin } = req.body;
   // Phonepe Integration
   // working on it
   try {
-    const uuid = randomUUID();
-    const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
+    const uniqueNumber = await generateUniqueNumber('phonepe');
+    const merchantTransactionId = `LS${uniqueNumber}`;
 
     const payload = {
       "merchantId": envConfig.PHONEPE_MERCHENT_ID,
@@ -434,6 +436,7 @@ export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, 
       sellerId: sellerId,
       merchantTransactionId: merchantTransactionId,
       amount: amount,
+      lastWalletBalance: seller.walletBalance,
       desc: "Wallet Recharge",
       code: rechargeWalletViaPhoenpeData.code,
       data: rechargeWalletViaPhoenpeData,
@@ -480,7 +483,12 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
     const rechargeWalletViaPhoenpe = await axios.request(options);
     const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
 
-    const isPaymentSuccess = rechargeWalletViaPhoenpeData.code.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE);
+    let isPaymentSuccess = rechargeWalletViaPhoenpeData.code.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE);
+    const phoneRechargeAmt = (rechargeWalletViaPhoenpeData.data.amount / 100)
+
+    if (phoneRechargeAmt !== Number(txn.amount)) {
+      isPaymentSuccess = false
+    }
 
     const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId, sellerId }, {
       $set: {

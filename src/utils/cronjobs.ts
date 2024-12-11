@@ -405,8 +405,8 @@ export const trackOrder_Smartr = async () => {
             });
             if (bucketInfo.bucket === RTO && ordersReferenceIdOrders.bucket !== RTO) {
               const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-              await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
-              if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
+              await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb}, RTO charges`)
+              if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb}, RTO COD charges`)
             }
             try {
               await ordersReferenceIdOrders.save();
@@ -577,7 +577,7 @@ export const track_delivery = async () => {
 
           if (bucketInfo.bucket === RTO && order?.rtoCharges === 0) {
             const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb)
-            await updateSellerWalletBalance(order.sellerId, rtoCharges?.rtoCharges, false, `${order.awb} RTO charges`);
+            await updateSellerWalletBalance(order.sellerId, rtoCharges?.rtoCharges, false, `${order.awb}, RTO charges`);
             order.rtoCharges = rtoCharges?.rtoCharges;
             await order.save();
           }
@@ -639,8 +639,8 @@ export const track_B2B_SHIPROCKET = async () => {
               .includes(orderWithOrderReferenceId?.bucket
               )) {
             const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`)
-            if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb} RTO COD charges`)
+            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb}, RTO charges`)
+            if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb}, RTO COD charges`)
           }
         }
       } catch (orderError) {
@@ -801,7 +801,7 @@ const processShiprocketOrders = async (orders) => {
 
         if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.rtoCharges === 0) {
           const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb);
-          await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges?.rtoCharges, false, `${orderWithOrderReferenceId.awb} RTO charges`);
+          await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges?.rtoCharges, false, `${orderWithOrderReferenceId.awb}, RTO charges`);
           orderWithOrderReferenceId.rtoCharges = rtoCharges?.rtoCharges;
           await orderWithOrderReferenceId.save();
         }

@@ -1207,6 +1207,19 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           );
           await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           if (type === "order") {
+            // API CALL: 
+            const cancelOrderPayload = { 
+              ids: [order.shiprocket_order_id]
+            }
+            const cancelOrderResponse = await axios.post(
+              config.SHIPROCKET_API_BASEURL + APIs.CANCEL_ORDER_SHIPROCKET,
+              cancelOrderPayload,
+              {
+                headers: {
+                  Authorization: shiprocketToken,
+                },
+              }
+            );
             await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
           } else {
             order.awb = null;

@@ -14,6 +14,7 @@ import envConfig from "./config";
 import APIs from "./constants/third_party_apis";
 import ShipmentResponseModel from "../models/shipment-response.model";
 import { randomUUID } from "crypto";
+import Counter from "../models/counter.model";
 
 
 
@@ -736,12 +737,12 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
     },
   };
 
-  const uuid = randomUUID();
-
-  const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
+  const uniqueNumber = await generateUniqueNumber('phonepe');
+  const merchantTransactionId = `LS${uniqueNumber}`;
 
   try {
     const seller = await SellerModel.findById(sellerId);
+    const lastBalance = seller?.walletBalance
 
     if (!seller) {
       throw new Error('Seller not found');
@@ -766,6 +767,7 @@ export async function updateSellerWalletBalance(sellerId: string, amount: number
         sellerId: sellerId.toString(),
         amount,
         merchantTransactionId,
+        lastWalletBalance: lastBalance,
         code: isCredit ? 'CREDIT' : 'DEBIT',
         desc,
         stage: [{
@@ -1656,3 +1658,22 @@ export async function createDelhiveryShipment(
     return await delhiveryProcess(vendorName.name, courier);
   }
 }
+
+export const generateUniqueNumber = async (key: string): Promise<number> => {
+  try {
+    const result = await Counter.findOneAndUpdate(
+      { key }, // Filter by key
+      { $inc: { value: 1 } }, // Increment the counter value by 1
+      { new: true, upsert: true } // Return the updated document; create if not exists
+    );
+
+    if (!result) {
+      throw new Error('Failed to generate unique number.');
+    }
+
+    return result.value; // Return the updated counter value
+  } catch (error) {
+    console.error('Error generating unique number:', error);
+    throw error;
+  }
+};
