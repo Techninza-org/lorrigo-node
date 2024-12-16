@@ -1190,7 +1190,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         // }
         // }
 
-        if (isRTOApplied) {
+        if (isRTOApplied && fwExcessCharge <= 0) {
 
           const isRTOChargeAlreadyReversed = await PaymentTransactionModal.find({
             desc: { $regex: `${awb} RTO` }
@@ -1208,10 +1208,10 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
             await updateSellerWalletBalance(sellerId, Number(returnCODCharge), true, `AWB: ${awb}, COD Charge Reversed`);
           }
 
-          // Excess weight charge
+          // Excess weight charge, it happens only after disptue accept or reject
           // if (fwExcessCharge > 0) {
-          //   console.log(fwExcessCharge, "fwExcessCharge")
-          //   // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, RTO Excess Weight Charge`);
+          // console.log(fwExcessCharge, "fwExcessCharge")
+          // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, RTO Excess Weight Charge`);
           // }
         }
 
@@ -1575,7 +1575,6 @@ export const getDisputeById = async (req: ExtendedRequest, res: Response, next: 
 export const acceptDispute = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { disputeId, chargedWeight } = req.body;
-    console.log(disputeId, chargedWeight, "disputeId, chargedWeight")
     const dispute = await SellerDisputeModel.findById(disputeId);
     if (!dispute) {
       return res.status(404).send({ valid: false, message: "No Dispute found" });
@@ -1623,6 +1622,14 @@ export const acceptDispute = async (req: ExtendedRequest, res: Response, next: N
 
     const billingAmount = bill.isRTOApplicable ? Math.max(0, ((totalCharge - order.shipmentCharges) + Number(rtoCharge))).toFixed(2) : (Math.max(0, totalCharge - order.shipmentCharges)).toFixed(2);
 
+    // console.log({
+    //   codValue: codCharge,
+    //   fwExcessCharge,
+    //   rtoCharge,
+    //   orderWeight: order.orderWeight,
+    //   billingAmount: billingAmount, // fw+RTO without COD Charge
+    //   chargedWeight: chargedWeight,
+    // })
     await Promise.all([
       bill.updateOne({
         codValue: codCharge,
@@ -1630,7 +1637,7 @@ export const acceptDispute = async (req: ExtendedRequest, res: Response, next: N
         rtoCharge,
         orderWeight: order.orderWeight,
         billingAmount: billingAmount, // fw+RTO without COD Charge
-        chargedWeight: dispute.chargedWeight,
+        chargedWeight: chargedWeight,
       }),
 
       MonthlyBilledAWBModel.findOneAndUpdate(
@@ -1664,8 +1671,10 @@ export const rejectDispute = async (req: ExtendedRequest, res: Response, next: N
     if (!dispute) {
       return res.status(404).send({ valid: false, message: "No Dispute found" });
     }
-    const deletedDispute = await SellerDisputeModel.findByIdAndDelete(disputeId);
-    return res.status(200).send({ valid: true, message: "Dispute rejected successfully", deletedDispute });
+    dispute.stage = 4
+    dispute.save();
+
+    return res.status(200).send({ valid: true, message: "Dispute rejected successfully", dispute });
   }
   catch (error) {
     return next(error)

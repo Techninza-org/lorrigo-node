@@ -764,6 +764,7 @@ export const raiseDispute = async (req: ExtendedRequest, res: Response, next: Ne
     });
 
     billing.isDisputeRaised = true;
+    billing.disputeId = newDispute.id;
     await billing.save();
 
     return res.status(200).send({ valid: true, dispute: newDispute });
@@ -774,7 +775,7 @@ export const raiseDispute = async (req: ExtendedRequest, res: Response, next: Ne
 
 export const getDisputes = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const disputes = await SellerDisputeModel.find({ sellerId: req.seller._id, accepted: false }).populate("sellerId", "name").populate("orderId")
+    const disputes = await SellerDisputeModel.find({ sellerId: req.seller._id, accepted: false }).populate("sellerId", "name").populate("clientBillingId")
     return res.status(200).send({ valid: true, disputes });
   } catch (error) {
     return next(error)

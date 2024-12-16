@@ -23,7 +23,8 @@ import PaymentTransactionModal from "../models/payment.transaction.modal";
 import InvoiceModel from "../models/invoice.model";
 import ClientBillingModal from "../models/client.billing.modal";
 import { updateSellerWalletBalance } from ".";
-import { formatISO, parse } from "date-fns";
+import { format, formatISO, parse } from "date-fns";
+import NotInInvoiceAwbModel from "../models/not-billed-awbs-due-to-dispute.model";
 const { PDFDocument, rgb } = require('pdf-lib');
 const fs = require('fs');
 
@@ -1616,9 +1617,9 @@ export const generateAccessToken = async () => {
 export const calculateSellerInvoiceAmount = async () => {
   try {
     const sellers = await SellerModel.find({ zoho_contact_id: { $exists: true } });
-    // const sellers = await SellerModel.find({ _id: "66791386cfe0c278957805af" });
 
     const batchSize = 3;
+    // const delay = 1;
     const delay = 5000;
 
     const processBatch = async (batch: any[]) => {
@@ -1637,45 +1638,70 @@ export const calculateSellerInvoiceAmount = async () => {
           lastInvoiceDate = lastInvoiceGenerationDate[0].createdAt;
         }
 
+        const billedOrders = await ClientBillingModal.find({ sellerId }).select("awb isDisputeRaised disputeId isRTOApplicable").populate("disputeId");
+
         const allOrders = await B2COrderModel.find({
           sellerId,
-          bucket: 4,
-          "orderStages.stageDateTime": { $gt: lastInvoiceDate, $lt: today },
-          "orderStages.stage": 4
+          awb: { $in: billedOrders.map(item => item.awb) }
+          // "orderStages.stageDateTime": { $gt: lastInvoiceDate, $lt: today },
         }).select(["productId", "awb"]).populate("productId");
 
-        const billedOrders = await ClientBillingModal.find({ sellerId, awb: { $in: allOrders.map(item => item.awb) } }).select("awb");
-        const billedAwb = billedOrders.map((order: any) => order.awb);
+        // @ts-ignore
+        const billedAwb = billedOrders.filter(item => !item.isDisputeRaised || (!item.isDisputeRaised && item.disputeId?.accepted)).map((order: any) => order.awb);
 
-        const orders = allOrders.filter((order: any) => {
-          return billedAwb.includes(order?.awb);
+        // @ts-ignore
+        const awbNotBilledDueToDispute = billedOrders.filter((item) => item.isDisputeRaised === true && !item.disputeId?.accepted).map(x => x.awb);
+
+        const lastMonthRecord = await NotInInvoiceAwbModel.findOne({ sellerId });
+
+        await NotInInvoiceAwbModel.create({
+          monthOf: format(startOfMonth, "MMM"),
+          notBilledAwb: awbNotBilledDueToDispute,
+          sellerId,
         });
 
-        const awbToBeInvoiced = orders.map((order: any) => order.awb);
-        const allWalletRecharge = await PaymentTransactionModal.find({ sellerId, desc: { $regex: "Wallet Recharge" }, createdAt: { $gt: lastInvoiceDate, $lt: today }, });
 
-        let totalWalletRecharge = allWalletRecharge.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+        const lastMonthDisputeAwbs = lastMonthRecord?.notBilledAwb || [];
 
-        if (totalWalletRecharge < 0) {
-          totalWalletRecharge = 0;
-        }
+        const orders = allOrders.filter((order: any) =>
+          billedAwb.includes(order?.awb)
+        );
+
+        // Combine current and last month's AWBs
+        const awbToBeInvoiced = [
+          ...orders.map((order: any) => order.awb),
+          ...lastMonthDisputeAwbs,
+        ];
+
+
+        // const allWalletRecharge = await PaymentTransactionModal.find({ sellerId, desc: { $regex: "Wallet Recharge" }, createdAt: { $gt: lastInvoiceDate, $lt: today }, });
+        // let totalWalletRecharge = Math.max(allWalletRecharge.reduce((acc, curr) => acc + parseFloat(curr.amount), 0), 0);
 
         let totalAmount = 0;
         for (let i = 0; i < awbToBeInvoiced.length; i++) {
           const awbTxn = await PaymentTransactionModal.find({ desc: { $regex: awbToBeInvoiced[i] } });
+          const clientBillAwbInfo = billedOrders.find(x => x.awb == awbToBeInvoiced[i])
 
           for (let txn of awbTxn) {
-            totalAmount += parseFloat(txn.amount);
+            if (!txn.desc.includes("COD Charge Reversed") && !txn.desc.includes("COD charges") && !txn.desc.includes("RTO Charge Applied")) {
+              totalAmount += parseFloat(txn.amount);
+            }
+
+            if (clientBillAwbInfo?.isRTOApplicable) {
+              if (txn.desc.includes("COD Charge Reversed") || txn.desc.includes("COD charges")) {
+                totalAmount -= Number((parseFloat(txn.amount) * 2).toFixed(2))
+              }
+            }
           }
         }
 
-        const NextMonthCreditZoho = (totalAmount - (totalWalletRecharge || 0) - (seller.zoho_advance_amount || 0));
+        // const NextMonthCreditZoho = Math.abs(totalAmount - Math.abs(totalWalletRecharge) - Math.abs(seller.zoho_advance_amount));
+        // seller.zoho_advance_amount = NextMonthCreditZoho;
+        // console.log(NextMonthCreditZoho, "NextMonthCreditZoho")
+        // await seller.save();
 
-        seller.zoho_advance_amount = NextMonthCreditZoho;
-        await seller.save();
 
-        const invoiceAmount = Math.round(Number(totalAmount / 1.18));
-
+        const invoiceAmount = Number(Number(totalAmount / 1.18).toFixed(2));
         const isPrepaid = seller.config?.isPrepaid;
 
         if (invoiceAmount > 0) {
@@ -1683,7 +1709,9 @@ export const calculateSellerInvoiceAmount = async () => {
           //   const spentAmount = Number((invoiceAmount * 1.18));
           //   await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
           // }
-          await createAdvanceAndInvoice(zoho_contact_id, invoiceAmount, awbToBeInvoiced, isPrepaid);
+
+          // Replace with seller contect id-----------
+          await createAdvanceAndInvoice(zoho_contact_id, totalAmount, awbToBeInvoiced, isPrepaid);
         }
       }
     };
@@ -1697,6 +1725,8 @@ export const calculateSellerInvoiceAmount = async () => {
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
+
+    console.log("All Invoice Generated Successfully");
 
   } catch (err) {
     console.log(err);

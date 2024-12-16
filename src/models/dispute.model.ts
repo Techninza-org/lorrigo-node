@@ -8,6 +8,7 @@ const disputeModel = new mongoose.Schema({
   description: { type: String, required: false },
   image: { type: String, required: false },
   accepted: { type: Boolean, default: false },
+  stage: {type: Number, default: 0}, // 0: Not Raised, 1: Raised, 2: Accepted, 3: Rejected
   orderBoxHeight: { type: Number, required: false },
   orderBoxWidth: { type: Number, required: false },
   orderBoxLength: { type: Number, required: false },

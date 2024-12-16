@@ -578,6 +578,7 @@ export const track_delivery = async () => {
           if (bucketInfo.bucket === RTO && order?.rtoCharges === 0) {
             const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb)
             await updateSellerWalletBalance(order.sellerId, rtoCharges?.rtoCharges, false, `${order.awb}, RTO charges`);
+            if (rtoCharges.cod) await updateSellerWalletBalance(order.sellerId, rtoCharges.cod, true, `${order.awb}, RTO COD charges`)
             order.rtoCharges = rtoCharges?.rtoCharges;
             await order.save();
           }
@@ -690,15 +691,15 @@ export default async function runCron() {
   const expression4every12Hrs = "0 0,12 * * *";
 
   if (cron.validate(expression4every2Minutes)) {
-    cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, track_delivery);  // Track order status every 30 minutes
+    cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
-    cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
-    cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every2Minutes, trackOrder_Smartr);
+    cron.schedule(expression4every2Minutes, trackOrder_Smartship);
+    cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     cron.schedule(expression4every2Minutes, scheduleShipmentCheck);
-    cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
-    cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
+    // cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
+    // cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
 
 
 
@@ -716,46 +717,47 @@ export default async function runCron() {
   }
 }
 
-const disputeOrderWalletDeductionWhenRejectByAdmin = async () => {
-  try {
-    const disputeOrders = await ClientBillingModal.find({
-      isDisputeRaised: true,
-    }).populate("disputeId");
-    if (disputeOrders.length > 0) {
-      for (const order of disputeOrders) {
-        if (!order.disputeId.accepted) {
-          await updateSellerWalletBalance(order.sellerId, order.fwExcessCharge, false, `AWB: ${order.awb}, Revised`)
-        }
-      }
-    }
-  } catch (error: any) {
-    console.log("Error disputeOrderWalletDeductionWhenRejectByAdmin:", error);
-  }
-}
+// const disputeOrderWalletDeductionWhenRejectByAdmin = async () => {
+//   try {
+//     const disputeOrders = await ClientBillingModal.find({
+//       isDisputeRaised: true,
+//     }).populate("disputeId");
+//     if (disputeOrders.length > 0) {
+//       for (const order of disputeOrders) {
+//         if (!order.disputeId.accepted) {
+//           await updateSellerWalletBalance(order.sellerId, order.fwExcessCharge, false, `AWB: ${order.awb}, Revised`)
+//         }
+//       }
+//     }
+//   } catch (error: any) {
+//     console.log("Error disputeOrderWalletDeductionWhenRejectByAdmin:", error);
+//   }
+// }
 
-const walletDeductionForBilledOrderOnEvery7Days = async () => {
-  try {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const billedOrders = await ClientBillingModal.find({
-      billingDate: { $lt: sevenDaysAgo },
-      paymentStatus: paymentStatusInfo.NOT_PAID,
-      isDisputeRaised: false
-    });
+// const walletDeductionForBilledOrderOnEvery7Days = async () => {
+//   try {
+//     const sevenDaysAgo = new Date();
+//     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    if (billedOrders.length > 0) {
-      for (const order of billedOrders) {
-        await updateSellerWalletBalance(order.sellerId, Number(order.fwExcessCharge), false, `AWB: ${order.awb}, Revised`)
-        order.paymentStatus = paymentStatusInfo.PAID;
-        order.save();
-      }
-    }
+//     const billedOrders = await ClientBillingModal.find({
+//       billingDate: { $lt: sevenDaysAgo },
+//       paymentStatus: paymentStatusInfo.NOT_PAID,
+//       isDisputeRaised: false
+//     });
 
-  } catch (error) {
-    console.log("Error walletDeductionForBilledOrderOnEvery7Days:", error);
-  }
-}
+//     if (billedOrders.length > 0) {
+//       for (const order of billedOrders) {
+//         await updateSellerWalletBalance(order.sellerId, Number(order.fwExcessCharge), false, `AWB: ${order.awb}, Revised`)
+//         order.paymentStatus = paymentStatusInfo.PAID;
+//         order.save();
+//       }
+//     }
+
+//   } catch (error) {
+//     console.log("Error walletDeductionForBilledOrderOnEvery7Days:", error);
+//   }
+// }
 
 const processShiprocketOrders = async (orders) => {
   for (const orderWithOrderReferenceId of orders) {
