@@ -1815,6 +1815,22 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmoun
   }
 }
 
+async function invoicesGeneratedButNotAdded(){
+  try {
+    const seller = await SellerModel.find({ zoho_contact_id: 852186000000090069 });
+    console.log(seller, 'seller');
+    const accessToken = await generateAccessToken();
+    console.log(accessToken, 'accessToken');
+    if (!accessToken) return;
+    
+    
+
+    
+  } catch (err) {
+    console.log(err);
+  }
+}
+
 
 export async function addAllToZoho() {
   try {
