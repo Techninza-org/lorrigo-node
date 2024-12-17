@@ -22,7 +22,8 @@ import {
     refetchLastTransactions,
     raiseDispute,
     getDisputes,
-    acceptDisputeBySeller
+    acceptDisputeBySeller,
+    invoiceAwbList
 } from "../controllers/seller.controller";
 
 import multer from 'multer';
@@ -117,5 +118,8 @@ sellerRouter.get("/disputes", getDisputes)
 
 //@ts-ignore
 sellerRouter.post("/disputes/accept", acceptDisputeBySeller)
+
+//@ts-ignore
+sellerRouter.get("/invoice-awbs/:id", invoiceAwbList )
 
 export default sellerRouter;

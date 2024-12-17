@@ -38,30 +38,33 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
       CourierModel.find({ _id: { $in: seller?.vendors } })
         .populate({
           path: "vendor_channel_id",
-          select: { name: 1, _id: 1, nickName: 1 }
+          select: { name: 1, _id: 1, nickName: 1 },
         })
         .lean(),
 
       CustomPricingModel.find({ sellerId, vendorId: { $in: seller?.vendors } })
         .populate({
-          path: 'vendorId',
+          path: "vendorId",
           populate: {
-            path: 'vendor_channel_id',
-            select: { name: 1, _id: 1, nickName: 1 }
+            path: "vendor_channel_id",
+            select: { name: 1, _id: 1, nickName: 1 },
           },
         })
         .lean(),
     ]);
 
     // @ts-ignore
-    const customPricingMap = new Map(customPricings.map(courier => [courier?.vendorId?._id.toString(), courier]));
+    const customPricingMap = new Map(customPricings.map((courier) => [courier?.vendorId?._id.toString(), courier]));
 
     const couriersWithNickname = couriers.map((courier) => {
       const customPricing = customPricingMap.get(courier._id.toString());
       // @ts-ignore
       const { vendor_channel_id, ...courierData } = customPricing || courier;
       // @ts-ignore
-      let nameWithNickname = `${courierData?.name || courierData?.vendorId?.name} ${vendor_channel_id?.nickName || courierData?.vendorId?.vendor_channel_id?.nickName}`.trim();
+      let nameWithNickname = `${courierData?.name || courierData?.vendorId?.name} ${
+        //@ts-ignore
+        vendor_channel_id?.nickName || courierData?.vendorId?.vendor_channel_id?.nickName
+      }`.trim();
       if (customPricing) {
         // @ts-ignore
         courierData._id = courierData.vendorId?._id;
@@ -79,10 +82,10 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
       couriers: couriersWithNickname,
     });
   } catch (err) {
-    console.log(err, 'err')
+    console.log(err, "err");
     return next(err);
   }
-}
+};
 
 export const getSeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -95,7 +98,7 @@ export const getSeller = async (req: ExtendedRequest, res: Response, next: NextF
         billingAddress: 1,
         companyProfile: 1,
         gstInvoice: 1,
-        kycDetails: { submitted: 1 },  // Include only 'submitted' field in 'kycDetails'
+        kycDetails: { submitted: 1 }, // Include only 'submitted' field in 'kycDetails'
       })
       .populate("channelPartners");
 
@@ -113,8 +116,8 @@ export const updateSeller = async (req: ExtendedRequest, res: Response, next: Ne
 
     try {
       if (req.file && req.file.buffer) {
-        const logo = req.file.buffer.toString('base64');
-        query['companyProfile.logo'] = logo;
+        const logo = req.file.buffer.toString("base64");
+        query["companyProfile.logo"] = logo;
       }
     } catch (error) {
       console.log(error, "error[Logo error]");
@@ -129,17 +132,17 @@ export const updateSeller = async (req: ExtendedRequest, res: Response, next: Ne
         ...existingSeller.companyProfile,
         ...body.companyProfile,
         companyId: existingSeller.companyProfile.companyId,
-        companyLogo: query['companyProfile.logo'] || existingSeller.companyProfile.companyLogo
+        companyLogo: query["companyProfile.logo"] || existingSeller.companyProfile.companyLogo,
       };
     }
 
-    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
-      $set: { ...body },
-    }, { new: true }).select([
-      "-__v",
-      "-password",
-      "-margin",
-    ]);
+    const updatedSeller = await SellerModel.findByIdAndUpdate(
+      sellerId,
+      {
+        $set: { ...body },
+      },
+      { new: true }
+    ).select(["-__v", "-password", "-margin"]);
 
     return res.status(200).send({
       valid: true,
@@ -156,21 +159,32 @@ export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: N
     const sellerId = req.seller._id;
     const files = req.files as any;
 
-    const { businessType, gstin, pan, photoUrl, submitted, verified, document1Feild, document2Feild, document1Type, document2Type } = req.body;
+    const {
+      businessType,
+      gstin,
+      pan,
+      photoUrl,
+      submitted,
+      verified,
+      document1Feild,
+      document2Feild,
+      document1Type,
+      document2Type,
+    } = req.body;
 
-    if (!files['document1Front'] || !files['document1Back'] || !files['document2Front'] || !files['document2Back']) {
-      return res.status(400).json({ message: 'All files are required' });
+    if (!files["document1Front"] || !files["document1Back"] || !files["document2Front"] || !files["document2Back"]) {
+      return res.status(400).json({ message: "All files are required" });
     }
 
     // || !pan  is missing, have to add it
     if (!businessType || !photoUrl || !submitted || !verified) {
-      return res.status(400).json({ message: 'All fields are required' });
+      return res.status(400).json({ message: "All fields are required" });
     }
 
-    const document1Front = files['document1Front'][0].buffer.toString('base64');
-    const document1Back = files['document1Back'][0].buffer.toString('base64');
-    const document2Front = files['document2Front'][0].buffer.toString('base64');
-    const document2Back = files['document2Back'][0].buffer.toString('base64');
+    const document1Front = files["document1Front"][0].buffer.toString("base64");
+    const document1Back = files["document1Back"][0].buffer.toString("base64");
+    const document2Front = files["document2Front"][0].buffer.toString("base64");
+    const document2Back = files["document2Back"][0].buffer.toString("base64");
 
     const companyID = `LS${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -196,7 +210,7 @@ export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: N
       document1Feild,
       document2Feild,
       submitted,
-      verified
+      verified,
     };
 
     // Update seller document
@@ -206,15 +220,15 @@ export const uploadKycDocs = async (req: ExtendedRequest, res: Response, next: N
         $set: {
           kycDetails: updatedKycDetails,
           // Ensure companyId remains unchanged
-          companyProfile: { ...existingSeller.companyProfile, companyId: companyID }
-        }
+          companyProfile: { ...existingSeller.companyProfile, companyId: companyID },
+        },
       },
       { new: true }
     ).select(["-__v", "-password", "-margin"]);
 
     return res.status(200).json({
       valid: true,
-      message: 'File uploaded successfully',
+      message: "File uploaded successfully",
       seller: updatedSeller,
     });
   } catch (err) {
@@ -243,24 +257,29 @@ export const deleteSeller = async (req: ExtendedRequest, res: Response, next: Ne
 
 export const getRemittaces = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const remittanceOrders = (await RemittanceModel.find({ sellerId: req.seller._id }, {
-      BankTransactionId: 1,
-      remittanceStatus: 1,
-      remittanceDate: 1,
-      remittanceId: 1,
-      remittanceAmount: 1,
-      sellerId: 1,
-      orders: {
-        $map: {
-          input: "$orders",
-          as: "order",
-          in: {
-            orderStages: "$$order.orderStages",
-            awb: "$$order.awb"
-          }
+    const remittanceOrders = (
+      await RemittanceModel.find(
+        { sellerId: req.seller._id },
+        {
+          BankTransactionId: 1,
+          remittanceStatus: 1,
+          remittanceDate: 1,
+          remittanceId: 1,
+          remittanceAmount: 1,
+          sellerId: 1,
+          orders: {
+            $map: {
+              input: "$orders",
+              as: "order",
+              in: {
+                orderStages: "$$order.orderStages",
+                awb: "$$order.awb",
+              },
+            },
+          },
         }
-      }
-    })).reverse();;
+      )
+    ).reverse();
     if (!remittanceOrders) return res.status(200).send({ valid: false, message: "No Remittance found" });
 
     return res.status(200).send({
@@ -268,9 +287,9 @@ export const getRemittaces = async (req: ExtendedRequest, res: Response, next: N
       remittanceOrders,
     });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const getRemittaceByID = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -282,31 +301,24 @@ export const getRemittaceByID = async (req: ExtendedRequest, res: Response, next
       remittanceOrder,
     });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const manageChannelPartner = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const {
-      channel: {
-        channelName,
-        isOrderSync,
-        storeUrl,
-        apiKey,
-        apiSk,
-        sharedSecret,
-      }
+      channel: { channelName, isOrderSync, storeUrl, apiKey, apiSk, sharedSecret },
     } = req.body;
 
     if (!channelName || !isOrderSync || !storeUrl || !apiKey || !apiSk || !sharedSecret) {
-      return res.status(400).json({ message: 'All fields are required' });
+      return res.status(400).json({ message: "All fields are required" });
     }
 
     const testChannel = await axios.get(`${storeUrl}${APIs.SHOPIFY_CUSTOMER}`, {
       headers: {
         "X-Shopify-Access-Token": sharedSecret,
-      }
+      },
     });
 
     const channel = await ChannelModel.create({
@@ -320,7 +332,7 @@ export const manageChannelPartner = async (req: ExtendedRequest, res: Response, 
     });
 
     const seller = await SellerModel.findByIdAndUpdate(req.seller._id, {
-      $push: { channelPartners: channel._id }
+      $push: { channelPartners: channel._id },
     });
 
     return res.status(200).send({
@@ -329,14 +341,16 @@ export const manageChannelPartner = async (req: ExtendedRequest, res: Response, 
       channel,
     });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const updateChannelPartner = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { channel: { isOrderSync } } = req.body;
+    const {
+      channel: { isOrderSync },
+    } = req.body;
 
     const channel = await ChannelModel.findByIdAndUpdate(id, {
       isOrderSync,
@@ -347,24 +361,23 @@ export const updateChannelPartner = async (req: ExtendedRequest, res: Response, 
       message: "Channel updated successfully",
       channel,
     });
-
   } catch (error) {
-    console.log(error, "error [manageChannelPartner]")
-    return next(error)
+    console.log(error, "error [manageChannelPartner]");
+    return next(error);
   }
-}
+};
 
 export const getSellerBilling = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const bills = await ClientBillingModal.find({ sellerId: req.seller._id });
     const b2bBills = await B2BClientBillingModal.find({ sellerId: req.seller._id });
 
-    const billedAwbs = bills.map(bill => bill.awb);
+    const billedAwbs = bills.map((bill) => bill.awb);
     const billsStatus = await MonthlyBilledAWBModel.find({ awb: { $in: billedAwbs } });
 
     const billsWStatus = bills.map((bill: any) => {
-      const statusEntry: any = billsStatus.find(status => status.awb === bill.awb);
-      let status = 'Forward Billed'
+      const statusEntry: any = billsStatus.find((status) => status.awb === bill.awb);
+      let status = "Forward Billed";
 
       // if (statusEntry.isRTOApplicable) {
       //   status = 'Forward + RTO Billed'
@@ -372,7 +385,7 @@ export const getSellerBilling = async (req: ExtendedRequest, res: Response, next
 
       return {
         ...bill._doc,
-        status
+        status,
       };
     });
 
@@ -381,52 +394,58 @@ export const getSellerBilling = async (req: ExtendedRequest, res: Response, next
     return res.status(200).send({
       valid: true,
       billing: billsWStatus,
-      b2bBills
+      b2bBills,
     });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  const seller = req.seller
+  const seller = req.seller;
   const sellerId = req.seller._id;
   const { amount, origin } = req.body;
   // Phonepe Integration
   // working on it
   try {
-    const uniqueNumber = await generateUniqueNumber('phonepe');
+    const uniqueNumber = await generateUniqueNumber("phonepe");
     const merchantTransactionId = `LS${uniqueNumber}`;
 
     const payload = {
-      "merchantId": envConfig.PHONEPE_MERCHENT_ID,
-      "merchantTransactionId": merchantTransactionId,
-      "merchantUserId": sellerId._id.toString(),
-      "amount": amount * 100, // 100 paise = 1 rupee
-      "redirectUrl": `${origin}/wallet/recharge/success/${merchantTransactionId}`,
-      "redirectMode": "REDIRECT",
-      "callbackUrl": `${origin}/wallet/recharge/success/${merchantTransactionId}`,
-      "mobileNumber": "9999999999",
-      "paymentInstrument": {
-        "type": "PAY_PAGE"
-      }
-    }
+      merchantId: envConfig.PHONEPE_MERCHENT_ID,
+      merchantTransactionId: merchantTransactionId,
+      merchantUserId: sellerId._id.toString(),
+      amount: amount * 100, // 100 paise = 1 rupee
+      redirectUrl: `${origin}/wallet/recharge/success/${merchantTransactionId}`,
+      redirectMode: "REDIRECT",
+      callbackUrl: `${origin}/wallet/recharge/success/${merchantTransactionId}`,
+      mobileNumber: "9999999999",
+      paymentInstrument: {
+        type: "PAY_PAGE",
+      },
+    };
 
     const bufferObj = Buffer.from(JSON.stringify(payload));
-    const base64Payload = bufferObj.toString('base64');
-    const xVerify = crypto.createHash('sha256').update(base64Payload + APIs.PHONEPE_PAY_API + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
+    const base64Payload = bufferObj.toString("base64");
+    const xVerify =
+      crypto
+        .createHash("sha256")
+        .update(base64Payload + APIs.PHONEPE_PAY_API + envConfig.PHONEPE_SALT_KEY)
+        .digest("hex") +
+      "###" +
+      envConfig.PHONEPE_SALT_INDEX;
 
     const options = {
-      method: 'post',
+      method: "post",
       url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_PAY_API}`,
       headers: {
-        'accept': 'application/json',
-        'Content-Type': 'application/json',
-        'X-VERIFY': xVerify,
+        accept: "application/json",
+        "Content-Type": "application/json",
+        "X-VERIFY": xVerify,
       },
       data: {
-        request: base64Payload
-      }
+        request: base64Payload,
+      },
     };
 
     const rechargeWalletViaPhoenpe = await axios.request(options);
@@ -440,11 +459,13 @@ export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, 
       desc: "Wallet Recharge",
       code: rechargeWalletViaPhoenpeData.code,
       data: rechargeWalletViaPhoenpeData,
-      stage: [{
-        action: rechargeWalletInfo.PAYMENT_INITIATED,
-        dateTime: new Date().toISOString()
-      }]
-    }
+      stage: [
+        {
+          action: rechargeWalletInfo.PAYMENT_INITIATED,
+          dateTime: new Date().toISOString(),
+        },
+      ],
+    };
 
     const rechargeTxn = await PaymentTransactionModal.create(txn);
 
@@ -452,13 +473,13 @@ export const rechargeWalletIntent = async (req: ExtendedRequest, res: Response, 
       valid: true,
       message: "Wallet recharged successfully",
       rechargeWalletViaPhoenpeData,
-      url: rechargeWalletViaPhoenpeData.data.instrumentResponse.redirectInfo.url
+      url: rechargeWalletViaPhoenpeData.data.instrumentResponse.redirectInfo.url,
     });
   } catch (error) {
-    console.log(error, "error [rechargeWallet]")
-    return next(error)
+    console.log(error, "error [rechargeWallet]");
+    return next(error);
   }
-}
+};
 
 export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -467,16 +488,25 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
     const txn = await PaymentTransactionModal.findOne({ merchantTransactionId });
     if (!txn) return res.status(200).send({ valid: false, message: "No transaction found" });
 
-    const xVerify = crypto.createHash('sha256').update(`${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}` + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
+    const xVerify =
+      crypto
+        .createHash("sha256")
+        .update(
+          `${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}` +
+            envConfig.PHONEPE_SALT_KEY
+        )
+        .digest("hex") +
+      "###" +
+      envConfig.PHONEPE_SALT_INDEX;
 
     const options = {
-      method: 'get',
+      method: "get",
       url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}`,
       headers: {
-        'accept': 'application/json',
-        'Content-Type': 'application/json',
-        'X-VERIFY': xVerify,
-        'X-MERCHANT-ID': envConfig.PHONEPE_MERCHENT_ID,
+        accept: "application/json",
+        "Content-Type": "application/json",
+        "X-VERIFY": xVerify,
+        "X-MERCHANT-ID": envConfig.PHONEPE_MERCHENT_ID,
       },
     };
 
@@ -484,77 +514,15 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
     const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
 
     let isPaymentSuccess = rechargeWalletViaPhoenpeData.code.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE);
-    const phoneRechargeAmt = (rechargeWalletViaPhoenpeData.data.amount / 100)
+    const phoneRechargeAmt = rechargeWalletViaPhoenpeData.data.amount / 100;
 
     if (phoneRechargeAmt !== Number(txn.amount)) {
-      isPaymentSuccess = false
+      isPaymentSuccess = false;
     }
 
-    const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId, sellerId }, {
-      $set: {
-        code: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE : rechargeWalletViaPhoenpeData.code,
-        data: rechargeWalletViaPhoenpeData,
-      },
-      $push: {
-        stage: {
-          action: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletInfo.PAYMENT_FAILED,
-          dateTime: new Date().toISOString()
-        }
-      }
-    });
-
-    let updatedSeller;
-    if (isPaymentSuccess) {
-      updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
-        $set: {
-          walletBalance: Number(req.seller.walletBalance) + (Number(rechargeWalletViaPhoenpeData.data.amount) / 100)
-        }
-      });
-    }
-
-    return res.status(200).send({
-      valid: true,
-      message: "Wallet recharged successfully",
-      rechargeWalletViaPhoenpeData,
-      updatedSeller
-    });
-
-  } catch (error) {
-    console.log(error, "error [confirmRechargeWallet]")
-    return next(error)
-  }
-}
-
-export const refetchLastTransactions = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  try {
-    const sellerId = req.seller._id;
-    const transactions = await PaymentTransactionModal.find({ sellerId }).sort({ _id: -1 });
-    const failedTxnTodayYesterday = transactions.filter(txn => txn?.desc?.includes("Wallet Recharge") && (txn.stage[txn.stage.length - 1].action === rechargeWalletInfo.PAYMENT_FAILED &&
-      (new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate()
-        ||
-        new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate() - 1)))
-      .slice(0, 5);
-
-    failedTxnTodayYesterday.forEach(async txn => {
-      const xVerify = crypto.createHash('sha256').update(`${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${txn.merchantTransactionId}` + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
-
-      const options = {
-        method: 'get',
-        url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${txn.merchantTransactionId}`,
-        headers: {
-          'accept': 'application/json',
-          'Content-Type': 'application/json',
-          'X-VERIFY': xVerify,
-          'X-MERCHANT-ID': envConfig.PHONEPE_MERCHENT_ID,
-        },
-      };
-
-      const rechargeWalletViaPhoenpe = await axios.request(options);
-      const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
-
-      const isPaymentSuccess = rechargeWalletViaPhoenpeData?.code?.includes(rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE);
-
-      const updatedTxn = await PaymentTransactionModal.updateOne({ merchantTransactionId: txn.merchantTransactionId, sellerId, desc: { $regex: "Wallet Recharge" } }, {
+    const updatedTxn = await PaymentTransactionModal.updateOne(
+      { merchantTransactionId, sellerId },
+      {
         $set: {
           code: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE : rechargeWalletViaPhoenpeData.code,
           data: rechargeWalletViaPhoenpeData,
@@ -562,27 +530,108 @@ export const refetchLastTransactions = async (req: ExtendedRequest, res: Respons
         $push: {
           stage: {
             action: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletInfo.PAYMENT_FAILED,
-            dateTime: new Date().toISOString()
-          }
-        }
+            dateTime: new Date().toISOString(),
+          },
+        },
+      }
+    );
+
+    let updatedSeller;
+    if (isPaymentSuccess) {
+      updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
+        $set: {
+          walletBalance: Number(req.seller.walletBalance) + Number(rechargeWalletViaPhoenpeData.data.amount) / 100,
+        },
       });
+    }
+
+    return res.status(200).send({
+      valid: true,
+      message: "Wallet recharged successfully",
+      rechargeWalletViaPhoenpeData,
+      updatedSeller,
+    });
+  } catch (error) {
+    console.log(error, "error [confirmRechargeWallet]");
+    return next(error);
+  }
+};
+
+export const refetchLastTransactions = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = req.seller._id;
+    const transactions = await PaymentTransactionModal.find({ sellerId }).sort({ _id: -1 });
+    const failedTxnTodayYesterday = transactions
+      .filter(
+        (txn) =>
+          txn?.desc?.includes("Wallet Recharge") &&
+          txn.stage[txn.stage.length - 1].action === rechargeWalletInfo.PAYMENT_FAILED &&
+          (new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate() ||
+            new Date(txn.stage[txn.stage.length - 1].dateTime).getDate() === new Date().getDate() - 1)
+      )
+      .slice(0, 5);
+
+    failedTxnTodayYesterday.forEach(async (txn) => {
+      const xVerify =
+        crypto
+          .createHash("sha256")
+          .update(
+            `${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${txn.merchantTransactionId}` +
+              envConfig.PHONEPE_SALT_KEY
+          )
+          .digest("hex") +
+        "###" +
+        envConfig.PHONEPE_SALT_INDEX;
+
+      const options = {
+        method: "get",
+        url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${txn.merchantTransactionId}`,
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+          "X-VERIFY": xVerify,
+          "X-MERCHANT-ID": envConfig.PHONEPE_MERCHENT_ID,
+        },
+      };
+
+      const rechargeWalletViaPhoenpe = await axios.request(options);
+      const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
+
+      const isPaymentSuccess = rechargeWalletViaPhoenpeData?.code?.includes(
+        rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE
+      );
+
+      const updatedTxn = await PaymentTransactionModal.updateOne(
+        { merchantTransactionId: txn.merchantTransactionId, sellerId, desc: { $regex: "Wallet Recharge" } },
+        {
+          $set: {
+            code: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL_PHONEPE : rechargeWalletViaPhoenpeData.code,
+            data: rechargeWalletViaPhoenpeData,
+          },
+          $push: {
+            stage: {
+              action: isPaymentSuccess ? rechargeWalletInfo.PAYMENT_SUCCESSFUL : rechargeWalletInfo.PAYMENT_FAILED,
+              dateTime: new Date().toISOString(),
+            },
+          },
+        }
+      );
 
       let updatedSeller;
       if (isPaymentSuccess) {
         updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, {
           $set: {
-            walletBalance: Number(req.seller.walletBalance) + (Number(rechargeWalletViaPhoenpeData.data.amount) / 100)
-          }
+            walletBalance: Number(req.seller.walletBalance) + Number(rechargeWalletViaPhoenpeData.data.amount) / 100,
+          },
         });
       }
     });
 
-
     return res.status(200).send({ valid: true, transactions });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const payInvoiceIntent = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   const sellerId = req.seller._id;
@@ -592,34 +641,40 @@ export const payInvoiceIntent = async (req: ExtendedRequest, res: Response, next
   try {
     const merchantTransactionId = `LS${Math.floor(1000 + Math.random() * 9000)}`;
     const payload = {
-      "merchantId": envConfig.PHONEPE_MERCHENT_ID,
-      "merchantTransactionId": merchantTransactionId,
-      "merchantUserId": sellerId._id.toString(),
-      "amount": amount * 100, // 100 paise = 1 rupee
-      "redirectUrl": `${origin}/pay/invoice/${invoiceId}/${merchantTransactionId}`,
-      "redirectMode": "REDIRECT",
-      "callbackUrl": `${origin}/pay/invoice/${invoiceId}/${merchantTransactionId}`,
-      "mobileNumber": "9999999999",
-      "paymentInstrument": {
-        "type": "PAY_PAGE"
-      }
-    }
+      merchantId: envConfig.PHONEPE_MERCHENT_ID,
+      merchantTransactionId: merchantTransactionId,
+      merchantUserId: sellerId._id.toString(),
+      amount: amount * 100, // 100 paise = 1 rupee
+      redirectUrl: `${origin}/pay/invoice/${invoiceId}/${merchantTransactionId}`,
+      redirectMode: "REDIRECT",
+      callbackUrl: `${origin}/pay/invoice/${invoiceId}/${merchantTransactionId}`,
+      mobileNumber: "9999999999",
+      paymentInstrument: {
+        type: "PAY_PAGE",
+      },
+    };
 
     const bufferObj = Buffer.from(JSON.stringify(payload));
-    const base64Payload = bufferObj.toString('base64');
-    const xVerify = crypto.createHash('sha256').update(base64Payload + APIs.PHONEPE_PAY_API + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
+    const base64Payload = bufferObj.toString("base64");
+    const xVerify =
+      crypto
+        .createHash("sha256")
+        .update(base64Payload + APIs.PHONEPE_PAY_API + envConfig.PHONEPE_SALT_KEY)
+        .digest("hex") +
+      "###" +
+      envConfig.PHONEPE_SALT_INDEX;
 
     const options = {
-      method: 'post',
+      method: "post",
       url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_PAY_API}`,
       headers: {
-        'accept': 'application/json',
-        'Content-Type': 'application/json',
-        'X-VERIFY': xVerify,
+        accept: "application/json",
+        "Content-Type": "application/json",
+        "X-VERIFY": xVerify,
       },
       data: {
-        request: base64Payload
-      }
+        request: base64Payload,
+      },
     };
 
     const rechargeWalletViaPhoenpe = await axios.request(options);
@@ -628,42 +683,50 @@ export const payInvoiceIntent = async (req: ExtendedRequest, res: Response, next
     return res.status(200).send({
       valid: true,
       rechargeWalletViaPhoenpeData,
-      url: rechargeWalletViaPhoenpeData.data.instrumentResponse.redirectInfo.url
+      url: rechargeWalletViaPhoenpeData.data.instrumentResponse.redirectInfo.url,
     });
   } catch (error) {
-    console.log(error, "error [rechargeWallet]")
-    return next(error)
+    console.log(error, "error [rechargeWallet]");
+    return next(error);
   }
-}
+};
 
 export const confirmInvoicePayment = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const sellerId = req.seller._id;
     const { merchantTransactionId, invoiceId } = req.query;
 
-    const xVerify = crypto.createHash('sha256').update(`${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}` + envConfig.PHONEPE_SALT_KEY).digest('hex') + "###" + envConfig.PHONEPE_SALT_INDEX;
+    const xVerify =
+      crypto
+        .createHash("sha256")
+        .update(
+          `${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}` +
+            envConfig.PHONEPE_SALT_KEY
+        )
+        .digest("hex") +
+      "###" +
+      envConfig.PHONEPE_SALT_INDEX;
 
     const options = {
-      method: 'get',
+      method: "get",
       url: `${envConfig.PHONEPE_API_BASEURL}${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}`,
       headers: {
-        'accept': 'application/json',
-        'Content-Type': 'application/json',
-        'X-VERIFY': xVerify,
-        'X-MERCHANT-ID': envConfig.PHONEPE_MERCHENT_ID,
+        accept: "application/json",
+        "Content-Type": "application/json",
+        "X-VERIFY": xVerify,
+        "X-MERCHANT-ID": envConfig.PHONEPE_MERCHENT_ID,
       },
     };
 
     const rechargeWalletViaPhoenpe = await axios.request(options);
     const rechargeWalletViaPhoenpeData = rechargeWalletViaPhoenpe.data;
 
-
     let updateSellerInvoice;
     if (rechargeWalletViaPhoenpeData.success) {
       updateSellerInvoice = await InvoiceModel.findByIdAndUpdate(invoiceId, {
         $set: {
-          status: "PAID"
-        }
+          status: "PAID",
+        },
       });
     }
 
@@ -671,14 +734,13 @@ export const confirmInvoicePayment = async (req: ExtendedRequest, res: Response,
       valid: true,
       message: "Invoice Paid Successfully",
       rechargeWalletViaPhoenpeData,
-      updateSellerInvoice
+      updateSellerInvoice,
     });
-
   } catch (error) {
-    console.log(error, "error [confirmRechargeWallet]")
-    return next(error)
+    console.log(error, "error [confirmRechargeWallet]");
+    return next(error);
   }
-}
+};
 
 export const getSellerWalletBalance = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -690,9 +752,9 @@ export const getSellerWalletBalance = async (req: ExtendedRequest, res: Response
       walletBalance: seller.walletBalance,
     });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const getSellerTransactionHistory = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -704,18 +766,18 @@ export const getSellerTransactionHistory = async (req: ExtendedRequest, res: Res
       transactions,
     });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const getInvoices = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const invoices = (await InvoiceModel.find({ sellerId: req.seller._id })).reverse();
     return res.status(200).send({ valid: true, invoices });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const getInoviceById = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -724,26 +786,80 @@ export const getInoviceById = async (req: ExtendedRequest, res: Response, next: 
 
     return res.status(200).send({ valid: true, invoice });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
+
+export const invoiceAwbList = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    let awbTransacs: any[] = [];
+    const invoice = await InvoiceModel.findById(req.params.id);
+    if (!invoice) return res.status(200).send({ valid: false, message: "No Invoice found" });
+    const awbs = invoice.invoicedAwbs ?? [];
+    const transactions = await PaymentTransactionModal.find({ sellerId: req.seller._id });
+    awbs.forEach((awb) => {
+      const transactionsForAwb = transactions.filter((txn) => txn.desc.includes(awb));
+      let forwardCharges = 0;
+      let rtoCharges = 0;
+      let codCharges = 0;
+      let otherCharges = 0;
+
+      transactionsForAwb.forEach((txn: any) => {
+        const desc = txn.desc;
+        if (desc.includes("Prepaid")) {
+          forwardCharges += Number(txn.amount);
+        } else if (desc.includes("COD")) {
+          codCharges += Number(txn.amount);
+        } else if (desc.includes("RTO")) {
+          rtoCharges += Number(txn.amount);
+        } else {
+          otherCharges += Number(txn.amount);
+        }
+      });
+
+      const awbObj = {
+        awb,
+        forwardCharges,
+        rtoCharges,
+        codCharges,
+        otherCharges,
+        total: forwardCharges + rtoCharges + codCharges + otherCharges,
+      };
+      awbTransacs.push(awbObj);
+    });
+
+
+    return res.status(200).send({ valid: true, awbTransacs });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 export const getCodPrice = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const seller = await SellerModel.findById(req.seller._id);
     if (!seller) return res.status(200).send({ valid: false, message: "No Seller found" });
     const custom_pricing = await CustomPricingModel.findOne({ sellerId: req.seller._id });
-    const codPrice = custom_pricing?.codCharge.hard || '';
+    const codPrice = custom_pricing?.codCharge.hard || "";
     return res.status(200).send({ valid: true, codPrice: codPrice });
+  } catch (error) {
+    return next(error);
   }
-  catch (error) {
-    return next(error)
-  }
-}
+};
 
 export const raiseDispute = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const { awb, image, description, orderBoxHeight, orderBoxWidth, orderBoxLength, orderWeight, orderSizeUnit, orderWeightUnit } = req.body;
+    const {
+      awb,
+      image,
+      description,
+      orderBoxHeight,
+      orderBoxWidth,
+      orderBoxLength,
+      orderWeight,
+      orderSizeUnit,
+      orderWeightUnit,
+    } = req.body;
     const billing = await ClientBillingModal.findOne({ awb });
     if (!billing) return res.status(200).send({ valid: false, message: "No Billing found" });
 
@@ -760,7 +876,7 @@ export const raiseDispute = async (req: ExtendedRequest, res: Response, next: Ne
       orderBoxLength,
       orderWeight, // client inp: from dispute
       chargedWeight: billing.chargedWeight,
-      billingMonth: format(new Date(billing.billingDate), 'MMM-yyyy'),
+      billingMonth: format(new Date(billing.billingDate), "MMM-yyyy"),
     });
 
     billing.isDisputeRaised = true;
@@ -769,30 +885,31 @@ export const raiseDispute = async (req: ExtendedRequest, res: Response, next: Ne
 
     return res.status(200).send({ valid: true, dispute: newDispute });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const getDisputes = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const disputes = await SellerDisputeModel.find({ sellerId: req.seller._id, accepted: false }).populate("sellerId", "name").populate("clientBillingId")
+    const disputes = await SellerDisputeModel.find({ sellerId: req.seller._id, accepted: false })
+      .populate("sellerId", "name")
+      .populate("clientBillingId");
     return res.status(200).send({ valid: true, disputes });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const acceptDisputeBySeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { awb } = req.body;
-    console.log(awb, 'awb');
+    console.log(awb, "awb");
     const bill = await ClientBillingModal.findOne({ awb });
     if (!bill) return res.status(200).send({ valid: false, message: "No Order found" });
     bill.disputeAcceptedBySeller = true;
     await bill.save();
     return res.status(200).send({ valid: true, message: "Dispute accepted successfully" });
+  } catch (error) {
+    return next(error);
   }
-  catch (error) {
-    return next(error)
-  }
-}
+};
