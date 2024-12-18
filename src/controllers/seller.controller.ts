@@ -796,37 +796,71 @@ export const invoiceAwbList = async (req: ExtendedRequest, res: Response, next: 
     const invoice = await InvoiceModel.findById(req.params.id);
     if (!invoice) return res.status(200).send({ valid: false, message: "No Invoice found" });
     const awbs = invoice.invoicedAwbs ?? [];
-    const transactions = await PaymentTransactionModal.find({ sellerId: req.seller._id });
+    const bills = await ClientBillingModal.find({ awb: { $in: awbs } });
     awbs.forEach((awb) => {
-      const transactionsForAwb = transactions.filter((txn) => txn.desc.includes(awb));
+      const bill = bills.find((bill) => bill.awb === awb);
       let forwardCharges = 0;
       let rtoCharges = 0;
       let codCharges = 0;
-      let otherCharges = 0;
-
-      transactionsForAwb.forEach((txn: any) => {
-        const desc = txn.desc;
-        if (desc.includes("Prepaid")) {
-          forwardCharges += Number(txn.amount);
-        } else if (desc.includes("COD")) {
-          codCharges += Number(txn.amount);
-        } else if (desc.includes("RTO")) {
-          rtoCharges += Number(txn.amount);
-        } else {
-          otherCharges += Number(txn.amount);
+      let excessCharges = 0;
+      console.log(bill, "bill");
+      if(bill){
+        if(bill.codValue){
+          codCharges = Number(bill.codValue);
         }
-      });
+        if(bill.isRTOApplicable === false){
+          forwardCharges = Number(bill.rtoCharge);
+        }else{
+          rtoCharges = Number(bill.rtoCharge);
+          forwardCharges = Number(bill.rtoCharge);
+        }
+        if(bill.fwExcessCharge){
+          excessCharges = Number(bill.fwExcessCharge);
+        }
+      }
 
       const awbObj = {
         awb,
         forwardCharges,
         rtoCharges,
         codCharges,
-        otherCharges,
-        total: forwardCharges + rtoCharges + codCharges + otherCharges,
-      };
-      awbTransacs.push(awbObj);
+        excessCharges,
+        total: forwardCharges + rtoCharges + codCharges + excessCharges,
+      }
+      awbTransacs.push(awbObj); 
     });
+    
+    // const transactions = await PaymentTransactionModal.find({ sellerId: req.seller._id });
+    // awbs.forEach((awb) => {
+    //   const transactionsForAwb = transactions.filter((txn) => txn.desc.includes(awb));
+    //   let forwardCharges = 0;
+    //   let rtoCharges = 0;
+    //   let codCharges = 0;
+    //   let otherCharges = 0;
+
+    //   transactionsForAwb.forEach((txn: any) => {
+    //     const desc = txn.desc;
+    //     if (desc.includes("Prepaid")) {
+    //       forwardCharges += Number(txn.amount);
+    //     } else if (desc.includes("COD")) {
+    //       codCharges += Number(txn.amount);
+    //     } else if (desc.includes("RTO")) {
+    //       rtoCharges += Number(txn.amount);
+    //     } else {
+    //       otherCharges += Number(txn.amount);
+    //     }
+    //   });
+
+    //   const awbObj = {
+    //     awb,
+    //     forwardCharges,
+    //     rtoCharges,
+    //     codCharges,
+    //     otherCharges,
+    //     total: forwardCharges + rtoCharges + codCharges + otherCharges,
+    //   };
+    //   awbTransacs.push(awbObj);
+    // });
 
 
     return res.status(200).send({ valid: true, awbTransacs });
