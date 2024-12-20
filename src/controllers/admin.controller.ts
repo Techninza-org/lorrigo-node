@@ -1179,43 +1179,43 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       const isForwardApplied = bill.updateOne.update.$set.isForwardApplicable // use to check RTO applied or not
       const rtoCharge = bill.updateOne.update.$set.rtoCharge // use as fw/RTO
 
-      if (sellerId) {
-        // if (isForwardApplied) {
-        // console.log("for Fw: ONLY\n\n")
+      // if (sellerId) {
+      //   if (isForwardApplied) {
+      //   console.log("for Fw: ONLY\n\n")
 
-        // // Excess weight charge
-        // if (fwExcessCharge > 0) {
-        //   console.log("Forward Excess Weight Charge ", fwExcessCharge)
-        //   // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, Forward Excess Weight Charge`);
-        // }
-        // }
+      //   // Excess weight charge
+      //   if (fwExcessCharge > 0) {
+      //     console.log("Forward Excess Weight Charge ", fwExcessCharge)
+      //     // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, Forward Excess Weight Charge`);
+      //   }
+      //   }
 
-        if (isRTOApplied && fwExcessCharge <= 0) {
+      //   if (isRTOApplied && fwExcessCharge <= 0) {
 
-          const isRTOChargeAlreadyReversed = await PaymentTransactionModal.find({
-            desc: { $regex: `${awb} RTO` }
-          })
+      //     const isRTOChargeAlreadyReversed = await PaymentTransactionModal.find({
+      //       desc: { $regex: `${awb} RTO` }
+      //     })
 
-          const isRTOCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO charges")) ? true : false
-          const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges")) ? true : false
+      //     const isRTOCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO charges")) ? true : false
+      //     const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges")) ? true : false
 
-          if (!isRTOCharged && rtoCharge > 0) {
-            // console.log(awb + "paise kt : RTO Charge \n\n ")
-            await updateSellerWalletBalance(sellerId, Number(rtoCharge), false, `AWB: ${awb}, RTO Charge Applied`);
-          }
-          if (!isRTOCODCharged && returnCODCharge > 0) {
-            // console.log(awb + "paise Add : COD Charge \n\n ")
-            await updateSellerWalletBalance(sellerId, Number(returnCODCharge), true, `AWB: ${awb}, COD Charge Reversed`);
-          }
+      //     if (!isRTOCharged && rtoCharge > 0) {
+      //       // console.log(awb + "paise kt : RTO Charge \n\n ")
+      //       await updateSellerWalletBalance(sellerId, Number(rtoCharge), false, `AWB: ${awb}, RTO Charge Applied`);
+      //     }
+      //     if (!isRTOCODCharged && returnCODCharge > 0) {
+      //       // console.log(awb + "paise Add : COD Charge \n\n ")
+      //       await updateSellerWalletBalance(sellerId, Number(returnCODCharge), true, `AWB: ${awb}, COD Charge Reversed`);
+      //     }
 
-          // Excess weight charge, it happens only after disptue accept or reject
-          // if (fwExcessCharge > 0) {
-          // console.log(fwExcessCharge, "fwExcessCharge")
-          // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, RTO Excess Weight Charge`);
-          // }
-        }
+      //     // Excess weight charge, it happens only after disptue accept or reject
+      //     // if (fwExcessCharge > 0) {
+      //     // console.log(fwExcessCharge, "fwExcessCharge")
+      //     // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, RTO Excess Weight Charge`);
+      //     // }
+      //   }
 
-      }
+      // }
     }));
 
     if (errorRows.length > 0) {
@@ -1509,6 +1509,15 @@ export const getSubAdmins = async (req: ExtendedRequest, res: Response, next: Ne
     return res.status(200).send({ valid: true, subadmins });
   } catch (err) {
     return next(err)
+  }
+}
+
+export const getAllInvoices = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const invoices = await InvoiceModel.find({}).populate("sellerId", "name");
+    return res.status(200).send({ valid: true, invoices });
+  } catch (error) {
+    return next(error)
   }
 }
 

@@ -33,7 +33,8 @@ import {
     acceptDispute,
     rejectDispute,
     getDisputeById,
-    uploadDisputeCSV
+    uploadDisputeCSV,
+    getAllInvoices
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -162,5 +163,8 @@ adminRouter.post("/disputes/accept", AdminAuthMiddleware, acceptDispute)
 
 //@ts-ignore
 adminRouter.post("/disputes/reject", AdminAuthMiddleware, rejectDispute)
+
+//@ts-ignore
+adminRouter.get("/invoices", AdminAuthMiddleware, getAllInvoices)
 
 export default adminRouter;

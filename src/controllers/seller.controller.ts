@@ -797,38 +797,43 @@ export const invoiceAwbList = async (req: ExtendedRequest, res: Response, next: 
     if (!invoice) return res.status(200).send({ valid: false, message: "No Invoice found" });
     const awbs = invoice.invoicedAwbs ?? [];
     const bills = await ClientBillingModal.find({ awb: { $in: awbs } });
+    console.log(bills.length, 'total bills');
+    
     awbs.forEach((awb) => {
       const bill = bills.find((bill) => bill.awb === awb);
       let forwardCharges = 0;
       let rtoCharges = 0;
       let codCharges = 0;
-      let excessCharges = 0;
-      console.log(bill, "bill");
+      // console.log(bill, "bill");
+      console.log(bill?.isForwardApplicable, bill?.rtoCharge, bill?.codValue, "bill");
+      
+      let total = 0;
       if(bill){
-        if(bill.codValue){
-          codCharges = Number(bill.codValue);
-        }
-        if(bill.isRTOApplicable === false){
-          forwardCharges = Number(bill.rtoCharge);
-        }else{
-          rtoCharges = Number(bill.rtoCharge);
-          forwardCharges = Number(bill.rtoCharge);
-        }
-        if(bill.fwExcessCharge){
-          excessCharges = Number(bill.fwExcessCharge);
+        if(bill){
+          if(bill.isRTOApplicable === false){
+            codCharges = Number(bill.codValue);
+            forwardCharges = Number(bill.rtoCharge);
+          }else{
+            rtoCharges = Number(bill.rtoCharge);
+            forwardCharges = Number(bill.rtoCharge);
+          }
+          console.log(awb, forwardCharges, rtoCharges, codCharges, "charges");
         }
       }
+      
 
       const awbObj = {
         awb,
         forwardCharges,
         rtoCharges,
         codCharges,
-        excessCharges,
-        total: forwardCharges + rtoCharges + codCharges + excessCharges,
+        total: forwardCharges + rtoCharges + codCharges,
       }
       awbTransacs.push(awbObj); 
+      console.log(total, "total");
+      
     });
+    
     
     // const transactions = await PaymentTransactionModal.find({ sellerId: req.seller._id });
     // awbs.forEach((awb) => {
