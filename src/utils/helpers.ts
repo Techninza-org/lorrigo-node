@@ -1673,35 +1673,36 @@ export const calculateSellerInvoiceAmount = async () => {
           ...lastMonthDisputeAwbs,
         ];
 
-
         // const allWalletRecharge = await PaymentTransactionModal.find({ sellerId, desc: { $regex: "Wallet Recharge" }, createdAt: { $gt: lastInvoiceDate, $lt: today }, });
         // let totalWalletRecharge = Math.max(allWalletRecharge.reduce((acc, curr) => acc + parseFloat(curr.amount), 0), 0);
 
         let totalAmount = 0;
-        for (let i = 0; i < awbToBeInvoiced.length; i++) {
-          const awbTxn = await PaymentTransactionModal.find({ desc: { $regex: awbToBeInvoiced[i] } });
-          const clientBillAwbInfo = billedOrders.find(x => x.awb == awbToBeInvoiced[i])
+        const bills = await ClientBillingModal.find({ awb: { $in: awbToBeInvoiced } });
+        awbToBeInvoiced.forEach((awb) => {
+          const bill = bills.find((bill) => bill.awb === awb);
+          let forwardCharges = 0;
+          let rtoCharges = 0;
+          let codCharges = 0;
+          // let excessCharges = 0;
+          if (bill) {
 
-          for (let txn of awbTxn) {
-            if (!txn.desc.includes("COD Charge Reversed") && !txn.desc.includes("COD charges") && !txn.desc.includes("RTO Charge Applied")) {
-              totalAmount += parseFloat(txn.amount);
+            if (bill.isRTOApplicable === false) {
+              codCharges = Number(bill.codValue);
+              forwardCharges = Number(bill.rtoCharge);
+            } else {
+              rtoCharges = Number(bill.rtoCharge);
+              forwardCharges = Number(bill.rtoCharge);
             }
-
-            if (clientBillAwbInfo?.isRTOApplicable) {
-              if (txn.desc.includes("COD Charge Reversed") || txn.desc.includes("COD charges")) {
-                totalAmount -= Number((parseFloat(txn.amount) * 2).toFixed(2))
-              }
-            }
+            // if(bill.fwExcessCharge){
+            //   excessCharges = Number(bill.fwExcessCharge);
+            // }
           }
-        }
 
-        // const NextMonthCreditZoho = Math.abs(totalAmount - Math.abs(totalWalletRecharge) - Math.abs(seller.zoho_advance_amount));
-        // seller.zoho_advance_amount = NextMonthCreditZoho;
-        // console.log(NextMonthCreditZoho, "NextMonthCreditZoho")
-        // await seller.save();
+          totalAmount += forwardCharges + rtoCharges + codCharges;
+        });
 
+        const invoiceAmount = totalAmount / 1.18;
 
-        const invoiceAmount = Number(Number(totalAmount / 1.18).toFixed(2));
         const isPrepaid = seller.config?.isPrepaid;
 
         if (invoiceAmount > 0) {
@@ -1710,10 +1711,9 @@ export const calculateSellerInvoiceAmount = async () => {
           //   await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
           // }
 
-          // Replace with seller contect id-----------
           await createAdvanceAndInvoice(zoho_contact_id, totalAmount, awbToBeInvoiced, isPrepaid);
         }
-      }
+      } 
     };
 
     for (let i = 0; i < sellers.length; i += batchSize) {
@@ -1733,13 +1733,13 @@ export const calculateSellerInvoiceAmount = async () => {
   }
 };
 
-export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmount: any, awbToBeInvoiced: any, isPrepaid: boolean) {
+export async function createAdvanceAndInvoice(zoho_contact_id: any, totalAmount: any, awbToBeInvoiced: any, isPrepaid: boolean) {
   try {
     const accessToken = await generateAccessToken();
     if (!accessToken) return;
     const rechargeBody = {
       "customer_id": zoho_contact_id,
-      "amount": Number(invoiceAmount * 1.18),
+      "amount": Number(totalAmount),
     }
     const rechargeRes = await axios.post(`https://www.zohoapis.in/books/v3/customerpayments?organization_id=60014023368`, rechargeBody, {
       headers: {
@@ -1761,7 +1761,7 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmoun
       "line_items": [
         {
           "item_id": "852186000000016945",
-          "rate": invoiceAmount,
+          "rate": totalAmount / 1.18,
           "quantity": 1,
         }
       ],
@@ -1783,7 +1783,7 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmoun
         "invoice_payments": [
           {
             "payment_id": paymentId,
-            "amount_applied": Number(invoiceAmount * 1.18)
+            "amount_applied": Number(totalAmount)
           }
         ]
       }
@@ -1804,7 +1804,7 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmoun
     })
 
     const pdfBase64 = Buffer.from(invoicePdf.data, 'binary').toString('base64');
-    const invoice = await InvoiceModel.create({ invoicedAwbs: awbToBeInvoiced, isPrepaidInvoice: seller.config?.isPrepaid, sellerId: seller._id, invoice_id: invoiceId, pdf: pdfBase64, date: invoiceRes.data.invoice.date, amount: (invoiceAmount * 1.18).toFixed(2) });
+    const invoice = await InvoiceModel.create({ invoicedAwbs: awbToBeInvoiced, isPrepaidInvoice: seller.config?.isPrepaid, sellerId: seller._id, invoice_id: invoiceId, pdf: pdfBase64, date: invoiceRes.data.invoice.date, amount: (totalAmount).toFixed(2) });
 
     seller.invoices.push(invoice._id);
     await seller.save();
@@ -1815,17 +1815,17 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, invoiceAmoun
   }
 }
 
-async function invoicesGeneratedButNotAdded(){
+async function invoicesGeneratedButNotAdded() {
   try {
     const seller = await SellerModel.find({ zoho_contact_id: 852186000000090069 });
     console.log(seller, 'seller');
     const accessToken = await generateAccessToken();
     console.log(accessToken, 'accessToken');
     if (!accessToken) return;
-    
-    
 
-    
+
+
+
   } catch (err) {
     console.log(err);
   }

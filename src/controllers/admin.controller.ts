@@ -1068,8 +1068,10 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
       }
 
+      let weightSlab = vendor?.weightSlab || vendor?.vendorId?.weightSlab
+
       const csvBody = {
-        weight: bill.chargedWeight,
+        weight: Math.max(bill.chargedWeight, weightSlab),
         paymentType: bill.shipmentType,
         collectableAmount: Math.max(0, order.amount2Collect),
       };
@@ -1083,7 +1085,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       const { incrementPrice, totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor); // csv calc 
 
       let orderShippingCalc: any;
-      let fwExcessCharge: any;
+      let fwExcessCharge: any = 0;
       if (bill.chargedWeight > order.orderWeight) {
         orderShippingCalc = await calculateShippingCharges(bill.zone, orderBody, vendor); // customer calc
 
@@ -1092,7 +1094,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         }
       }
 
-      const baseWeight = (vendor?.weightSlab || vendor?.vendorId?.weightSlab) || 0;
+      const baseWeight = (vendor?.weightSlab || vendor?.vendorId?.weightSlab) || 0; // Courier weight
       const incrementWeight = bill.chargedWeight - Number(order.orderWeight) - baseWeight;
 
       const rtoCharge = (totalCharge - (codCharge || 0)).toFixed(2)
@@ -1130,6 +1132,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
           upsert: true
         }
       );
+
+      // TODO: Zone change Handle! 
       return {
         updateOne: {
           filter: { awb: bill.awb },
@@ -1138,24 +1142,37 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
               ...bill,
               carrierID: bill.carrierID,
               sellerId: order.sellerId,
-              codValue: codCharge,
-              fwExcessCharge,
-              rtoCharge,
-              orderWeight: order.orderWeight,
-              orderCharges: order.shipmentCharges, // applied_weight charge
-              billingAmount: billingAmount, // fw+RTO without COD Charge 
-              incrementPrice: incrementPrice.incrementPrice, // cc
+
               basePrice: incrementPrice.basePrice, // cc
-              incrementWeight: incrementWeight >= 0 ? incrementWeight.toString() : 0,
               baseWeight: baseWeight.toString(),  // cc
-              vendorWNickName: `${vendor?.name || vendor?.vendorId?.name} ${vendor?.vendor_channel_id?.nickName || vendor?.vendorId?.vendor_channel_id.nickName}`.trim(),
-              billingDate: format(new Date(), 'yyyy-MM-dd'),
-              rtoAwb: "",
+              incrementPrice: incrementPrice.incrementPrice, // cc
+
               orderRefId: order.order_reference_id,
+              orderCharges: order.shipmentCharges, // applied_weight charge
+              orderWeight: order.orderWeight,
+              codValue: codCharge,
+              rtoAwb: "",
+
+              fwExcessCharge,
+              rtoExcessCharge: fwExcessCharge > 0 && bill.isRTOApplicable ? fwExcessCharge : 0,
+              rtoCharge,
+              fwCharge,
+
+              // if ZONE Change
+              // fwExcessCharge,
+              // rtoExcessCharge,
+              // rtoCharge,
+              // fwCharge,
+
+
+              billingAmount: billingAmount, // fw+RTO without COD Charge 
+              billingDate: format(new Date(), 'yyyy-MM-dd'),
+              vendorWNickName: `${vendor?.name || vendor?.vendorId?.name} ${vendor?.vendor_channel_id?.nickName || vendor?.vendorId?.vendor_channel_id.nickName}`.trim(),
+
+              paymentStatus: paymentStatusInfo.NOT_PAID,
               recipientName: order.customerDetails.get("name"),
               fromCity: order.pickupAddress.city,
               toCity: order.customerDetails.get("city"),
-              paymentStatus: paymentStatusInfo.NOT_PAID,
             }
           },
           upsert: true
@@ -1201,11 +1218,11 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
           if (!isRTOCharged && rtoCharge > 0) {
             // console.log(awb + "paise kt : RTO Charge \n\n ")
-            await updateSellerWalletBalance(sellerId, Number(rtoCharge), false, `AWB: ${awb}, RTO Charge Applied`);
+            // await updateSellerWalletBalance(sellerId, Number(rtoCharge), false, `AWB: ${awb}, RTO Charge Applied`);
           }
           if (!isRTOCODCharged && returnCODCharge > 0) {
             // console.log(awb + "paise Add : COD Charge \n\n ")
-            await updateSellerWalletBalance(sellerId, Number(returnCODCharge), true, `AWB: ${awb}, COD Charge Reversed`);
+            // await updateSellerWalletBalance(sellerId, Number(returnCODCharge), true, `AWB: ${awb}, COD Charge Reversed`);
           }
 
           // Excess weight charge, it happens only after disptue accept or reject
@@ -1431,7 +1448,7 @@ export const getClientBillingData = async (req: ExtendedRequest, res: Response, 
       const statusEntry: any = billsStatus.find(status => status.awb === bill.awb);
       let status = 'Forward Billed'
 
-      if (statusEntry.isRTOApplicable) {
+      if (statusEntry?.isRTOApplicable) {
         status = 'Forward + RTO Billed'
       }
 
