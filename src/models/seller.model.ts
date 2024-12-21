@@ -17,7 +17,7 @@ const sellerSchema = new mongoose.Schema({
   gst: { type: String, required: false },
   pan: { type: String, required: false },
   aadhar: { type: String, required: false },
-
+  showPaymentAlert: { type: Boolean, default: false },
   prefix: { type: String, required: false },
   address: { type: String, required: false },
   margin: { type: Number, min: 0, max: 100, default: 20 },

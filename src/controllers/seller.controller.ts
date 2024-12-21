@@ -98,6 +98,7 @@ export const getSeller = async (req: ExtendedRequest, res: Response, next: NextF
         billingAddress: 1,
         companyProfile: 1,
         gstInvoice: 1,
+        showPaymentAlert: 1,
         kycDetails: { submitted: 1 }, // Include only 'submitted' field in 'kycDetails'
       })
       .populate("channelPartners");
@@ -730,6 +731,10 @@ export const confirmInvoicePayment = async (req: ExtendedRequest, res: Response,
       });
     }
 
+    const seller = await SellerModel.findById(sellerId);
+    seller?.showPaymentAlert === false;
+    await seller?.save();
+
     return res.status(200).send({
       valid: true,
       message: "Invoice Paid Successfully",
@@ -797,19 +802,15 @@ export const invoiceAwbList = async (req: ExtendedRequest, res: Response, next: 
     if (!invoice) return res.status(200).send({ valid: false, message: "No Invoice found" });
     const awbs = invoice.invoicedAwbs ?? [];
     const bills = await ClientBillingModal.find({ awb: { $in: awbs } });
-    console.log(bills.length, 'total bills');
     
     awbs.forEach((awb) => {
       const bill = bills.find((bill) => bill.awb === awb);
       let forwardCharges = 0;
       let rtoCharges = 0;
       let codCharges = 0;
-      // console.log(bill, "bill");
-      console.log(bill?.isForwardApplicable, bill?.rtoCharge, bill?.codValue, "bill");
       
       let total = 0;
       if(bill){
-        if(bill){
           if(bill.isRTOApplicable === false){
             codCharges = Number(bill.codValue);
             forwardCharges = Number(bill.rtoCharge);
@@ -817,8 +818,6 @@ export const invoiceAwbList = async (req: ExtendedRequest, res: Response, next: 
             rtoCharges = Number(bill.rtoCharge);
             forwardCharges = Number(bill.rtoCharge);
           }
-          console.log(awb, forwardCharges, rtoCharges, codCharges, "charges");
-        }
       }
       
 
@@ -830,43 +829,7 @@ export const invoiceAwbList = async (req: ExtendedRequest, res: Response, next: 
         total: forwardCharges + rtoCharges + codCharges,
       }
       awbTransacs.push(awbObj); 
-      console.log(total, "total");
-      
     });
-    
-    
-    // const transactions = await PaymentTransactionModal.find({ sellerId: req.seller._id });
-    // awbs.forEach((awb) => {
-    //   const transactionsForAwb = transactions.filter((txn) => txn.desc.includes(awb));
-    //   let forwardCharges = 0;
-    //   let rtoCharges = 0;
-    //   let codCharges = 0;
-    //   let otherCharges = 0;
-
-    //   transactionsForAwb.forEach((txn: any) => {
-    //     const desc = txn.desc;
-    //     if (desc.includes("Prepaid")) {
-    //       forwardCharges += Number(txn.amount);
-    //     } else if (desc.includes("COD")) {
-    //       codCharges += Number(txn.amount);
-    //     } else if (desc.includes("RTO")) {
-    //       rtoCharges += Number(txn.amount);
-    //     } else {
-    //       otherCharges += Number(txn.amount);
-    //     }
-    //   });
-
-    //   const awbObj = {
-    //     awb,
-    //     forwardCharges,
-    //     rtoCharges,
-    //     codCharges,
-    //     otherCharges,
-    //     total: forwardCharges + rtoCharges + codCharges + otherCharges,
-    //   };
-    //   awbTransacs.push(awbObj);
-    // });
-
 
     return res.status(200).send({ valid: true, awbTransacs });
   } catch (error) {

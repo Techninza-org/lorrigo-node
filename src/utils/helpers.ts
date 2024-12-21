@@ -1686,7 +1686,6 @@ export const calculateSellerInvoiceAmount = async () => {
           let codCharges = 0;
           // let excessCharges = 0;
           if(bill){
-            if(bill)
             if(bill.isRTOApplicable === false){
               codCharges = Number(bill.codValue);
               forwardCharges = Number(bill.rtoCharge);
@@ -1709,7 +1708,7 @@ export const calculateSellerInvoiceAmount = async () => {
        
 
 
-        const invoiceAmount = Number((totalAmount * 0.82).toFixed(2));
+        const invoiceAmount = totalAmount;
         // for (let i = 0; i < awbToBeInvoiced.length; i++) {
         //   const awbTxn = await PaymentTransactionModal.find({ desc: { $regex: awbToBeInvoiced[i] } });
         //   const clientBillAwbInfo = billedOrders.find(x => x.awb == awbToBeInvoiced[i])

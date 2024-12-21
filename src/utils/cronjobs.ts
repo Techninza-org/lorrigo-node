@@ -21,6 +21,7 @@ import { setTimeout } from 'timers/promises';
 import envConfig from "../utils/config";
 import ClientBillingModal from "../models/client.billing.modal";
 import { paymentStatusInfo } from "./recharge-wallet-info";
+import InvoiceModel from "../models/invoice.model";
 
 const BATCH_SIZE = 130;
 const API_DELAY = 120000; // 2 minutes in milliseconds
@@ -710,6 +711,7 @@ export default async function runCron() {
     cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
     cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);
     cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
+    cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);
 
     Logger.log("Cron jobs scheduled successfully");
   } else {
@@ -851,5 +853,19 @@ export const scheduleShipmentCheck = async () => {
 
   } catch (error) {
     console.error("Error fetching shipment details: B2B SHIPROCKET", error);
+  }
+}
+
+
+export const updatePaymentAlertStatus = async () => {
+  try{
+    const invoices = await InvoiceModel.find({status: 'pending', isPrepaidInvoice: false})
+    for(let i=0; i<invoices.length; i++){
+      const seller = await SellerModel.findById(invoices[i].sellerId)
+      seller.showPaymentAlert === true;
+      await seller?.save()
+    }
+  }catch(err){
+    console.log("Error in updatePaymentAlertStatus", err)
   }
 }

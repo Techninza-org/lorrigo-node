@@ -1689,3 +1689,55 @@ export const rejectDispute = async (req: ExtendedRequest, res: Response, next: N
     return next(error)
   }
 }
+
+export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    let awbTransacs: any[] = [];
+    console.log(req.params.id, 'id');
+    console.log(typeof req.params.id, 'type');
+    
+    
+    const invoice = await InvoiceModel.find({ invoice_id: req.params.id });
+    console.log(invoice, 'invoice');
+    
+    if (!invoice) return res.status(200).send({ valid: false, message: "No Invoice found" });
+    //@ts-ignore
+    const awbs = invoice[0]?.invoicedAwbs;
+    console.log(awbs, 'awbs');
+    
+    const bills = await ClientBillingModal.find({ awb: { $in: awbs } });
+    //@ts-ignore
+    awbs.forEach((awb: any) => {
+      const bill = bills.find((bill) => bill.awb === awb);
+      let forwardCharges = 0;
+      let rtoCharges = 0;
+      let codCharges = 0;
+      
+      if(bill){
+          if(bill.isRTOApplicable === false){
+            codCharges = Number(bill.codValue);
+            forwardCharges = Number(bill.rtoCharge);
+          }else{
+            rtoCharges = Number(bill.rtoCharge);
+            forwardCharges = Number(bill.rtoCharge);
+          }
+      }
+      
+
+      const awbObj = {
+        awb,
+        forwardCharges,
+        rtoCharges,
+        codCharges,
+        total: forwardCharges + rtoCharges + codCharges,
+      }
+      awbTransacs.push(awbObj); 
+      
+    });
+    console.log(awbTransacs, 'awbTransacs');
+
+    return res.status(200).send({ valid: true, awbTransacs });
+  } catch (error) {
+    return next(error);
+  }
+};
