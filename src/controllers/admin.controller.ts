@@ -971,8 +971,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
   const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
 
   const csvBills = json.map((bill: any) => {
-    const isForwardApplicable = Boolean(bill["Forward Applicable"]?.toUpperCase() === "YES");
-    const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "YES");
+    const isForwardApplicable = Boolean(bill["Forward Applicable"]?.toUpperCase() === "TRUE");
+    const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "TRUE");
 
     return {
       awb: (bill["Awb"])?.toString(),
@@ -1171,7 +1171,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
               paymentStatus: paymentStatusInfo.NOT_PAID,
               recipientName: order.customerDetails.get("name"),
-              fromCity: order.pickupAddress.city,
+              fromCity: order?.pickupAddress?.city || order?.pickupAddress?.get("city"),
               toCity: order.customerDetails.get("city"),
             }
           },
@@ -1183,57 +1183,57 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
     const validBills = billsWithCharges.filter(x => !!x)
     // @ts-ignore
-    await ClientBillingModal.bulkWrite(validBills);
+    const result  = await ClientBillingModal.bulkWrite(validBills);
 
-    await Promise.all(validBills.map(async (bill: any) => {
-      const sellerId = bill.updateOne.update.$set.sellerId
-      // const sellerId = "663379872fc3a04d7cc1e7a1" // for testing 
+    // await Promise.all(validBills.map(async (bill: any) => {
+    //   const sellerId = bill.updateOne.update.$set.sellerId
+    //   // const sellerId = "663379872fc3a04d7cc1e7a1" // for testing 
 
-      const awb = bill.updateOne.filter.awb;
-      const returnCODCharge = Math.max((bill.updateOne.update.$set.codValue || 0), 0); // Reversed COD Charge
-      const fwExcessCharge = Math.max((bill.updateOne.update.$set.fwExcessCharge || 0), 0); // use as fw + RTO excess charge
-      const isRTOApplied = bill.updateOne.update.$set.isRTOApplicable // use to check RTO applied or not
-      const isForwardApplied = bill.updateOne.update.$set.isForwardApplicable // use to check RTO applied or not
-      const rtoCharge = bill.updateOne.update.$set.rtoCharge // use as fw/RTO
+    //   const awb = bill.updateOne.filter.awb;
+    //   const returnCODCharge = Math.max((bill.updateOne.update.$set.codValue || 0), 0); // Reversed COD Charge
+    //   const fwExcessCharge = Math.max((bill.updateOne.update.$set.fwExcessCharge || 0), 0); // use as fw + RTO excess charge
+    //   const isRTOApplied = bill.updateOne.update.$set.isRTOApplicable // use to check RTO applied or not
+    //   const isForwardApplied = bill.updateOne.update.$set.isForwardApplicable // use to check RTO applied or not
+    //   const rtoCharge = bill.updateOne.update.$set.rtoCharge // use as fw/RTO
 
-      if (sellerId) {
-        // if (isForwardApplied) {
-        // console.log("for Fw: ONLY\n\n")
+    //   if (sellerId) {
+    //     // if (isForwardApplied) {
+    //     // console.log("for Fw: ONLY\n\n")
 
-        // // Excess weight charge
-        // if (fwExcessCharge > 0) {
-        //   console.log("Forward Excess Weight Charge ", fwExcessCharge)
-        //   // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, Forward Excess Weight Charge`);
-        // }
-        // }
+    //     // // Excess weight charge
+    //     // if (fwExcessCharge > 0) {
+    //     //   console.log("Forward Excess Weight Charge ", fwExcessCharge)
+    //     //   // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, Forward Excess Weight Charge`);
+    //     // }
+    //     // }
 
-        if (isRTOApplied && fwExcessCharge <= 0) {
+    //     if (isRTOApplied && fwExcessCharge <= 0) {
 
-          const isRTOChargeAlreadyReversed = await PaymentTransactionModal.find({
-            desc: { $regex: `${awb} RTO` }
-          })
+    //       const isRTOChargeAlreadyReversed = await PaymentTransactionModal.find({
+    //         desc: { $regex: `${awb} RTO` }
+    //       })
 
-          const isRTOCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO charges")) ? true : false
-          const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges")) ? true : false
+    //       const isRTOCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO charges")) ? true : false
+    //       const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges")) ? true : false
 
-          if (!isRTOCharged && rtoCharge > 0) {
-            // console.log(awb + "paise kt : RTO Charge \n\n ")
-            // await updateSellerWalletBalance(sellerId, Number(rtoCharge), false, `AWB: ${awb}, RTO Charge Applied`);
-          }
-          if (!isRTOCODCharged && returnCODCharge > 0) {
-            // console.log(awb + "paise Add : COD Charge \n\n ")
-            // await updateSellerWalletBalance(sellerId, Number(returnCODCharge), true, `AWB: ${awb}, COD Charge Reversed`);
-          }
+    //       if (!isRTOCharged && rtoCharge > 0) {
+    //         // console.log(awb + "paise kt : RTO Charge \n\n ")
+    //         // await updateSellerWalletBalance(sellerId, Number(rtoCharge), false, `AWB: ${awb}, RTO Charge Applied`);
+    //       }
+    //       if (!isRTOCODCharged && returnCODCharge > 0) {
+    //         // console.log(awb + "paise Add : COD Charge \n\n ")
+    //         // await updateSellerWalletBalance(sellerId, Number(returnCODCharge), true, `AWB: ${awb}, COD Charge Reversed`);
+    //       }
 
-          // Excess weight charge, it happens only after disptue accept or reject
-          // if (fwExcessCharge > 0) {
-          // console.log(fwExcessCharge, "fwExcessCharge")
-          // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, RTO Excess Weight Charge`);
-          // }
-        }
+    //       // Excess weight charge, it happens only after disptue accept or reject
+    //       // if (fwExcessCharge > 0) {
+    //       // console.log(fwExcessCharge, "fwExcessCharge")
+    //       // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, RTO Excess Weight Charge`);
+    //       // }
+    //     }
 
-      }
-    }));
+    //   }
+    // }));
 
     if (errorRows.length > 0) {
       errorWorksheet.addRows(errorRows);
