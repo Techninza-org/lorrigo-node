@@ -1111,6 +1111,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         return;
       }
 
+      bill.isForwardApplicable = bill.isRTOApplicable === true ? true : bill.isForwardApplicable;
+
       const monthBill = await MonthlyBilledAWBModel.findOneAndUpdate(
         { sellerId: order.sellerId, awb: order.awb },
         {
@@ -1183,7 +1185,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
     const validBills = billsWithCharges.filter(x => !!x)
     // @ts-ignore
-    const result  = await ClientBillingModal.bulkWrite(validBills);
+    const result = await ClientBillingModal.bulkWrite(validBills);
 
     // await Promise.all(validBills.map(async (bill: any) => {
     //   const sellerId = bill.updateOne.update.$set.sellerId
