@@ -1713,7 +1713,7 @@ export const calculateSellerInvoiceAmount = async () => {
 
           await createAdvanceAndInvoice(zoho_contact_id, totalAmount, awbToBeInvoiced, isPrepaid);
         }
-      } 
+      }
     };
 
     for (let i = 0; i < sellers.length; i += batchSize) {
@@ -1726,10 +1726,13 @@ export const calculateSellerInvoiceAmount = async () => {
       }
     }
 
-    console.log("All Invoice Generated Successfully");
+
+
+    return { message: "All Invoice Generated Successfully", status: 200 };
 
   } catch (err) {
     console.log(err);
+    return { message: "Error: While generating Invoice", status: 500 };
   }
 };
 

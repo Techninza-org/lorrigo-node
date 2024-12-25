@@ -1515,8 +1515,11 @@ export const getInoviceById = async (req: ExtendedRequest, res: Response, next: 
 
 export const generateInvoices = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    await calculateSellerInvoiceAmount();
-    return res.status(200).send({ valid: true, message: "Invoices generated successfully!" });
+    const result = await calculateSellerInvoiceAmount();
+    if (result.status === 200) {
+      return res.status(200).send({ valid: true, message: "Invoices generated successfully!" });
+    }
+    return res.status(200).send({ valid: false, message: "Error in generating invoices" });
   } catch (err) {
     return next(err);
   }
