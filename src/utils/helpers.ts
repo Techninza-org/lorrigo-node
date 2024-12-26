@@ -1741,20 +1741,9 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, totalAmount:
   try {
     const accessToken = await generateAccessToken();
     if (!accessToken) return;
-    const rechargeBody = {
-      "customer_id": zoho_contact_id,
-      "amount": Number(totalAmount),
-    }
-    let paymentId = '';
-    if(isPrepaid){
-    const rechargeRes = await axios.post(`https://www.zohoapis.in/books/v3/customerpayments?organization_id=60014023368`, rechargeBody, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Zoho-oauthtoken ${accessToken}`
-      }
-    })
-    paymentId = rechargeRes.data.payment.payment_id;
-  }
+    
+    const seller = await SellerModel.findOne({ zoho_contact_id });
+    if (!seller) return;
     
     const date = new Date().toISOString().split('T')[0];
     const dueDate = new Date();
@@ -1781,16 +1770,25 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, totalAmount:
     })
 
     const invoiceId = invoiceRes.data.invoice.invoice_id;
-
-    const seller = await SellerModel.findOne({ zoho_contact_id });
-    if (!seller) return;
+    const invoiceTotalZoho = invoiceRes.data.invoice.total;
 
     if (isPrepaid) {
+      const rechargeBody = {
+        "customer_id": zoho_contact_id,
+        "amount": invoiceTotalZoho,
+      }
+      const rechargeRes = await axios.post(`https://www.zohoapis.in/books/v3/customerpayments?organization_id=60014023368`, rechargeBody, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Zoho-oauthtoken ${accessToken}`
+      }
+    })
+    const paymentId = rechargeRes.data.payment.payment_id;
       const creditsBody = {
         "invoice_payments": [
           {
             "payment_id": paymentId,
-            "amount_applied": Number(totalAmount)
+            "amount_applied": invoiceTotalZoho
           }
         ]
       }
