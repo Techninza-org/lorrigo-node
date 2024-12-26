@@ -3,7 +3,7 @@ import axios from "axios";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import config from "./config";
 import APIs from "./constants/third_party_apis";
-import { getB2BShiprocketBucketing, getDelhiveryBucketing, getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getSMARTRToken, getShiprocketB2BConfig, getShiprocketBucketing, getShiprocketToken, getSmartRBucketing, getSmartShipToken, getSmartshipBucketing, handleDateFormat, modifyPdf } from "./helpers";
+import { generateAccessToken, getB2BShiprocketBucketing, getDelhiveryBucketing, getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getSMARTRToken, getShiprocketB2BConfig, getShiprocketBucketing, getShiprocketToken, getSmartRBucketing, getSmartShipToken, getSmartshipBucketing, handleDateFormat, modifyPdf } from "./helpers";
 import * as cron from "node-cron";
 import EnvModel from "../models/env.model";
 import https from "node:https";
@@ -699,6 +699,8 @@ export default async function runCron() {
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     cron.schedule(expression4every2Minutes, scheduleShipmentCheck);
+
+    // Need to fix
     // cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
     // cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
 
@@ -869,3 +871,92 @@ export const updatePaymentAlertStatus = async () => {
     console.log("Error in updatePaymentAlertStatus", err)
   }
 }
+
+
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// async function zohoUser() {
+//   try {
+//     const sellers: any[] = [
+//       { email: "parichha.surya@gmail.com", zoho_contect_id: "852186000000015775" },
+//       { email: "woof@caninecraving.com", zoho_contect_id: "852186000000016155" },
+//       { email: "logistics@sportsjam.in", zoho_contect_id: "852186000000016271" },
+//       { email: "balaji.m@readyassist.in", zoho_contect_id: "852186000000016560" },
+//       { email: "innovationn09@gmail.com", zoho_contect_id: "852186000000020243" },
+//       { email: "nuttysdenpetworld@gmail.com", zoho_contect_id: "852186000000087163" },
+//       { email: "mansi@tanntrim.com", zoho_contect_id: "852186000000090069" },
+//       { email: "manishjain644@gmail.com", zoho_contect_id: "852186000000170001" },
+//       { email: "nripendra@ayurmeans.com", zoho_contect_id: "852186000000305083" },
+//       { email: "admin@noahsports.in", zoho_contect_id: "852186000001069003" },
+//       { email: "info@dadudadiskitchen.com", zoho_contect_id: "852186000001173327" },
+//       { email: "shruti@thestruttstore.com", zoho_contect_id: "852186000001418017" },
+//       { email: "info@clayandhearth.com", zoho_contect_id: "852186000001429005" },
+//       { email: "info@pepperwicks.com", zoho_contect_id: "852186000001454003" },
+//       { email: "shanualidelhi0786@gmail.com", zoho_contect_id: "852186000001706043" },
+//       { email: "sushilbardia@live.com", zoho_contect_id: "852186000001759023" },
+//       { email: "delivery@houseofdeepthiltd.com", zoho_contect_id: "852186000001759043" },
+//       { email: "balaji@scorpionventures.com", zoho_contect_id: "852186000001790265" },
+//       { email: "deepender@swizzle.in", zoho_contect_id: "852186000002187163" },
+//       { email: "ravi8877@gmail.com", zoho_contect_id: "852186000002187163" },
+//       { email: "nishant_singh@lorrigo.com", zoho_contect_id: "852186000002187163" },
+//       { email: "fashion.freaks030@gmail.com", zoho_contect_id: "852186000002187163" },
+//       { email: "tr5531803@gmail.com", zoho_contect_id: "852186000002187163" },
+//       { email: "sakshi.mahajan1422@gmail.com", zoho_contect_id: "852186000002187163" },
+//       { email: "nishant10194@gmail.com", zoho_contect_id: "852186000002187163" },
+//     ]
+//     const sellerEmails = sellers.map((seller) => seller.email);
+
+//     const usersToUpdateZoho = await SellerModel.find({
+//       email: { $nin: sellerEmails },
+//     });
+
+//     if (usersToUpdateZoho.length === 0) {
+//       console.log("No users need to be updated in Zoho.");
+//       return;
+//     }
+
+//     const token = await generateAccessToken(); // Ensure this function exists and works correctly
+
+//     for (const user of usersToUpdateZoho) {
+//       const data = {
+//         contact_name: user.name,
+//         email: user.email,
+//       };
+
+//       console.log(data, "data")
+
+//       try {
+
+//         const response = await axios.post(
+//           `https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`,
+//           JSON.stringify(data),
+//           {
+//             headers: {
+//               "Content-Type": "application/json",
+//               Authorization: `Zoho-oauthtoken ${token}`,
+//             },
+//           }
+//         );
+
+//         console.log(response?.data?.contact, "response?.data?.contact")
+//         if (response?.data?.contact) {
+//           user.zoho_contact_id = response.data.contact.contact_id;
+//           await user.save();
+//           console.log(`Updated Zoho contact ID for user: ${user.email}`);
+//         } else {
+//           console.log(`Failed to update Zoho contact for user: ${user.email}`);
+//         }
+
+//         await delay(10000); // 10-second delay
+
+//       } catch (err) {
+//         console.error(`Error updating user ${user.email}:`, err);
+//       }
+//     }
+//   } catch (error) {
+//     console.error("Error while updating Zoho users:", error);
+//   }
+// }

@@ -79,6 +79,12 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     } catch (err) {
       return next(err);
     }
+
+    // If awb already exist then, stop to create shipment
+    if(order.awb){
+      return res.status(200).send({ valid: false, message: "Shipment Already Exists" });
+    }
+
     let hubDetails;
     try {
       hubDetails = await HubModel.findById(order.pickupAddress);

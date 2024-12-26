@@ -64,7 +64,7 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
       let nameWithNickname = `${courierData?.name || courierData?.vendorId?.name} ${
         //@ts-ignore
         vendor_channel_id?.nickName || courierData?.vendorId?.vendor_channel_id?.nickName
-      }`.trim();
+        }`.trim();
       if (customPricing) {
         // @ts-ignore
         courierData._id = courierData.vendorId?._id;
@@ -494,7 +494,7 @@ export const confirmRechargeWallet = async (req: ExtendedRequest, res: Response,
         .createHash("sha256")
         .update(
           `${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}` +
-            envConfig.PHONEPE_SALT_KEY
+          envConfig.PHONEPE_SALT_KEY
         )
         .digest("hex") +
       "###" +
@@ -578,7 +578,7 @@ export const refetchLastTransactions = async (req: ExtendedRequest, res: Respons
           .createHash("sha256")
           .update(
             `${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${txn.merchantTransactionId}` +
-              envConfig.PHONEPE_SALT_KEY
+            envConfig.PHONEPE_SALT_KEY
           )
           .digest("hex") +
         "###" +
@@ -702,7 +702,7 @@ export const confirmInvoicePayment = async (req: ExtendedRequest, res: Response,
         .createHash("sha256")
         .update(
           `${APIs.PHONEPE_CONFIRM_API}/${envConfig.PHONEPE_MERCHENT_ID}/${merchantTransactionId}` +
-            envConfig.PHONEPE_SALT_KEY
+          envConfig.PHONEPE_SALT_KEY
         )
         .digest("hex") +
       "###" +
@@ -800,24 +800,26 @@ export const invoiceAwbList = async (req: ExtendedRequest, res: Response, next: 
     let awbTransacs: any[] = [];
     const invoice = await InvoiceModel.findById(req.params.id);
     if (!invoice) return res.status(200).send({ valid: false, message: "No Invoice found" });
+
     const awbs = invoice.invoicedAwbs ?? [];
     const bills = await ClientBillingModal.find({ awb: { $in: awbs } });
-    
+
     awbs.forEach((awb) => {
+
       const bill = bills.find((bill) => bill.awb === awb);
       let forwardCharges = 0;
       let rtoCharges = 0;
       let codCharges = 0;
-      
-      let total = 0;
-      if(bill){
-          if(bill.isRTOApplicable === false){
-            codCharges = Number(bill.codValue);
-            forwardCharges = Number(bill.rtoCharge);
-          }else{
-            rtoCharges = Number(bill.rtoCharge);
-            forwardCharges = Number(bill.rtoCharge);
-          }
+
+      if (bill) {
+
+        if (bill.isRTOApplicable === false) {
+          codCharges = Number(bill.codValue);
+          forwardCharges = Number(bill.rtoCharge);
+        } else {
+          rtoCharges = Number(bill.rtoCharge);
+          forwardCharges = Number(bill.rtoCharge);
+        }
       }
       
 
@@ -828,7 +830,7 @@ export const invoiceAwbList = async (req: ExtendedRequest, res: Response, next: 
         codCharges,
         total: forwardCharges + rtoCharges + codCharges,
       }
-      awbTransacs.push(awbObj); 
+      awbTransacs.push(awbObj);
     });
 
     return res.status(200).send({ valid: true, awbTransacs });

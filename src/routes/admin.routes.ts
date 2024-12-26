@@ -142,7 +142,7 @@ adminRouter.get("/invoice", AdminAuthMiddleware, cache("1 day"), getInvoices);
 adminRouter.get("/invoice/:id", AdminAuthMiddleware, cache("1 day"), getInoviceById);
 
 // @ts-ignore
-adminRouter.get('/generate-invoice', AdminAuthMiddleware, cache("1 day"), generateInvoices);
+adminRouter.get('/generate-invoice', AdminAuthMiddleware, generateInvoices);
 
 //@ts-ignore
 adminRouter.get('/subadmins', AdminAuthMiddleware, getSubAdmins)
