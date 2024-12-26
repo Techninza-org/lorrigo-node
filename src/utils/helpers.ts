@@ -1744,14 +1744,17 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, totalAmount:
       "customer_id": zoho_contact_id,
       "amount": Number(totalAmount),
     }
+    let paymentId = '';
+    if(isPrepaid){
     const rechargeRes = await axios.post(`https://www.zohoapis.in/books/v3/customerpayments?organization_id=60014023368`, rechargeBody, {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Zoho-oauthtoken ${accessToken}`
       }
     })
-
-    const paymentId = rechargeRes.data.payment.payment_id;
+    paymentId = rechargeRes.data.payment.payment_id;
+  }
+    
     const date = new Date().toISOString().split('T')[0];
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 15);
@@ -1813,22 +1816,6 @@ export async function createAdvanceAndInvoice(zoho_contact_id: any, totalAmount:
     await seller.save();
 
     console.log('Completed for seller', seller.name);
-  } catch (err) {
-    console.log(err);
-  }
-}
-
-async function invoicesGeneratedButNotAdded() {
-  try {
-    const seller = await SellerModel.find({ zoho_contact_id: 852186000000090069 });
-    console.log(seller, 'seller');
-    const accessToken = await generateAccessToken();
-    console.log(accessToken, 'accessToken');
-    if (!accessToken) return;
-
-
-
-
   } catch (err) {
     console.log(err);
   }
