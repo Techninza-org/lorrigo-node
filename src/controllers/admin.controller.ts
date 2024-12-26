@@ -1715,17 +1715,12 @@ export const rejectDispute = async (req: ExtendedRequest, res: Response, next: N
 export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     let awbTransacs: any[] = [];
-    console.log(req.params.id, 'id');
-    console.log(typeof req.params.id, 'type');
-    
     
     const invoice = await InvoiceModel.find({ invoice_id: req.params.id });
-    console.log(invoice, 'invoice');
     
     if (!invoice) return res.status(200).send({ valid: false, message: "No Invoice found" });
     //@ts-ignore
     const awbs = invoice[0]?.invoicedAwbs;
-    console.log(awbs, 'awbs');
     
     const bills = await ClientBillingModal.find({ awb: { $in: awbs } });
     //@ts-ignore
@@ -1748,15 +1743,19 @@ export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, n
 
       const awbObj = {
         awb,
+        invoiceNo: req.params.id,
         forwardCharges,
         rtoCharges,
         codCharges,
         total: forwardCharges + rtoCharges + codCharges,
+        zone: bill?.zone,
+        recipientName: bill?.recipientName,
+        fromCity: bill?.fromCity,
+        toCity: bill?.toCity,
+        orderId: bill?.orderRefId,
       }
       awbTransacs.push(awbObj); 
-      
     });
-    console.log(awbTransacs, 'awbTransacs');
 
     return res.status(200).send({ valid: true, awbTransacs });
   } catch (error) {
