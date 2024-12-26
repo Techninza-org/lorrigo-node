@@ -98,6 +98,7 @@ export const getSeller = async (req: ExtendedRequest, res: Response, next: NextF
         billingAddress: 1,
         companyProfile: 1,
         gstInvoice: 1,
+        showPaymentAlert: 1,
         kycDetails: { submitted: 1 }, // Include only 'submitted' field in 'kycDetails'
       })
       .populate("channelPartners");
@@ -730,6 +731,10 @@ export const confirmInvoicePayment = async (req: ExtendedRequest, res: Response,
       });
     }
 
+    const seller = await SellerModel.findById(sellerId);
+    seller?.showPaymentAlert === false;
+    await seller?.save();
+
     return res.status(200).send({
       valid: true,
       message: "Invoice Paid Successfully",
@@ -816,6 +821,7 @@ export const invoiceAwbList = async (req: ExtendedRequest, res: Response, next: 
           forwardCharges = Number(bill.rtoCharge);
         }
       }
+      
 
       const awbObj = {
         awb,
