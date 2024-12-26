@@ -1700,6 +1700,7 @@ export const calculateSellerInvoiceAmount = async () => {
 
           totalAmount += forwardCharges + rtoCharges + codCharges;
         });
+        totalAmount = Number((totalAmount).toFixed(2));
 
         const invoiceAmount = totalAmount / 1.18;
 
