@@ -1069,9 +1069,10 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       }
 
       let weightSlab = vendor?.weightSlab || vendor?.vendorId?.weightSlab
+      const csvWeight = Math.max(bill.chargedWeight, weightSlab);
 
       const csvBody = {
-        weight: Math.max(bill.chargedWeight, weightSlab),
+        weight: csvWeight,
         paymentType: bill.shipmentType,
         collectableAmount: Math.max(0, order.amount2Collect),
       };
@@ -1715,13 +1716,13 @@ export const rejectDispute = async (req: ExtendedRequest, res: Response, next: N
 export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     let awbTransacs: any[] = [];
-    
+
     const invoice = await InvoiceModel.find({ invoice_id: req.params.id });
-    
+
     if (!invoice) return res.status(200).send({ valid: false, message: "No Invoice found" });
     //@ts-ignore
     const awbs = invoice[0]?.invoicedAwbs;
-    
+
     const bills = await ClientBillingModal.find({ awb: { $in: awbs } });
     const orders = await B2COrderModel.find({ awb: { $in: awbs } });
     //@ts-ignore
@@ -1734,17 +1735,17 @@ export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, n
       let forwardCharges = 0;
       let rtoCharges = 0;
       let codCharges = 0;
-      
-      if(bill){
-          if(bill.isRTOApplicable === false){
-            codCharges = Number(bill.codValue);
-            forwardCharges = Number(bill.rtoCharge);
-          }else{
-            rtoCharges = Number(bill.rtoCharge);
-            forwardCharges = Number(bill.rtoCharge);
-          }
+
+      if (bill) {
+        if (bill.isRTOApplicable === false) {
+          codCharges = Number(bill.codValue);
+          forwardCharges = Number(bill.rtoCharge);
+        } else {
+          rtoCharges = Number(bill.rtoCharge);
+          forwardCharges = Number(bill.rtoCharge);
+        }
       }
-      
+
 
       const awbObj = {
         awb,
@@ -1761,7 +1762,7 @@ export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, n
         createdAt: orderCreatedAt,
         deliveredAt: deliveryDate,
       }
-      awbTransacs.push(awbObj); 
+      awbTransacs.push(awbObj);
     });
 
     return res.status(200).send({ valid: true, awbTransacs });

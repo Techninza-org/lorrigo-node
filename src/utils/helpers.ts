@@ -1638,7 +1638,9 @@ export const calculateSellerInvoiceAmount = async () => {
           lastInvoiceDate = lastInvoiceGenerationDate[0].createdAt;
         }
 
-        const billedOrders = await ClientBillingModal.find({ sellerId }).select("awb isDisputeRaised disputeId isRTOApplicable").populate("disputeId");
+        const billedOrders = await ClientBillingModal.find({ sellerId,
+          createdAt: { $gt: lastInvoiceDate, $lt: today }
+         }).select("awb isDisputeRaised disputeId isRTOApplicable").populate("disputeId");
 
         const allOrders = await B2COrderModel.find({
           sellerId,
