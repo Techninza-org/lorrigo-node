@@ -12,7 +12,7 @@ import CustomPricingModel, { CustomB2BPricingModel } from "../models/custom_pric
 import ClientBillingModal from "../models/client.billing.modal";
 import csvtojson from "csvtojson";
 import exceljs from "exceljs";
-import { format } from "date-fns";
+import { format, formatDate } from "date-fns";
 import InvoiceModel from "../models/invoice.model";
 import { calculateSellerInvoiceAmount, generateAccessToken } from "../utils/helpers";
 import axios from "axios";
@@ -1723,9 +1723,14 @@ export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, n
     const awbs = invoice[0]?.invoicedAwbs;
     
     const bills = await ClientBillingModal.find({ awb: { $in: awbs } });
+    const orders = await B2COrderModel.find({ awb: { $in: awbs } });
     //@ts-ignore
     awbs.forEach((awb: any) => {
       const bill = bills.find((bill) => bill.awb === awb);
+      const order = orders.find((order) => order.awb === awb);
+      const orderCreatedAt = formatDate(`${order?.createdAt}`, 'dd MM yyyy | HH:mm a');
+      const orderStage = order?.orderStages?.slice(-1)[0];
+      const deliveryDate = formatDate(`${orderStage?.stageDateTime}`, 'dd MM yyyy | HH:mm a')
       let forwardCharges = 0;
       let rtoCharges = 0;
       let codCharges = 0;
@@ -1753,6 +1758,8 @@ export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, n
         fromCity: bill?.fromCity,
         toCity: bill?.toCity,
         orderId: bill?.orderRefId,
+        createdAt: orderCreatedAt,
+        deliveredAt: deliveryDate,
       }
       awbTransacs.push(awbObj); 
     });
@@ -1762,3 +1769,51 @@ export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, n
     return next(error);
   }
 };
+
+
+export const mapInoiceAwbTransactions = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const invoices = await InvoiceModel.find({}).select(["invoice_id", "invoicedAwbs"]);
+    invoices.forEach(async (invoice) => {
+      const awbs = invoice.invoicedAwbs || [];
+      const awbTransacs: any[] = [];
+      const bills = await ClientBillingModal.find({ awb: { $in: awbs } });
+      awbs.forEach((awb: any) => {
+        const bill = bills.find((bill) => bill.awb === awb);
+        let forwardCharges = 0;
+        let rtoCharges = 0;
+        let codCharges = 0;
+        
+        if(bill){
+            if(bill.isRTOApplicable === false){
+              codCharges = Number(bill.codValue);
+              forwardCharges = Number(bill.rtoCharge);
+            }else{
+              rtoCharges = Number(bill.rtoCharge);
+              forwardCharges = Number(bill.rtoCharge);
+            }
+        }
+        
+
+        const awbObj = {
+          awb,
+          invoiceNo: invoice.invoice_id,
+          forwardCharges,
+          rtoCharges,
+          codCharges,
+          total: forwardCharges + rtoCharges + codCharges,
+          zone: bill?.zone,
+          recipientName: bill?.recipientName,
+          fromCity: bill?.fromCity,
+          toCity: bill?.toCity,
+          orderId: bill?.orderRefId,
+        }
+        awbTransacs.push(awbObj); 
+      });
+      console.log(awbTransacs, 'awbbbbbb'); 
+    })
+
+  } catch (error) {
+    return next(error);
+  }
+}
