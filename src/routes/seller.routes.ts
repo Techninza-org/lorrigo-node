@@ -23,7 +23,8 @@ import {
     raiseDispute,
     getDisputes,
     acceptDisputeBySeller,
-    invoiceAwbList
+    invoiceAwbList,
+    getInvoicesFromZoho
 } from "../controllers/seller.controller";
 
 import multer from 'multer';
@@ -58,6 +59,9 @@ sellerRouter.get("/transactions", getSellerTransactionHistory);
 
 //@ts-ignore
 sellerRouter.get("/invoice", cache("5 minutes"), getInvoices)
+
+//@ts-ignore
+sellerRouter.get("/invoices", cache("5 minutes"), getInvoicesFromZoho)
 
 //@ts-ignore
 sellerRouter.get("/invoice/:id", cache("1 day"), getInoviceById)

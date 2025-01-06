@@ -4,6 +4,7 @@ const InvoiceSchema = new mongoose.Schema({
     invoice_id: { type: String, required: true },
     amount: { type: String, required: false },
     pdf: { type: String, required: false },
+    dueAmount: { type: String, required: true, default: "0" },
     date: { type: String, required: true },
     status: { type: String, required: false, default: "pending" },
     sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },

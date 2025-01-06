@@ -784,6 +784,62 @@ export const getInvoices = async (req: ExtendedRequest, res: Response, next: Nex
   }
 };
 
+export const getInvoicesFromZoho = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const accessToken = await generateAccessToken();
+    if (!accessToken) return;
+    const seller = await SellerModel.findById(req.seller._id);
+    const zohoId = seller?.zoho_contact_id;
+    
+    
+    if(!zohoId) return res.status(200).send({ valid: false, message: "No Zoho Id found" });
+    const invoices = await axios.get(
+      `https://www.zohoapis.in/books/v3/invoices?organization_id=60014023368`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+      }
+    );
+    
+    const sellerInvoices = invoices.data.invoices.filter((invoice: any) => invoice.customer_id === zohoId);
+    
+    const paidInvoices = sellerInvoices.filter((invoice: any) => invoice.status === "paid");
+    
+    const unpaidInvoices = sellerInvoices.filter((invoice: any) => invoice.status !== "paid");
+    
+    
+    const paidInvoiceIds = paidInvoices.map((invoice: any) => invoice.invoice_id);
+    
+    const unpaidInvoiceIds = unpaidInvoices.map((invoice: any) => invoice.invoice_id);
+
+    const paidInvoiceFromDB = await InvoiceModel.find({ invoice_id: { $in: paidInvoiceIds } });
+    
+    paidInvoiceFromDB.forEach((invoice: any) => {
+      const zohoInvoice = sellerInvoices.find((zohoInvoice: any) => zohoInvoice.invoice_id === invoice.invoice_id);
+      
+      invoice.status = 'paid';
+      invoice.dueAmount = zohoInvoice?.balance.toString();
+    });
+
+    const unpaidInvoiceFromDB = await InvoiceModel.find({ invoice_id: { $in: unpaidInvoiceIds } });
+
+    unpaidInvoiceFromDB.forEach((invoice: any) => {
+      const zohoInvoice = sellerInvoices.find((zohoInvoice: any) => zohoInvoice.invoice_id === invoice.invoice_id);
+      
+      invoice.status = 'unpaid';
+      invoice.dueAmount = zohoInvoice?.balance.toString();
+    });
+
+    const allInvoices = [...paidInvoiceFromDB, ...unpaidInvoiceFromDB];
+    return res.status(200).send({ valid: true, invoices: allInvoices});
+
+  } catch (error) {
+    return next(error);
+  }
+}
+
 export const getInoviceById = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const invoice = await InvoiceModel.findById(req.params.id);
@@ -907,7 +963,6 @@ export const getDisputes = async (req: ExtendedRequest, res: Response, next: Nex
 export const acceptDisputeBySeller = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { awb } = req.body;
-    console.log(awb, "awb");
     const bill = await ClientBillingModal.findOne({ awb });
     if (!bill) return res.status(200).send({ valid: false, message: "No Order found" });
     bill.disputeAcceptedBySeller = true;
