@@ -13,7 +13,27 @@ import { isValidObjectId } from "mongoose";
 import CustomPricingModel from "../models/custom_pricing.model";
 import envConfig from "./config";
 import { Types } from "mongoose";
-import { CANCELED, DELIVERED, IN_TRANSIT, LOST_DAMAGED, NDR, READY_TO_SHIP, RTO, RETURN_CANCELLATION, RETURN_CANCELLED_BY_CLIENT, RETURN_CANCELLED_BY_SMARTSHIP, RETURN_CONFIRMED, RETURN_DELIVERED, RETURN_IN_TRANSIT, RETURN_ORDER_MANIFESTED, RETURN_OUT_FOR_PICKUP, RETURN_PICKED, RETURN_SHIPMENT_LOST, DISPOSED, RTO_DELIVERED } from "./lorrigo-bucketing-info";
+import {
+  CANCELED,
+  DELIVERED,
+  IN_TRANSIT,
+  LOST_DAMAGED,
+  NDR,
+  READY_TO_SHIP,
+  RTO,
+  RETURN_CANCELLATION,
+  RETURN_CANCELLED_BY_CLIENT,
+  RETURN_CANCELLED_BY_SMARTSHIP,
+  RETURN_CONFIRMED,
+  RETURN_DELIVERED,
+  RETURN_IN_TRANSIT,
+  RETURN_ORDER_MANIFESTED,
+  RETURN_OUT_FOR_PICKUP,
+  RETURN_PICKED,
+  RETURN_SHIPMENT_LOST,
+  DISPOSED,
+  RTO_DELIVERED,
+} from "./lorrigo-bucketing-info";
 import ChannelModel from "../models/channel.model";
 import HubModel from "../models/hub.model";
 import { calculateRateAndPrice, regionToZoneMappingLowercase } from "./B2B-helper";
@@ -25,8 +45,8 @@ import ClientBillingModal from "../models/client.billing.modal";
 import { updateSellerWalletBalance } from ".";
 import { format, formatISO, parse } from "date-fns";
 import NotInInvoiceAwbModel from "../models/not-billed-awbs-due-to-dispute.model";
-const { PDFDocument, rgb } = require('pdf-lib');
-const fs = require('fs');
+const { PDFDocument, rgb } = require("pdf-lib");
+const fs = require("fs");
 
 export const validateEmail = (email: string): boolean => {
   return /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)*[a-zA-Z]{2,}))$/.test(
@@ -50,9 +70,7 @@ export const validateSmartShipServicablity = async (
   shipmentType: number, // 0 for forward 1 for reverse
 
   prefferredCarrier: number[]
-
 ): Promise<any> => {
-
   const requestBody: any = {
     order_info: {
       email: "noreply@lorrigo.com",
@@ -81,10 +99,12 @@ export const validateSmartShipServicablity = async (
       smartshipAPIconfig
     );
     const responseData = response.data;
-    const mappedCouriers = Object?.keys(responseData?.data?.carrier_info)?.map((item: any) => responseData.data.carrier_info[item])
+    const mappedCouriers = Object?.keys(responseData?.data?.carrier_info)?.map(
+      (item: any) => responseData.data.carrier_info[item]
+    );
     return mappedCouriers || [];
   } catch (err) {
-    console.log(err, "err")
+    console.log(err, "err");
     return false;
   }
 
@@ -105,7 +125,7 @@ export const addVendors = async (req: Request, res: Response, next: NextFunction
       vendor: savedVendor,
     });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
 };
 
@@ -124,7 +144,7 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
       const vendor = await CourierModel.findById(vendorId);
       if (!vendor) {
         const previouslySavedPricing = await CustomPricingModel.findById(vendorId).lean();
-        console.log(previouslySavedPricing, "previouslySavedPricing")
+        console.log(previouslySavedPricing, "previouslySavedPricing");
         if (previouslySavedPricing) {
           delete body.vendorId;
           // const savedPricing = await CustomPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
@@ -132,7 +152,9 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
           let savedPricing = await CustomPricingModel.findOne({ vendorId: vendorId, sellerId: sellerId });
           savedPricing = await CustomPricingModel.findByIdAndUpdate(savedPricing?._id, { ...body }, { new: true });
 
-          return res.status(200).send({ valid: true, message: "Vendor not found. Custom pricing updated for user", savedPricing });
+          return res
+            .status(200)
+            .send({ valid: true, message: "Vendor not found. Custom pricing updated for user", savedPricing });
         } else {
           const toAdd = {
             vendorId: vendorId,
@@ -141,7 +163,9 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
           };
           const savedPricing = new CustomPricingModel(toAdd);
           await savedPricing.save();
-          return res.status(200).send({ valid: true, message: "Vendor not found. Custom pricing created for user", savedPricing });
+          return res
+            .status(200)
+            .send({ valid: true, message: "Vendor not found. Custom pricing created for user", savedPricing });
         }
       } else {
         // Vendor found, update its pricing
@@ -151,7 +175,11 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
         let savedPricing;
         if (previouslySavedPricing) {
           // Update custom pricing
-          savedPricing = await CustomPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
+          savedPricing = await CustomPricingModel.findByIdAndUpdate(
+            previouslySavedPricing._id,
+            { ...body },
+            { new: true }
+          );
           return res.status(200).send({ valid: true, message: "Vendor priced updated for user", savedPricing });
         } else {
           const toAdd = {
@@ -165,7 +193,7 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
             ...body,
           };
 
-          console.log(toAdd, "toAdd")
+          console.log(toAdd, "toAdd");
           savedPricing = new CustomPricingModel(toAdd);
           savedPricing = await savedPricing.save();
           return res.status(200).send({ valid: true, message: "Vendor priced updated for user", savedPricing });
@@ -177,7 +205,7 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
     }
     return res.status(200).send({ valid: false, message: "Not implemented yet" });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
 };
 
@@ -195,18 +223,18 @@ export const getSellers = async (req: Request, res: Response, next: NextFunction
       .sort({ _id: -1 }) // Sort by _id in descending order
       // .skip(skip)
       // .limit(limit)
-      .select('name isVerified email  billingAddress companyProfile bankDetails createdAt _id'); // Exclude the kycDetails field
+      .select("name isVerified email  billingAddress companyProfile bankDetails createdAt _id"); // Exclude the kycDetails field
 
     return res.status(200).json({
       valid: true,
       sellers: sellers,
     });
   } catch (err: any) {
-    console.error('Error fetching sellers:', err);
+    console.error("Error fetching sellers:", err);
     return res.status(500).json({
       valid: false,
-      message: 'An error occurred while fetching sellers.',
-      error: err.message || 'Unknown error',
+      message: "An error occurred while fetching sellers.",
+      error: err.message || "Unknown error",
     });
   }
 };
@@ -296,7 +324,8 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
 
     const vendors = await CourierModel.find({
       _id: { $in: vendorIds },
-    }).populate("vendor_channel_id")
+    })
+      .populate("vendor_channel_id")
       .lean();
 
     const loopLength = vendors.length;
@@ -365,7 +394,6 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
       let totalCharge = 0;
       totalCharge += increment_price.basePrice;
 
-
       if (orderWeight < minWeight) {
         orderWeight = minWeight;
       }
@@ -380,7 +408,7 @@ export const ratecalculatorController = async (req: ExtendedRequest, res: Respon
       }
       const weightIncrementRatio = Math.ceil(orderWeight / cv.incrementWeight);
       totalCharge += increment_price.incrementPrice * weightIncrementRatio + cod;
-      let rtoCharges = (totalCharge - cod)
+      let rtoCharges = totalCharge - cod;
 
       data2send.push({
         name: cv.name,
@@ -407,12 +435,7 @@ export const B2BRatecalculatorController = async (req: ExtendedRequest, res: Res
   const body = req.body;
   const users_vendors = req.seller?.b2bVendors;
 
-  const {
-    deliveryPincode: toPin,
-    pickupPincode: fromPin,
-    amount,
-    orderWeight,
-  } = body
+  const { deliveryPincode: toPin, pickupPincode: fromPin, amount, orderWeight } = body;
 
   const pickupPincode = Number(fromPin);
   const deliveryPincode = Number(toPin);
@@ -421,7 +444,7 @@ export const B2BRatecalculatorController = async (req: ExtendedRequest, res: Res
   const deliveryPincodeData = await PincodeModel.findOne({ Pincode: deliveryPincode }).exec();
 
   if (!pickupPincodeData || !deliveryPincodeData) {
-    throw new Error('Pincode data not found');
+    throw new Error("Pincode data not found");
   }
 
   const fromRegionName = pickupPincodeData.District.toLowerCase(); // convert to lowercase
@@ -431,7 +454,7 @@ export const B2BRatecalculatorController = async (req: ExtendedRequest, res: Res
   const Tzone = await regionToZoneMappingLowercase(toRegionName);
 
   if (!Fzone || !Tzone) {
-    throw new Error('Zone not found for the given region');
+    throw new Error("Zone not found for the given region");
   }
 
   let query: {
@@ -444,11 +467,19 @@ export const B2BRatecalculatorController = async (req: ExtendedRequest, res: Res
     isReversedCourier: false,
   };
 
-
   const b2bCouriers = await B2BCalcModel.find(query).populate("vendor_channel_id");
   const courierDataPromises = b2bCouriers.map(async (courier) => {
     try {
-      const result = await calculateRateAndPrice(courier, Fzone, Tzone, orderWeight, courier._id.toString(), fromRegionName, toRegionName, amount);
+      const result = await calculateRateAndPrice(
+        courier,
+        Fzone,
+        Tzone,
+        orderWeight,
+        courier._id.toString(),
+        fromRegionName,
+        toRegionName,
+        amount
+      );
 
       const parterPickupTime = courier.pickupTime;
       const partnerPickupHour = Number(parterPickupTime.split(":")[0]);
@@ -474,20 +505,19 @@ export const B2BRatecalculatorController = async (req: ExtendedRequest, res: Res
         order_zone: `${Fzone}-${Tzone}`,
         charge: result.finalAmount,
         expectedPickup,
-        ...result
+        ...result,
       };
     } catch (error) {
-      console.log(error)
+      console.log(error);
       return null;
     }
   });
 
   const courierData = await Promise.all(courierDataPromises);
-  const b2bCouriersData = courierData.filter(data => data !== null);
+  const b2bCouriersData = courierData.filter((data) => data !== null);
 
   return res.status(200).send({ valid: true, rates: b2bCouriersData });
-
-}
+};
 
 const convertToObjectId = (id: string) => {
   try {
@@ -514,7 +544,7 @@ export const rateCalculation = async (
   collectableAmount?: any,
   hubId?: number,
   isReversedOrder?: boolean,
-  orderRefId?: string,
+  orderRefId?: string
 ) => {
   try {
     const numPaymentType = Number(paymentType);
@@ -549,7 +579,7 @@ export const rateCalculation = async (
     } = {
       _id: { $in: vendorIds },
       isActive: true,
-      isReversedCourier: false
+      isReversedCourier: false,
     };
 
     if (isReversedOrder) {
@@ -564,7 +594,10 @@ export const rateCalculation = async (
       const token = await getShiprocketToken();
       if (!token) return [{ message: "Invalid Shiprocket token" }];
 
-      const url = envConfig.SHIPROCKET_API_BASEURL + APIs.SHIPROCKET_ORDER_COURIER + `/?pickup_postcode=${pickupPincode}&delivery_postcode=${deliveryPincode}&weight=${weight}&cod=0&order_id=${shiprocketOrderID}`;
+      const url =
+        envConfig.SHIPROCKET_API_BASEURL +
+        APIs.SHIPROCKET_ORDER_COURIER +
+        `/?pickup_postcode=${pickupPincode}&delivery_postcode=${deliveryPincode}&weight=${weight}&cod=0&order_id=${shiprocketOrderID}`;
 
       const config = {
         headers: {
@@ -575,16 +608,18 @@ export const rateCalculation = async (
       const response = await axios.get(url, config);
       const courierCompanies = response?.data?.data?.available_courier_companies;
 
-      console.log("[Shiprocket Heavy weight Couries]", courierCompanies?.map((item: any) => {
-        return [item.courier_company_id, item.courier_name]
-      }))
+      console.log(
+        "[Shiprocket Heavy weight Couries]",
+        courierCompanies?.map((item: any) => {
+          return [item.courier_company_id, item.courier_name];
+        })
+      );
 
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
       vendors?.forEach((vendor: any) => {
-
-        const courier = courierCompanies?.find((company: { courier_company_id: number; }) => {
+        const courier = courierCompanies?.find((company: { courier_company_id: number }) => {
           if (company.courier_company_id === 369) return false;
-          return company.courier_company_id === vendor.carrierID
+          return company.courier_company_id === vendor.carrierID;
         });
 
         if (courier && shiprocketNiceName) {
@@ -595,7 +630,7 @@ export const rateCalculation = async (
           if (shiprocketVendors.length > 0) {
             commonCouriers.push({
               ...vendor.toObject(),
-              nickName: shiprocketNiceName.nickName
+              nickName: shiprocketNiceName.nickName,
             });
           }
         }
@@ -618,16 +653,18 @@ export const rateCalculation = async (
         []
       );
 
-      console.log(smartShipCouriers.map((item: any) => {
-        return [item.carrier_id, item.carrier_name]
-      }), "smartShipCouriers")
+      console.log(
+        smartShipCouriers.map((item: any) => {
+          return [item.carrier_id, item.carrier_name];
+        }),
+        "smartShipCouriers"
+      );
 
       const smartShipNiceName = await EnvModel.findOne({ name: "SMARTSHIP" }).select("_id nickName");
 
-
       vendors?.forEach((vendor: any) => {
-        const courier = smartShipCouriers?.find((company: { carrier_id: string; }) => {
-          return Number(company.carrier_id) === vendor.carrierID
+        const courier = smartShipCouriers?.find((company: { carrier_id: string }) => {
+          return Number(company.carrier_id) === vendor.carrierID;
         });
         if (courier && smartShipNiceName) {
           const smartShipVendors = vendors.filter((vendor) => {
@@ -638,13 +675,12 @@ export const rateCalculation = async (
             smartShipVendors.forEach((vendor) => {
               commonCouriers.push({
                 ...vendor.toObject(),
-                nickName: smartShipNiceName.nickName
+                nickName: smartShipNiceName.nickName,
               });
             });
           }
         }
       });
-
     } catch (error) {
       console.log("error", error);
     }
@@ -667,14 +703,14 @@ export const rateCalculation = async (
       if (!isSMARTRServicable.data.errors) {
         const smartrNiceName = await EnvModel.findOne({ name: "SMARTR" }).select("_id nickName");
         if (smartrNiceName) {
-          const smartrVendors = vendors.filter((vendor) =>
-            vendor?.vendor_channel_id?.toString() === smartrNiceName._id.toString()
+          const smartrVendors = vendors.filter(
+            (vendor) => vendor?.vendor_channel_id?.toString() === smartrNiceName._id.toString()
           );
           if (smartrVendors.length > 0) {
             smartrVendors.forEach((vendor) => {
               commonCouriers.push({
                 ...vendor.toObject(),
-                nickName: smartrNiceName.nickName
+                nickName: smartrNiceName.nickName,
               });
             });
           }
@@ -703,14 +739,14 @@ export const rateCalculation = async (
         const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY" }).select("_id nickName");
         if (delhiveryNiceName) {
           const delhiveryVendors = vendors.filter((vendor) => {
-            return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString()
+            return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString();
           });
 
           if (delhiveryVendors.length > 0) {
             delhiveryVendors.forEach((vendor) => {
               commonCouriers.push({
                 ...vendor.toObject(),
-                nickName: delhiveryNiceName.nickName
+                nickName: delhiveryNiceName.nickName,
               });
             });
           }
@@ -737,13 +773,13 @@ export const rateCalculation = async (
         const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY_0.5" }).select("_id nickName");
         if (delhiveryNiceName) {
           const delhiveryVendors = vendors.filter((vendor) => {
-            return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString()
+            return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString();
           });
           if (delhiveryVendors.length > 0) {
             delhiveryVendors.forEach((vendor) => {
               commonCouriers.push({
                 ...vendor.toObject(),
-                nickName: delhiveryNiceName.nickName
+                nickName: delhiveryNiceName.nickName,
               });
             });
           }
@@ -768,18 +804,17 @@ export const rateCalculation = async (
         }
       );
 
-
       if (!!isDelhiveryServicable.data.delivery_codes[0]) {
         const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY_10" }).select("_id nickName");
         if (delhiveryNiceName) {
           const delhiveryVendors = vendors.filter((vendor) => {
-            return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString()
+            return vendor?.vendor_channel_id?.toString() === delhiveryNiceName._id.toString();
           });
           if (delhiveryVendors.length > 0) {
             delhiveryVendors.forEach((vendor) => {
               commonCouriers.push({
                 ...vendor.toObject(),
-                nickName: delhiveryNiceName.nickName
+                nickName: delhiveryNiceName.nickName,
               });
             });
           }
@@ -799,31 +834,35 @@ export const rateCalculation = async (
       // TODO: check order is for AIR or SURFACE
 
       const marutiRequestBodySurface = {
-        "fromPincode": pickupPincode,
-        "toPincode": deliveryPincode,
-        "isCodOrder": paymentType === 1,
-        "deliveryMode": "SURFACE"
-      }
+        fromPincode: pickupPincode,
+        toPincode: deliveryPincode,
+        isCodOrder: paymentType === 1,
+        deliveryMode: "SURFACE",
+      };
 
-      console.log(marutiRequestBodySurface, "marutiRequestBodySurface")
+      console.log(marutiRequestBodySurface, "marutiRequestBodySurface");
 
-      const isMarutiServicableSurface = await axios.post(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_SERVICEABILITY}`, marutiRequestBodySurface);
-      const isMSSurface = isMarutiServicableSurface.data.data.serviceability
+      const isMarutiServicableSurface = await axios.post(
+        `${envConfig.MARUTI_BASEURL}${APIs.MARUTI_SERVICEABILITY}`,
+        marutiRequestBodySurface
+      );
+      const isMSSurface = isMarutiServicableSurface.data.data.serviceability;
 
-      console.log("isMSSurface", isMarutiServicableSurface.data)
+      console.log("isMSSurface", isMarutiServicableSurface.data);
 
       if (isMSSurface) {
         const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
         if (marutiNiceName) {
-
           const marutiVendors = vendors.filter((vendor) => {
-            return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString() && vendor?.type === 'surface';
+            return (
+              vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString() && vendor?.type === "surface"
+            );
           });
           if (marutiVendors.length > 0) {
             marutiVendors.forEach((vendor) => {
               commonCouriers.push({
                 ...vendor.toObject(),
-                nickName: marutiNiceName.nickName
+                nickName: marutiNiceName.nickName,
               });
             });
           }
@@ -831,27 +870,29 @@ export const rateCalculation = async (
       }
 
       const marutiRequestBodyAir = {
-        "fromPincode": pickupPincode,
-        "toPincode": deliveryPincode,
-        "isCodOrder": paymentType === 1,
-        "deliveryMode": "AIR"
-      }
+        fromPincode: pickupPincode,
+        toPincode: deliveryPincode,
+        isCodOrder: paymentType === 1,
+        deliveryMode: "AIR",
+      };
 
-      const isMarutiServicableAir = await axios.post(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_SERVICEABILITY}`, marutiRequestBodyAir);
-      const isMSAir = isMarutiServicableAir.data.data.serviceability
+      const isMarutiServicableAir = await axios.post(
+        `${envConfig.MARUTI_BASEURL}${APIs.MARUTI_SERVICEABILITY}`,
+        marutiRequestBodyAir
+      );
+      const isMSAir = isMarutiServicableAir.data.data.serviceability;
 
       if (isMSAir) {
         const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
         if (marutiNiceName) {
           const marutiVendors = vendors.filter((vendor) => {
-
-            return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString() && vendor?.type === 'air';
+            return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString() && vendor?.type === "air";
           });
           if (marutiVendors.length > 0) {
             marutiVendors.forEach((vendor) => {
               commonCouriers.push({
                 ...vendor.toObject(),
-                nickName: marutiNiceName.nickName
+                nickName: marutiNiceName.nickName,
               });
             });
           }
@@ -863,7 +904,7 @@ export const rateCalculation = async (
 
     const data2send: {
       name: string;
-      cod: number
+      cod: number;
       minWeight: number;
       charge: number;
       isReversedCourier: boolean;
@@ -874,11 +915,9 @@ export const rateCalculation = async (
       order_zone: string;
       nickName?: string;
       orderRefId?: string;
-
     }[] = [];
 
     const loopLength = commonCouriers.length;
-
 
     for (let i = 0; i < loopLength; i++) {
       let orderWeight = volumetricWeight > Number(weight) ? volumetricWeight : Number(weight);
@@ -944,16 +983,14 @@ export const rateCalculation = async (
       let totalCharge = 0;
       totalCharge += increment_price.basePrice;
 
-
       if (orderWeight < minWeight) {
         orderWeight = minWeight;
       }
 
-
-      // minW = 5kg 
+      // minW = 5kg
       // or: 6.49kg
       // zone c (inP: 40, BaseP : 240)
-      // 7kg - 5kg = 2kg 
+      // 7kg - 5kg = 2kg
       // totalW = baseP + (inP * 2)
 
       const codPrice = cv.codCharge?.hard;
@@ -964,8 +1001,8 @@ export const rateCalculation = async (
       }
 
       const weightIncrementRatio = Math.ceil((orderWeight - minWeight) / cv.incrementWeight);
-      totalCharge += (increment_price.incrementPrice * weightIncrementRatio) + cod;
-      let rtoCharges = (totalCharge - cod)
+      totalCharge += increment_price.incrementPrice * weightIncrementRatio + cod;
+      let rtoCharges = totalCharge - cod;
 
       data2send.push({
         nickName: cv.nickName,
@@ -979,7 +1016,7 @@ export const rateCalculation = async (
         expectedPickup,
         carrierID: cv._id,
         order_zone,
-        orderRefId: orderRefId
+        orderRefId: orderRefId,
       });
     }
 
@@ -1067,7 +1104,17 @@ export const MetroCitys = [
   "Ahmedabad",
   "AHMEDABAD",
 ];
-export const NorthEastStates = ["Sikkim", "Mizoram", "Manipur", "Assam", "Megalaya", "Nagaland", "Tripura", "Jammu and Kashmir", "Himachal Pradesh"];
+export const NorthEastStates = [
+  "Sikkim",
+  "Mizoram",
+  "Manipur",
+  "Assam",
+  "Megalaya",
+  "Nagaland",
+  "Tripura",
+  "Jammu and Kashmir",
+  "Himachal Pradesh",
+];
 
 export async function getShiprocketB2BConfig(): Promise<any> {
   try {
@@ -1079,9 +1126,8 @@ export async function getShiprocketB2BConfig(): Promise<any> {
       clientId: env.client_id,
       refreshToken: env.refreshToken,
       token,
-    }
-  }
-  catch (error) {
+    };
+  } catch (error) {
     return false;
   }
 }
@@ -1135,10 +1181,10 @@ export async function getEcommToken() {
 export async function getSellerChannelConfig(sellerId: string) {
   try {
     const channel = await ChannelModel.findOne({ sellerId }).lean();
-    const { sharedSecret, storeUrl } = channel as { sharedSecret: string, storeUrl: string };
+    const { sharedSecret, storeUrl } = channel as { sharedSecret: string; storeUrl: string };
     return { sharedSecret, storeUrl };
   } catch (error) {
-    console.log("error", error)
+    console.log("error", error);
   }
 }
 
@@ -1171,7 +1217,6 @@ export async function getZohoConfig() {
   } catch (error) {
     return false;
   }
-
 }
 
 export function getMarutiBucketing(status: number) {
@@ -1347,16 +1392,16 @@ export function getSmartRBucketing(status: string, desc: string, reasonCode: str
     description: string;
     reasonCode?: string;
     bucket: number;
-  }
+  };
 
   const smarRBuckets: Record<string, SSTYPE[]> = {
     // "MAN": [{ description: "Shipment manifested", bucket: NEW }],
 
-    "CAN": [{ description: "Shipment Cancelled", bucket: CANCELED }],
-    "PKA": [{ description: "Pickup assigned", bucket: READY_TO_SHIP }],
-    "PKU": [{ description: "Pickup un-assigned", bucket: CANCELED }],
-    "OFP": [{ description: "Out for Pickup", bucket: READY_TO_SHIP }],
-    "PKF": [
+    CAN: [{ description: "Shipment Cancelled", bucket: CANCELED }],
+    PKA: [{ description: "Pickup assigned", bucket: READY_TO_SHIP }],
+    PKU: [{ description: "Pickup un-assigned", bucket: CANCELED }],
+    OFP: [{ description: "Out for Pickup", bucket: READY_TO_SHIP }],
+    PKF: [
       { description: "Pickup Failed", bucket: READY_TO_SHIP },
       { description: "Package Not Travel Worthy; Shipment Hold", reasonCode: "PF001", bucket: IN_TRANSIT },
       { description: "Change In Product-On Shippers Request on Fresh AWB", reasonCode: "PF002", bucket: CANCELED },
@@ -1364,30 +1409,38 @@ export function getSmartRBucketing(status: string, desc: string, reasonCode: str
       { description: "Shipment Returned Back to Shipper", reasonCode: "PF004", bucket: RTO },
       { description: "Missed Pickup- Reached Late", reasonCode: "PF005", bucket: READY_TO_SHIP },
       { description: "Pickup Declined-Prohibited Content", reasonCode: "PF006", bucket: READY_TO_SHIP },
-      { description: "Pickup Not Done - Destination Pin Code Not Serviceable", reasonCode: "PF007", bucket: READY_TO_SHIP },
+      {
+        description: "Pickup Not Done - Destination Pin Code Not Serviceable",
+        reasonCode: "PF007",
+        bucket: READY_TO_SHIP,
+      },
       { description: "Pickup Wrongly Registered By Shipper", reasonCode: "PF008", bucket: READY_TO_SHIP },
       { description: "Pickup Not Done - Contact Person Not Available", reasonCode: "PF009", bucket: READY_TO_SHIP },
       { description: "Shipment Not Ready or No Shipment Today", reasonCode: "PF010", bucket: READY_TO_SHIP },
       { description: "Pickup Cancelled By Shipper", reasonCode: "PF011", bucket: READY_TO_SHIP },
       { description: "Holiday- Shipper Closed", reasonCode: "PF012", bucket: READY_TO_SHIP },
       { description: "Shippers or Consignee Request to Hold at Location", reasonCode: "PF013", bucket: READY_TO_SHIP },
-      { description: "Shipment Manifested But Not Received By Destination", reasonCode: "PF014", bucket: READY_TO_SHIP },
+      {
+        description: "Shipment Manifested But Not Received By Destination",
+        reasonCode: "PF014",
+        bucket: READY_TO_SHIP,
+      },
       { description: "Disturbance or Natural Disaster or Strike", reasonCode: "PF015", bucket: READY_TO_SHIP },
       { description: "Shipment Lost", reasonCode: "PF016", bucket: READY_TO_SHIP },
       { description: "Shipment Held-Regulartory Paperworks Required", reasonCode: "PF017", bucket: READY_TO_SHIP },
       { description: "Security Cleared", reasonCode: "PF018", bucket: READY_TO_SHIP },
       { description: "Shipment or Package Damaged", reasonCode: "PF019", bucket: READY_TO_SHIP },
-      { description: "Canvas Bag or shipment received short", reasonCode: "PF021", bucket: READY_TO_SHIP }
+      { description: "Canvas Bag or shipment received short", reasonCode: "PF021", bucket: READY_TO_SHIP },
     ],
-    "PKD": [{ description: "Shipment Picked up", bucket: IN_TRANSIT }],
-    "IND": [{ description: "Shipment Inscan at facility", bucket: IN_TRANSIT }],
-    "BGD": [{ description: "Shipment Bagged", bucket: IN_TRANSIT }],
-    "BGU": [{ description: "Shipment de-Bagged", bucket: IN_TRANSIT }],
-    "DPD": [{ description: "Shipment Departed", bucket: IN_TRANSIT }],
-    "ARD": [{ description: "Shipment Arrived", bucket: IN_TRANSIT }],
-    "RDC": [{ description: "Shipment Reached at DC", bucket: IN_TRANSIT }],
-    "OFD": [{ description: "Out for Delivery", bucket: IN_TRANSIT }],
-    "SUD": [
+    PKD: [{ description: "Shipment Picked up", bucket: IN_TRANSIT }],
+    IND: [{ description: "Shipment Inscan at facility", bucket: IN_TRANSIT }],
+    BGD: [{ description: "Shipment Bagged", bucket: IN_TRANSIT }],
+    BGU: [{ description: "Shipment de-Bagged", bucket: IN_TRANSIT }],
+    DPD: [{ description: "Shipment Departed", bucket: IN_TRANSIT }],
+    ARD: [{ description: "Shipment Arrived", bucket: IN_TRANSIT }],
+    RDC: [{ description: "Shipment Reached at DC", bucket: IN_TRANSIT }],
+    OFD: [{ description: "Out for Delivery", bucket: IN_TRANSIT }],
+    SUD: [
       { description: "Undelivered", bucket: IN_TRANSIT },
       { description: "Shippers or Consignee Request to Hold at Location", reasonCode: "UD001", bucket: NDR },
       { description: "Non Serviceable Area or Pin code", reasonCode: "UD002", bucket: NDR },
@@ -1406,7 +1459,11 @@ export function getSmartRBucketing(status: string, desc: string, reasonCode: str
       { description: "Shipment Destroyed or Abandoned", reasonCode: "UD015", bucket: LOST_DAMAGED },
       { description: "Shipment Redirected to Alternate Address", reasonCode: "UD016", bucket: IN_TRANSIT },
       { description: "Package Interchanged At Org or Dest", reasonCode: "UD017", bucket: NDR },
-      { description: "Late Arrival or Scheduled For Next Working Day Delivery", reasonCode: "UD019", bucket: IN_TRANSIT },
+      {
+        description: "Late Arrival or Scheduled For Next Working Day Delivery",
+        reasonCode: "UD019",
+        bucket: IN_TRANSIT,
+      },
       { description: "Shipment Held-Regulartory Paperworks Required", reasonCode: "UD020", bucket: IN_TRANSIT },
       { description: "Shipment Misrouted In Network", reasonCode: "UD021", bucket: IN_TRANSIT },
       { description: "Schedule for Next Business Day Delivery", reasonCode: "UD022", bucket: IN_TRANSIT },
@@ -1418,24 +1475,28 @@ export function getSmartRBucketing(status: string, desc: string, reasonCode: str
       { description: "DOD or FOD or COD not ready", reasonCode: "UD030", bucket: NDR },
       { description: "Entry restricted, no response on call", reasonCode: "UD031", bucket: NDR },
       { description: "No response from consignee", reasonCode: "UD032", bucket: NDR },
-      { description: "OTP NOT RECEIVED BY CONSIGNEE", reasonCode: "UD033", bucket: NDR }
+      { description: "OTP NOT RECEIVED BY CONSIGNEE", reasonCode: "UD033", bucket: NDR },
     ],
-    "DDL": [{ description: "Delivered", bucket: DELIVERED }],
-    "SDL": [{ description: "Delivered-Self Pickup", bucket: DELIVERED }],
-    "PDL": [{ description: "Delivered-partially", bucket: DELIVERED }],
-    "RTL": [{ description: "RTO Locked", bucket: RTO }],
-    "RTR": [{ description: "RTO Lock Revoked", bucket: IN_TRANSIT }],
-    "RTS": [{ description: "Return to Shipper", bucket: RTO }],
-    "RTD": [{ description: "RTO Delivered", bucket: RTO_DELIVERED }],
-    "LST": [{ description: "Shipment Lost", bucket: LOST_DAMAGED }],
-    "DMG": [{ description: "Damaged", bucket: LOST_DAMAGED }],
-    "DSD": [{ description: "Destroyed", bucket: LOST_DAMAGED }],
-    "DLD": [{ description: "Delayed", bucket: IN_TRANSIT }],
-    "HLD": [{ description: "Hold", bucket: IN_TRANSIT }]
-  }
-  const smarRPossibleResponse = smarRBuckets[status]?.find(statusD => !statusD.reasonCode || statusD.reasonCode === reasonCode);
+    DDL: [{ description: "Delivered", bucket: DELIVERED }],
+    SDL: [{ description: "Delivered-Self Pickup", bucket: DELIVERED }],
+    PDL: [{ description: "Delivered-partially", bucket: DELIVERED }],
+    RTL: [{ description: "RTO Locked", bucket: RTO }],
+    RTR: [{ description: "RTO Lock Revoked", bucket: IN_TRANSIT }],
+    RTS: [{ description: "Return to Shipper", bucket: RTO }],
+    RTD: [{ description: "RTO Delivered", bucket: RTO_DELIVERED }],
+    LST: [{ description: "Shipment Lost", bucket: LOST_DAMAGED }],
+    DMG: [{ description: "Damaged", bucket: LOST_DAMAGED }],
+    DSD: [{ description: "Destroyed", bucket: LOST_DAMAGED }],
+    DLD: [{ description: "Delayed", bucket: IN_TRANSIT }],
+    HLD: [{ description: "Hold", bucket: IN_TRANSIT }],
+  };
+  const smarRPossibleResponse = smarRBuckets[status]?.find(
+    (statusD) => !statusD.reasonCode || statusD.reasonCode === reasonCode
+  );
 
-  return smarRPossibleResponse ? { bucket: smarRPossibleResponse.bucket, description: smarRPossibleResponse.description } : { bucket: -1, description: "Status code not found" }
+  return smarRPossibleResponse
+    ? { bucket: smarRPossibleResponse.bucket, description: smarRPossibleResponse.description }
+    : { bucket: -1, description: "Status code not found" };
 }
 
 type DelhiveryBucket = {
@@ -1446,56 +1507,61 @@ type DelhiveryBucket = {
 export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: string }): DelhiveryBucket {
   const forwardStatusMapping = {
     "In Transit": { bucket: IN_TRANSIT, description: "In Transit" },
-    "Pending": { bucket: IN_TRANSIT, description: "In Transit" },
-    "Delivered": { bucket: DELIVERED, description: "Delivered" },
-    "Dispatched": { bucket: IN_TRANSIT, description: "Out for Delivery" },
-    "RTO": { bucket: RTO, description: "Return to Origin (RTO)" },
-    "DTO": { bucket: RTO_DELIVERED, description: "Return Delivered" },
-    "Returned": { bucket: RETURN_CONFIRMED, description: "Return Delivered" },
-    "LOST": { bucket: LOST_DAMAGED, description: "Lost or Damaged" },
+    Pending: { bucket: IN_TRANSIT, description: "In Transit" },
+    Delivered: { bucket: DELIVERED, description: "Delivered" },
+    Dispatched: { bucket: IN_TRANSIT, description: "Out for Delivery" },
+    RTO: { bucket: RTO, description: "Return to Origin (RTO)" },
+    DTO: { bucket: RTO_DELIVERED, description: "Return Delivered" },
+    Returned: { bucket: RETURN_CONFIRMED, description: "Return Delivered" },
+    LOST: { bucket: LOST_DAMAGED, description: "Lost or Damaged" },
   };
 
   // RTO Status Mapping
   const rtoStatusMapping = {
     "In Transit": { bucket: RTO, description: "In Transit" },
-    "Pending": { bucket: RTO, description: "In Transit" },
-    "Delivered": { bucket: RTO, description: "Delivered" },
-    "Dispatched": { bucket: RTO, description: "Out for Delivery" },
-    "RTO": { bucket: RTO, description: "Return to Origin (RTO)" },
-    "DTO": { bucket: RTO_DELIVERED, description: "Return Delivered" },
-    "Returned": { bucket: RTO, description: "Return Delivered" },
-    "LOST": { bucket: RTO, description: "Lost or Damaged" },
+    Pending: { bucket: RTO, description: "In Transit" },
+    Delivered: { bucket: RTO, description: "Delivered" },
+    Dispatched: { bucket: RTO, description: "Out for Delivery" },
+    RTO: { bucket: RTO, description: "Return to Origin (RTO)" },
+    DTO: { bucket: RTO_DELIVERED, description: "Return Delivered" },
+    Returned: { bucket: RTO, description: "Return Delivered" },
+    LOST: { bucket: RTO, description: "Lost or Damaged" },
   };
 
   // Reverse Mapping
   const returnStatusMapping = {
     "In Transit": { bucket: RETURN_IN_TRANSIT, description: "In Transit (Return)" },
-    "Pending": { bucket: RETURN_ORDER_MANIFESTED, description: "Pending (Return)" },
-    "Dispatched": { bucket: RETURN_OUT_FOR_PICKUP, description: "Out for Pickup (Return)" },
+    Pending: { bucket: RETURN_ORDER_MANIFESTED, description: "Pending (Return)" },
+    Dispatched: { bucket: RETURN_OUT_FOR_PICKUP, description: "Out for Pickup (Return)" },
     // "RTO": { bucket: 4, description: "Return to Origin (RTO)" },
-    "DTO": { bucket: RETURN_DELIVERED, description: "Return Delivered" },
-    "Returned": { bucket: RETURN_DELIVERED, description: "Return Delivered" },
+    DTO: { bucket: RETURN_DELIVERED, description: "Return Delivered" },
+    Returned: { bucket: RETURN_DELIVERED, description: "Return Delivered" },
   };
 
   const deliveredStatusMapping = {
-    "RTO": { bucket: RTO_DELIVERED, description: "RTO Delivered" },
-    "Delivered": { bucket: DELIVERED, description: "Delivered" },
-    "DTO": { bucket: RETURN_DELIVERED, description: "Delivered To Origin" },
+    RTO: { bucket: RTO_DELIVERED, description: "RTO Delivered" },
+    Delivered: { bucket: DELIVERED, description: "Delivered" },
+    DTO: { bucket: RETURN_DELIVERED, description: "Delivered To Origin" },
     "RETURN Accepted": { bucket: RETURN_DELIVERED, description: "Delivered To Origin" },
-    "Returned": { bucket: RETURN_CONFIRMED, description: "Returned" },
+    Returned: { bucket: RETURN_CONFIRMED, description: "Returned" },
   };
 
   const { StatusType, Status } = scanDetail;
 
   // Determine the correct mapping based on StatusType (UD for forward, RT for return, DL for delivered)
   const statusMapping =
-    StatusType === "UD" ? forwardStatusMapping :
-      StatusType === "RT" ? rtoStatusMapping :
-        StatusType === "PP" ? returnStatusMapping :
-          StatusType === "DL" ? deliveredStatusMapping : null;
+    StatusType === "UD"
+      ? forwardStatusMapping
+      : StatusType === "RT"
+      ? rtoStatusMapping
+      : StatusType === "PP"
+      ? returnStatusMapping
+      : StatusType === "DL"
+      ? deliveredStatusMapping
+      : null;
 
   return (
-    statusMapping && statusMapping[Status as keyof typeof statusMapping] || {
+    (statusMapping && statusMapping[Status as keyof typeof statusMapping]) || {
       bucket: -1,
       description: "Status code not found",
     }
@@ -1506,15 +1572,15 @@ export function getB2BShiprocketBucketing(status: string) {
   const shiprocketStatusMapping = {
     "Not Picked": { bucket: READY_TO_SHIP, description: "In Transit" },
     "In Transit": { bucket: IN_TRANSIT, description: "In Transit" },
-    "Pending": { bucket: IN_TRANSIT, description: "In Transit" },
+    Pending: { bucket: IN_TRANSIT, description: "In Transit" },
     "Picked Up": { bucket: IN_TRANSIT, description: "In Transit" },
     "Out For Delivery": { bucket: IN_TRANSIT, description: "Out for Delivery" },
     "Reached At Destination": { bucket: DELIVERED, description: "Delivered" },
-    "Delivered": { bucket: DELIVERED, description: "Delivered" },
-    "RTO": { bucket: RTO, description: "Return to Origin (RTO)" },
-    "DTO": { bucket: RTO_DELIVERED, description: "Return Delivered" },
-    "Returned": { bucket: RETURN_CONFIRMED, description: "Return Delivered" },
-    "LOST": { bucket: LOST_DAMAGED, description: "Lost or Damaged" },
+    Delivered: { bucket: DELIVERED, description: "Delivered" },
+    RTO: { bucket: RTO, description: "Return to Origin (RTO)" },
+    DTO: { bucket: RTO_DELIVERED, description: "Return Delivered" },
+    Returned: { bucket: RETURN_CONFIRMED, description: "Return Delivered" },
+    LOST: { bucket: LOST_DAMAGED, description: "Lost or Damaged" },
   };
   return (
     shiprocketStatusMapping[status as keyof typeof shiprocketStatusMapping] || {
@@ -1610,9 +1676,9 @@ export const generateAccessToken = async () => {
     //@ts-ignore
     return env.token;
   } catch (err) {
-    console.log(err, 'err')
+    console.log(err, "err");
   }
-}
+};
 
 export const calculateSellerInvoiceAmount = async () => {
   try {
@@ -1638,21 +1704,32 @@ export const calculateSellerInvoiceAmount = async () => {
           lastInvoiceDate = lastInvoiceGenerationDate[0].createdAt;
         }
 
-        const billedOrders = await ClientBillingModal.find({ sellerId,
-          createdAt: { $gt: lastInvoiceDate, $lt: today }
-         }).select("awb isDisputeRaised disputeId isRTOApplicable").populate("disputeId");
+        const billedOrders = await ClientBillingModal.find({
+          sellerId,
+          createdAt: { $gt: lastInvoiceDate, $lt: today },
+        })
+          .select("awb isDisputeRaised disputeId isRTOApplicable")
+          .populate("disputeId");
 
         const allOrders = await B2COrderModel.find({
           sellerId,
-          awb: { $in: billedOrders.map(item => item.awb) }
+          awb: { $in: billedOrders.map((item) => item.awb) },
           // "orderStages.stageDateTime": { $gt: lastInvoiceDate, $lt: today },
-        }).select(["productId", "awb"]).populate("productId");
+        })
+          .select(["productId", "awb"])
+          .populate("productId");
 
         // @ts-ignore
-        const billedAwb = billedOrders.filter(item => !item.isDisputeRaised || (!item.isDisputeRaised && item.disputeId?.accepted)).map((order: any) => order.awb);
+        const billedAwb = billedOrders
+        //@ts-ignore
+          .filter((item) => !item.isDisputeRaised || (!item.isDisputeRaised && item.disputeId?.accepted))
+          .map((order: any) => order.awb);
 
         // @ts-ignore
-        const awbNotBilledDueToDispute = billedOrders.filter((item) => item.isDisputeRaised === true && !item.disputeId?.accepted).map(x => x.awb);
+        const awbNotBilledDueToDispute = billedOrders
+        //@ts-ignore
+          .filter((item) => item.isDisputeRaised === true && !item.disputeId?.accepted)
+          .map((x) => x.awb);
 
         const lastMonthRecord = await NotInInvoiceAwbModel.findOne({ sellerId });
 
@@ -1662,18 +1739,12 @@ export const calculateSellerInvoiceAmount = async () => {
           sellerId,
         });
 
-
         const lastMonthDisputeAwbs = lastMonthRecord?.notBilledAwb || [];
 
-        const orders = allOrders.filter((order: any) =>
-          billedAwb.includes(order?.awb)
-        );
+        const orders = allOrders.filter((order: any) => billedAwb.includes(order?.awb));
 
         // Combine current and last month's AWBs
-        const awbToBeInvoiced = [
-          ...orders.map((order: any) => order.awb),
-          ...lastMonthDisputeAwbs,
-        ];
+        const awbToBeInvoiced = [...orders.map((order: any) => order.awb), ...lastMonthDisputeAwbs];
 
         // const allWalletRecharge = await PaymentTransactionModal.find({ sellerId, desc: { $regex: "Wallet Recharge" }, createdAt: { $gt: lastInvoiceDate, $lt: today }, });
         // let totalWalletRecharge = Math.max(allWalletRecharge.reduce((acc, curr) => acc + parseFloat(curr.amount), 0), 0);
@@ -1687,7 +1758,6 @@ export const calculateSellerInvoiceAmount = async () => {
           let codCharges = 0;
           // let excessCharges = 0;
           if (bill) {
-
             if (bill.isRTOApplicable === false) {
               codCharges = Number(bill.codValue);
               forwardCharges = Number(bill.rtoCharge);
@@ -1702,7 +1772,7 @@ export const calculateSellerInvoiceAmount = async () => {
 
           totalAmount += forwardCharges + rtoCharges + codCharges;
         });
-        totalAmount = Number((totalAmount).toFixed(2));
+        totalAmount = Number(totalAmount.toFixed(2));
 
         const invoiceAmount = totalAmount / 1.18;
 
@@ -1725,103 +1795,127 @@ export const calculateSellerInvoiceAmount = async () => {
 
       if (i + batchSize < sellers.length) {
         console.log(`Waiting ${delay / 1000} seconds before processing the next batch...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
 
-
-
     return { message: "All Invoice Generated Successfully", status: 200 };
-
   } catch (err) {
     console.log(err);
     return { message: "Error: While generating Invoice", status: 500 };
   }
 };
 
-export async function createAdvanceAndInvoice(zoho_contact_id: any, totalAmount: any, awbToBeInvoiced: any, isPrepaid: boolean) {
+export async function createAdvanceAndInvoice(
+  zoho_contact_id: any,
+  totalAmount: any,
+  awbToBeInvoiced: any,
+  isPrepaid: boolean
+) {
   try {
     const accessToken = await generateAccessToken();
     if (!accessToken) return;
-    
+
     const seller = await SellerModel.findOne({ zoho_contact_id });
     if (!seller) return;
-    
-    const date = new Date().toISOString().split('T')[0];
+
+    const date = new Date().toISOString().split("T")[0];
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 15);
 
     const invoiceBody = {
-      "customer_id": zoho_contact_id,
-      "allow_partial_payments": true,
-      "date": date,
-      "due_date": dueDate.toISOString().split('T')[0],
-      "line_items": [
+      customer_id: zoho_contact_id,
+      allow_partial_payments: true,
+      date: date,
+      due_date: dueDate.toISOString().split("T")[0],
+      line_items: [
         {
-          "item_id": "852186000000016945",
-          "rate": totalAmount / 1.18,
-          "quantity": 1,
-        }
+          item_id: "852186000000016945",
+          rate: totalAmount / 1.18,
+          quantity: 1,
+        },
       ],
-    }
-    const invoiceRes = await axios.post(`https://www.zohoapis.in/books/v3/invoices?organization_id=60014023368`, invoiceBody, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Zoho-oauthtoken ${accessToken}`
+    };
+    const invoiceRes = await axios.post(
+      `https://www.zohoapis.in/books/v3/invoices?organization_id=60014023368`,
+      invoiceBody,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
       }
-    })
+    );
 
     const invoiceId = invoiceRes.data.invoice.invoice_id;
     const invoiceTotalZoho = invoiceRes.data.invoice.total;
 
     if (isPrepaid) {
       const rechargeBody = {
-        "customer_id": zoho_contact_id,
-        "amount": invoiceTotalZoho,
-      }
-      const rechargeRes = await axios.post(`https://www.zohoapis.in/books/v3/customerpayments?organization_id=60014023368`, rechargeBody, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Zoho-oauthtoken ${accessToken}`
-      }
-    })
-    const paymentId = rechargeRes.data.payment.payment_id;
-      const creditsBody = {
-        "invoice_payments": [
-          {
-            "payment_id": paymentId,
-            "amount_applied": invoiceTotalZoho
-          }
-        ]
-      }
-      const applyCredits = await axios.post(`https://www.zohoapis.in/books/v3/invoices/${invoiceId}/credits?organization_id=60014023368`, creditsBody, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Zoho-oauthtoken ${accessToken}`
+        customer_id: zoho_contact_id,
+        amount: invoiceTotalZoho,
+      };
+      const rechargeRes = await axios.post(
+        `https://www.zohoapis.in/books/v3/customerpayments?organization_id=60014023368`,
+        rechargeBody,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Zoho-oauthtoken ${accessToken}`,
+          },
         }
-      })
+      );
+      const paymentId = rechargeRes.data.payment.payment_id;
+      const creditsBody = {
+        invoice_payments: [
+          {
+            payment_id: paymentId,
+            amount_applied: invoiceTotalZoho,
+          },
+        ],
+      };
+      const applyCredits = await axios.post(
+        `https://www.zohoapis.in/books/v3/invoices/${invoiceId}/credits?organization_id=60014023368`,
+        creditsBody,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Zoho-oauthtoken ${accessToken}`,
+          },
+        }
+      );
     }
 
-    const invoicePdf = await axios.get(`https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=60014023368&accept=pdf`, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Zoho-oauthtoken ${accessToken}`
-      },
-      responseType: 'arraybuffer'
-    })
+    const invoicePdf = await axios.get(
+      `https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=60014023368&accept=pdf`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+        responseType: "arraybuffer",
+      }
+    );
 
-    const pdfBase64 = Buffer.from(invoicePdf.data, 'binary').toString('base64');
-    const invoice = await InvoiceModel.create({ invoicedAwbs: awbToBeInvoiced, isPrepaidInvoice: seller.config?.isPrepaid, sellerId: seller._id, invoice_id: invoiceId, pdf: pdfBase64, date: invoiceRes.data.invoice.date, amount: (totalAmount).toFixed(2) });
+    const pdfBase64 = Buffer.from(invoicePdf.data, "binary").toString("base64");
+    const invoice = await InvoiceModel.create({
+      invoicedAwbs: awbToBeInvoiced,
+      isPrepaidInvoice: seller.config?.isPrepaid,
+      sellerId: seller._id,
+      invoice_id: invoiceId,
+      pdf: pdfBase64,
+      date: invoiceRes.data.invoice.date,
+      amount: totalAmount.toFixed(2),
+    });
 
     seller.invoices.push(invoice._id);
     await seller.save();
 
-    console.log('Completed for seller', seller.name);
+    console.log("Completed for seller", seller.name);
   } catch (err) {
     console.log(err);
   }
 }
-
 
 export async function addAllToZoho() {
   try {
@@ -1830,17 +1924,21 @@ export async function addAllToZoho() {
     sellers.forEach(async (seller) => {
       if (!seller.zoho_contact_id) {
         const creditsBody = {
-          "contact_name": seller.name,
-        }
-        const contact = await axios.post(`https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`, creditsBody, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Zoho-oauthtoken ${access_token}`
+          contact_name: seller.name,
+        };
+        const contact = await axios.post(
+          `https://www.zohoapis.in/books/v3/contacts?organization_id=60014023368`,
+          creditsBody,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Zoho-oauthtoken ${access_token}`,
+            },
           }
-        })
+        );
         seller.zoho_contact_id = contact.data.contact.contact_id;
         await seller.save();
-        console.log('Seller added', seller.name, seller.zoho_contact_id);
+        console.log("Seller added", seller.name, seller.zoho_contact_id);
       }
     });
   } catch (err) {
@@ -1849,17 +1947,23 @@ export async function addAllToZoho() {
 }
 
 //  =================           PDF EDIT            =====================
-// const pdfUrl = 'https://api.rocketbox.in/api/common/download_file?code=https://ltl-prod-docs.s3.amazonaws.com/media/shipment_labels/gati/352515065.pdf:k0Bo8KqpYgHKwcbuk8DHtONBGlZaCERNf-Rlcy23G8o'; 
-// const wordsToRemove = ['PICKRR', 'TECHNOLOGIES'];  
-// const replacementText = '';   
-// const outputFilePath = 'modified.pdf';    
+// const pdfUrl = 'https://api.rocketbox.in/api/common/download_file?code=https://ltl-prod-docs.s3.amazonaws.com/media/shipment_labels/gati/352515065.pdf:k0Bo8KqpYgHKwcbuk8DHtONBGlZaCERNf-Rlcy23G8o';
+// const wordsToRemove = ['PICKRR', 'TECHNOLOGIES'];
+// const replacementText = '';
+// const outputFilePath = 'modified.pdf';
 
 // modifyPdf(pdfUrl, wordsToRemove, replacementText, outputFilePath);
 
-export async function modifyPdf(url: string, wordsToRemove: any, replacementText: any, outputFilePath: any, sellerId: string) {
+export async function modifyPdf(
+  url: string,
+  wordsToRemove: any,
+  replacementText: any,
+  outputFilePath: any,
+  sellerId: string
+) {
   try {
     const seller = await SellerModel.findById(sellerId).lean();
-    const response = await axios.get(url, { responseType: 'arraybuffer' });
+    const response = await axios.get(url, { responseType: "arraybuffer" });
     const pdfData = response.data;
 
     const pdfDoc = await PDFDocument.load(pdfData);
@@ -1969,10 +2073,9 @@ export async function modifyPdf(url: string, wordsToRemove: any, replacementText
     fs.writeFileSync(outputFilePath, pdfBytes);
     console.log(`PDF modified and saved to ${outputFilePath}`);
   } catch (err) {
-    console.error('Error modifying the PDF:', err);
+    console.error("Error modifying the PDF:", err);
   }
 }
-
 
 export function handleDateFormat(dateTimeString: string) {
   const ddMmYyyyRegex = /^\d{2}-\d{2}-\d{4}/;
@@ -1980,10 +2083,50 @@ export function handleDateFormat(dateTimeString: string) {
   let parsedDate;
 
   if (ddMmYyyyRegex.test(dateTimeString)) {
-    parsedDate = parse(dateTimeString, 'dd-MM-yyyy HH:mm:ss', new Date());
+    parsedDate = parse(dateTimeString, "dd-MM-yyyy HH:mm:ss", new Date());
   } else {
     parsedDate = new Date(dateTimeString);
   }
 
   return formatISO(parsedDate);
+}
+
+export async function refundExtraInvoiceAmount() {
+  try {
+    const invoice = await InvoiceModel.find({});
+    // const allAwbs = invoice.map((item) => item.invoicedAwbs).flat();
+    const allAwbs = ["9145210470654", "627291701", "77628923993", "77648019245"];
+    const bills = await ClientBillingModal.find({ awb: { $in: allAwbs } });
+    // console.log(allAwbs.length, 'allAwbs');
+    allAwbs.forEach(async (awb) => {
+      const awbTransactions = await PaymentTransactionModal.find({ desc: { $regex: `AWB: ${awb}` } });
+      const totalAmount = awbTransactions.reduce((acc, curr) => {
+        if (curr.code === "DEBIT") {
+          return acc + parseFloat(curr.amount);
+        } else if (curr.code === "CREDIT") {
+          return acc - parseFloat(curr.amount);
+        }
+        return acc;
+      }, 0);
+      const bill = bills.find((bill) => bill.awb === awb);
+      let forwardCharges = 0;
+      let rtoCharges = 0;
+      let codCharges = 0;
+
+      if (bill) {
+        if (bill.isRTOApplicable === false) {
+          codCharges = Number(bill.codValue);
+          forwardCharges = Number(bill.rtoCharge);
+        } else {
+          rtoCharges = Number(bill.rtoCharge);
+          forwardCharges = Number(bill.rtoCharge);
+        }
+      }
+      const billTotal = forwardCharges + rtoCharges + codCharges;
+      const refundAmount = billTotal - totalAmount;
+      console.log(refundAmount, "refundAmount", awb);
+    });
+  } catch (err) {
+    console.log(err);
+  }
 }
