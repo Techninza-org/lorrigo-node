@@ -1,7 +1,7 @@
 import mongoose, { isValidObjectId, Types } from "mongoose";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
-import { startOfWeek, addDays, getDay, format, startOfDay } from "date-fns";
+import { startOfWeek, addDays, getDay, format, startOfDay, formatDate } from "date-fns";
 import { getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getMarutiToken, getSellerChannelConfig, getShiprocketToken, getSMARTRToken, getSmartShipToken, MetroCitys, NorthEastStates, validateEmail } from "./helpers";
 import { COURRIER_ASSIGNED_ORDER_DESCRIPTION, DELIVERED, IN_TRANSIT, MANIFEST_ORDER_DESCRIPTION, PICKUP_SCHEDULED_DESCRIPTION, READY_TO_SHIP, RETURN_CONFIRMED, RTO, SHIPMENT_CANCELLED_ORDER_DESCRIPTION, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, SHIPROCKET_MANIFEST_ORDER_STATUS, SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS, SMARTSHIP_MANIFEST_ORDER_STATUS } from "./lorrigo-bucketing-info";
 import { DeliveryDetails, IncrementPrice, PickupDetails, Vendor, Body } from "../types/rate-cal";
@@ -15,6 +15,7 @@ import APIs from "./constants/third_party_apis";
 import ShipmentResponseModel from "../models/shipment-response.model";
 import { randomUUID } from "crypto";
 import Counter from "../models/counter.model";
+import ClientBillingModal from "../models/client.billing.modal";
 
 
 
@@ -700,7 +701,7 @@ function calculateTotalCharge(
   vendor: Vendor
 ): {
   totalCharge: number;
-  codCharge: number;  
+  codCharge: number;
   fwCharge: number;
 } {
   let totalCharge = incrementPrice.basePrice;
@@ -716,7 +717,7 @@ function calculateTotalCharge(
     // @ts-ignore
     const codPrice = (vendor.codCharge?.hard || vendor?.vendorId?.codCharge?.hard) || 0;
     // @ts-ignore
-    const codAfterPercent = (Math.max(vendor.codCharge?.percent || vendor?.vendorId?.codCharge?.percent, 0) * body.collectableAmount)/100;
+    const codAfterPercent = (Math.max(vendor.codCharge?.percent || vendor?.vendorId?.codCharge?.percent, 0) * body.collectableAmount) / 100;
     codCharge = Math.max(codPrice, codAfterPercent);
     totalCharge += codCharge;
   }
@@ -1677,3 +1678,51 @@ export const generateUniqueNumber = async (key: string): Promise<number> => {
     throw error;
   }
 };
+
+export const generateListInoviceAwbs = async (awbs: string[], invoiceNo: string) => {
+  let awbTransacs: any[] = [];
+
+  const [orders, bills] = await Promise.all([
+    B2COrderModel.find({ awb: { $in: awbs } }),
+    ClientBillingModal.find({ awb: { $in: awbs } })
+  ]);
+  awbs.forEach((awb: any) => {
+    const bill = bills.find((bill) => bill.awb === awb);
+    const order = orders.find((order) => order.awb === awb);
+    const orderCreatedAt = formatDate(`${order?.createdAt}`, 'dd MM yyyy | HH:mm a');
+    const orderStage = order?.orderStages?.slice(-1)[0];
+    const deliveryDate = formatDate(`${orderStage?.stageDateTime}`, 'dd MM yyyy | HH:mm a')
+    let forwardCharges = 0;
+    let rtoCharges = 0;
+    let codCharges = 0;
+
+    if (bill) {
+      if (bill.isRTOApplicable === false) {
+        codCharges = Number(bill.codValue);
+        forwardCharges = Number(bill.rtoCharge);
+      } else {
+        rtoCharges = Number(bill.rtoCharge);
+        forwardCharges = Number(bill.rtoCharge);
+      }
+    }
+
+
+    const awbObj = {
+      awb,
+      invoiceNo,
+      forwardCharges,
+      rtoCharges,
+      codCharges,
+      total: forwardCharges + rtoCharges + codCharges,
+      zone: bill?.zone,
+      recipientName: bill?.recipientName,
+      fromCity: bill?.fromCity,
+      toCity: bill?.toCity,
+      orderId: bill?.orderRefId,
+      createdAt: orderCreatedAt,
+      deliveredAt: deliveryDate,
+    }
+    awbTransacs.push(awbObj);
+  });
+  return awbTransacs;
+}

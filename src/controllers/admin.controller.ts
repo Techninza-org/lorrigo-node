@@ -5,7 +5,7 @@ import { DELIVERED, IN_TRANSIT, NDR, NEW, READY_TO_SHIP, RTO } from "../utils/lo
 import { Types, isValidObjectId } from "mongoose";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
-import { calculateShippingCharges, convertToISO, csvJSON, updateSellerWalletBalance, validateB2BClientBillingFeilds, validateClientBillingFeilds, validateDisputeFeilds } from "../utils";
+import { calculateShippingCharges, convertToISO, csvJSON, generateListInoviceAwbs, updateSellerWalletBalance, validateB2BClientBillingFeilds, validateClientBillingFeilds, validateDisputeFeilds } from "../utils";
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
 import CustomPricingModel, { CustomB2BPricingModel } from "../models/custom_pricing.model";
@@ -1715,57 +1715,17 @@ export const rejectDispute = async (req: ExtendedRequest, res: Response, next: N
 
 export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    let awbTransacs: any[] = [];
-
     const invoice = await InvoiceModel.find({ invoice_id: req.params.id });
 
     if (!invoice) return res.status(200).send({ valid: false, message: "No Invoice found" });
     //@ts-ignore
     const awbs = invoice[0]?.invoicedAwbs;
 
-    const bills = await ClientBillingModal.find({ awb: { $in: awbs } });
-    const orders = await B2COrderModel.find({ awb: { $in: awbs } });
-    //@ts-ignore
-    awbs.forEach((awb: any) => {
-      const bill = bills.find((bill) => bill.awb === awb);
-      const order = orders.find((order) => order.awb === awb);
-      const orderCreatedAt = formatDate(`${order?.createdAt}`, 'dd MM yyyy | HH:mm a');
-      const orderStage = order?.orderStages?.slice(-1)[0];
-      const deliveryDate = formatDate(`${orderStage?.stageDateTime}`, 'dd MM yyyy | HH:mm a')
-      let forwardCharges = 0;
-      let rtoCharges = 0;
-      let codCharges = 0;
+    if (!awbs) return res.status(400).send({ valid: false, awbTransacs: null })
 
-      if (bill) {
-        if (bill.isRTOApplicable === false) {
-          codCharges = Number(bill.codValue);
-          forwardCharges = Number(bill.rtoCharge);
-        } else {
-          rtoCharges = Number(bill.rtoCharge);
-          forwardCharges = Number(bill.rtoCharge);
-        }
-      }
+    const result = await generateListInoviceAwbs(awbs, req.params.id)
 
-
-      const awbObj = {
-        awb,
-        invoiceNo: req.params.id,
-        forwardCharges,
-        rtoCharges,
-        codCharges,
-        total: forwardCharges + rtoCharges + codCharges,
-        zone: bill?.zone,
-        recipientName: bill?.recipientName,
-        fromCity: bill?.fromCity,
-        toCity: bill?.toCity,
-        orderId: bill?.orderRefId,
-        createdAt: orderCreatedAt,
-        deliveredAt: deliveryDate,
-      }
-      awbTransacs.push(awbObj);
-    });
-
-    return res.status(200).send({ valid: true, awbTransacs });
+    return res.status(200).send({ valid: true, awbTransacs: result });
   } catch (error) {
     return next(error);
   }
@@ -1784,17 +1744,17 @@ export const mapInoiceAwbTransactions = async (req: ExtendedRequest, res: Respon
         let forwardCharges = 0;
         let rtoCharges = 0;
         let codCharges = 0;
-        
-        if(bill){
-            if(bill.isRTOApplicable === false){
-              codCharges = Number(bill.codValue);
-              forwardCharges = Number(bill.rtoCharge);
-            }else{
-              rtoCharges = Number(bill.rtoCharge);
-              forwardCharges = Number(bill.rtoCharge);
-            }
+
+        if (bill) {
+          if (bill.isRTOApplicable === false) {
+            codCharges = Number(bill.codValue);
+            forwardCharges = Number(bill.rtoCharge);
+          } else {
+            rtoCharges = Number(bill.rtoCharge);
+            forwardCharges = Number(bill.rtoCharge);
+          }
         }
-        
+
 
         const awbObj = {
           awb,
@@ -1809,9 +1769,9 @@ export const mapInoiceAwbTransactions = async (req: ExtendedRequest, res: Respon
           toCity: bill?.toCity,
           orderId: bill?.orderRefId,
         }
-        awbTransacs.push(awbObj); 
+        awbTransacs.push(awbObj);
       });
-      console.log(awbTransacs, 'awbbbbbb'); 
+      console.log(awbTransacs, 'awbbbbbb');
     })
 
   } catch (error) {

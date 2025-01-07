@@ -18,8 +18,9 @@ import { isValidObjectId } from "mongoose";
 import B2BClientBillingModal from "../models/b2b-client.billing.modal";
 import { MonthlyBilledAWBModel } from "../models/billed-awbs-month";
 import SellerDisputeModel from "../models/dispute.model";
-import { format } from "date-fns";
-import { generateUniqueNumber } from "../utils";
+import { format, formatDate } from "date-fns";
+import { generateListInoviceAwbs, generateUniqueNumber } from "../utils";
+import { B2COrderModel } from "../models/order.model";
 
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -380,9 +381,9 @@ export const getSellerBilling = async (req: ExtendedRequest, res: Response, next
       const statusEntry: any = billsStatus.find((status) => status.awb === bill.awb);
       let status = "Forward Billed";
 
-      // if (statusEntry.isRTOApplicable) {
-      //   status = 'Forward + RTO Billed'
-      // }
+      if (statusEntry && statusEntry?.isRTOApplicable) {
+        status = 'Forward + RTO Billed'
+      }
 
       return {
         ...bill._doc,
@@ -790,9 +791,9 @@ export const getInvoicesFromZoho = async (req: ExtendedRequest, res: Response, n
     if (!accessToken) return;
     const seller = await SellerModel.findById(req.seller._id);
     const zohoId = seller?.zoho_contact_id;
-    
-    
-    if(!zohoId) return res.status(200).send({ valid: false, message: "No Zoho Id found" });
+
+
+    if (!zohoId) return res.status(200).send({ valid: false, message: "No Zoho Id found" });
     const invoices = await axios.get(
       `https://www.zohoapis.in/books/v3/invoices?organization_id=60014023368`,
       {
@@ -802,23 +803,23 @@ export const getInvoicesFromZoho = async (req: ExtendedRequest, res: Response, n
         },
       }
     );
-    
+
     const sellerInvoices = invoices.data.invoices.filter((invoice: any) => invoice.customer_id === zohoId);
-    
+
     const paidInvoices = sellerInvoices.filter((invoice: any) => invoice.status === "paid");
-    
+
     const unpaidInvoices = sellerInvoices.filter((invoice: any) => invoice.status !== "paid");
-    
-    
+
+
     const paidInvoiceIds = paidInvoices.map((invoice: any) => invoice.invoice_id);
-    
+
     const unpaidInvoiceIds = unpaidInvoices.map((invoice: any) => invoice.invoice_id);
 
     const paidInvoiceFromDB = await InvoiceModel.find({ invoice_id: { $in: paidInvoiceIds } });
-    
+
     paidInvoiceFromDB.forEach((invoice: any) => {
       const zohoInvoice = sellerInvoices.find((zohoInvoice: any) => zohoInvoice.invoice_id === invoice.invoice_id);
-      
+
       invoice.status = 'paid';
       invoice.dueAmount = zohoInvoice?.balance.toString();
     });
@@ -827,13 +828,13 @@ export const getInvoicesFromZoho = async (req: ExtendedRequest, res: Response, n
 
     unpaidInvoiceFromDB.forEach((invoice: any) => {
       const zohoInvoice = sellerInvoices.find((zohoInvoice: any) => zohoInvoice.invoice_id === invoice.invoice_id);
-      
+
       invoice.status = 'unpaid';
       invoice.dueAmount = zohoInvoice?.balance.toString();
     });
 
     const allInvoices = [...paidInvoiceFromDB, ...unpaidInvoiceFromDB];
-    return res.status(200).send({ valid: true, invoices: allInvoices});
+    return res.status(200).send({ valid: true, invoices: allInvoices });
 
   } catch (error) {
     return next(error);
@@ -853,43 +854,14 @@ export const getInoviceById = async (req: ExtendedRequest, res: Response, next: 
 
 export const invoiceAwbList = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    let awbTransacs: any[] = [];
     const invoice = await InvoiceModel.findById(req.params.id);
     if (!invoice) return res.status(200).send({ valid: false, message: "No Invoice found" });
 
     const awbs = invoice.invoicedAwbs ?? [];
-    const bills = await ClientBillingModal.find({ awb: { $in: awbs } });
 
-    awbs.forEach((awb) => {
+    const result = await generateListInoviceAwbs(awbs, req.params.id)
 
-      const bill = bills.find((bill) => bill.awb === awb);
-      let forwardCharges = 0;
-      let rtoCharges = 0;
-      let codCharges = 0;
-
-      if (bill) {
-
-        if (bill.isRTOApplicable === false) {
-          codCharges = Number(bill.codValue);
-          forwardCharges = Number(bill.rtoCharge);
-        } else {
-          rtoCharges = Number(bill.rtoCharge);
-          forwardCharges = Number(bill.rtoCharge);
-        }
-      }
-      
-
-      const awbObj = {
-        awb,
-        forwardCharges,
-        rtoCharges,
-        codCharges,
-        total: forwardCharges + rtoCharges + codCharges,
-      }
-      awbTransacs.push(awbObj);
-    });
-
-    return res.status(200).send({ valid: true, awbTransacs });
+    return res.status(200).send({ valid: true, awbTransacs: result });
   } catch (error) {
     return next(error);
   }
