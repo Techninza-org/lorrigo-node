@@ -27,6 +27,7 @@ import path from "path";
 import PaymentTransactionModal from "./models/payment.transaction.modal";
 import SellerModel from "./models/seller.model";
 import RemittanceModel from "./models/remittance-modal";
+import { sendInvoicePaymentLink } from "./utils";
 
 
 const app = express();
@@ -128,6 +129,8 @@ app.use("*", (req: Request, res: Response) => {
 });
 
 // refundExtraInvoiceAmount();
+
+// sendInvoicePaymentLink({ user: { email: 'biserwalk25@gmail.com', name: "Krish" },  invoiceId: '852186000002566111' })
 
 runCron();
 

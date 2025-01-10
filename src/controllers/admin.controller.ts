@@ -5,7 +5,15 @@ import { DELIVERED, IN_TRANSIT, NDR, NEW, READY_TO_SHIP, RTO } from "../utils/lo
 import { Types, isValidObjectId } from "mongoose";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
-import { calculateShippingCharges, convertToISO, csvJSON, updateSellerWalletBalance, validateB2BClientBillingFeilds, validateClientBillingFeilds, validateDisputeFeilds } from "../utils";
+import {
+  calculateShippingCharges,
+  convertToISO,
+  csvJSON,
+  updateSellerWalletBalance,
+  validateB2BClientBillingFeilds,
+  validateClientBillingFeilds,
+  validateDisputeFeilds,
+} from "../utils";
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
 import CustomPricingModel, { CustomB2BPricingModel } from "../models/custom_pricing.model";
@@ -22,9 +30,10 @@ import PaymentTransactionModal from "../models/payment.transaction.modal";
 import B2BClientBillingModal from "../models/b2b-client.billing.modal";
 import { calculateRateAndPrice, regionToZoneMappingLowercase } from "../utils/B2B-helper";
 import { MonthlyBilledAWBModel } from "../models/billed-awbs-month";
-import { addDays } from 'date-fns';
+import { addDays } from "date-fns";
 import SellerDisputeModel from "../models/dispute.model";
 import { paymentStatusInfo } from "../utils/recharge-wallet-info";
+import NeftModel from "../models/neft.model";
 
 export const walletDeduction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -45,10 +54,10 @@ export const walletDeduction = async (req: ExtendedRequest, res: Response, next:
   } catch (error) {
     return next(error);
   }
-}
+};
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const { from, to, status }: { from?: string, to?: string, status?: string } = req.query;
+    const { from, to, status }: { from?: string; to?: string; status?: string } = req.query;
 
     // Define status buckets
     const statusBuckets = {
@@ -96,7 +105,7 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
         .populate("pickupAddress")
         .populate({
           path: "sellerId",
-          select: "name"
+          select: "name",
         })
         .lean(),
       B2BOrderModel.find(query)
@@ -105,12 +114,11 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
         .populate("pickupAddress")
         .populate({
           path: "sellerId",
-          select: "name"
+          select: "name",
         })
-        .select('-invoiceImage')
-        .lean()
+        .select("-invoiceImage")
+        .lean(),
     ]);
-
 
     return res.status(200).send({
       valid: true,
@@ -121,10 +129,9 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
   }
 };
 
-
 export const getAllUserWalletTransaction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    let { from, to, status }: { from?: string, to?: string, status?: string } = req.query;
+    let { from, to, status }: { from?: string; to?: string; status?: string } = req.query;
 
     const obj = {
       new: [NEW],
@@ -135,7 +142,7 @@ export const getAllUserWalletTransaction = async (req: ExtendedRequest, res: Res
       rto: [RTO],
     };
 
-    let walletTxns
+    let walletTxns;
     try {
       let query: any = {};
 
@@ -166,13 +173,10 @@ export const getAllUserWalletTransaction = async (req: ExtendedRequest, res: Res
         }
       }
 
-      walletTxns = await PaymentTransactionModal.find(query)
-        .sort({ createdAt: -1 })
-        .populate({
-          path: "sellerId",
-          select: "name",
-        });
-
+      walletTxns = await PaymentTransactionModal.find(query).sort({ createdAt: -1 }).populate({
+        path: "sellerId",
+        select: "name",
+      });
     } catch (err) {
       return next(err);
     }
@@ -212,7 +216,7 @@ export const getSellerSpecificOrderAdmin = async (req: ExtendedRequest, res: Res
 
 export const getAllRemittances = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const { from, to }: { from?: string, to?: string, status?: string } = req.query;
+    const { from, to }: { from?: string; to?: string; status?: string } = req.query;
 
     const query: { createdAt?: any } = {};
 
@@ -272,7 +276,7 @@ export const getAllRemittances = async (req: ExtendedRequest, res: Response, nex
 export const getFutureRemittances = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const currentDate = new Date();
-    const currDate = format(currentDate, 'yyyy-MM-dd');
+    const currDate = format(currentDate, "yyyy-MM-dd");
 
     const futureRemittances = await RemittanceModel.find(
       {
@@ -291,15 +295,15 @@ export const getFutureRemittances = async (req: ExtendedRequest, res: Response, 
             as: "order",
             in: {
               orderStages: "$$order.orderStages",
-              awb: "$$order.awb"
-            }
-          }
-        }
+              awb: "$$order.awb",
+            },
+          },
+        },
       }
     )
       .populate("sellerId", "name email")
       .lean()
-      .sort({ remittanceDate: -1 })
+      .sort({ remittanceDate: -1 });
 
     return res.status(200).send({
       valid: true,
@@ -336,11 +340,10 @@ export const getSellerRemittance = async (req: ExtendedRequest, res: Response, n
       valid: true,
       remittance,
     });
-
   } catch (err) {
     return next(err);
   }
-}
+};
 
 export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   let body = req.body;
@@ -366,11 +369,11 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
 
     // Handle nested objects like bankDetails and kycDetails
     if (body.bankDetails) {
-      updatedData['bankDetails'] = { ...existingSeller.bankDetails, ...body.bankDetails };
+      updatedData["bankDetails"] = { ...existingSeller.bankDetails, ...body.bankDetails };
     }
 
     if (body.kycDetails) {
-      updatedData['kycDetails'] = { ...existingSeller.kycDetails, ...body.kycDetails };
+      updatedData["kycDetails"] = { ...existingSeller.kycDetails, ...body.kycDetails };
     }
 
     // If there are no valid fields to update, return early
@@ -388,18 +391,22 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
       try {
         const accessToken = await generateAccessToken();
         const updateContactBody = {
-          "gst_no": updatedSeller?.gstInvoice?.gstin,
-          "company_name": updatedSeller?.companyProfile?.companyName,
-        }
-        const updateRes = await axios.post(`https://www.zohoapis.in/books/v3/contacts/${updatedSeller?.zoho_contact_id}?organization_id=60014023368`, updateContactBody, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Zoho-oauthtoken ${accessToken}`
+          gst_no: updatedSeller?.gstInvoice?.gstin,
+          company_name: updatedSeller?.companyProfile?.companyName,
+        };
+        const updateRes = await axios.post(
+          `https://www.zohoapis.in/books/v3/contacts/${updatedSeller?.zoho_contact_id}?organization_id=60014023368`,
+          updateContactBody,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Zoho-oauthtoken ${accessToken}`,
+            },
           }
-        })
-        console.log(updateRes, 'updateRes[zoho]');
+        );
+        console.log(updateRes, "updateRes[zoho]");
       } catch (error) {
-        console.log(error, 'error');
+        console.log(error, "error");
       }
     }
 
@@ -409,7 +416,7 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
       seller: updatedSeller,
     });
   } catch (err) {
-    console.log(err, 'err[updateselleradmin]')
+    console.log(err, "err[updateselleradmin]");
     return next(err);
   }
 };
@@ -425,13 +432,15 @@ export const updateSellerConfig = async (req: ExtendedRequest, res: Response, ne
 
     const update = {
       $set: {
-        'config.isD2C': isD2C,
-        'config.isB2B': isB2B,
-        'config.isPrepaid': isPrepaid,
-      }
+        "config.isD2C": isD2C,
+        "config.isB2B": isB2B,
+        "config.isPrepaid": isPrepaid,
+      },
     };
 
-    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, update, { new: true }).select("-__v -password -margin -kycDetails");
+    const updatedSeller = await SellerModel.findByIdAndUpdate(sellerId, update, { new: true }).select(
+      "-__v -password -margin -kycDetails"
+    );
 
     if (!updatedSeller) {
       return res.status(404).send({ error: "Seller not found" });
@@ -441,7 +450,7 @@ export const updateSellerConfig = async (req: ExtendedRequest, res: Response, ne
   } catch (error) {
     next(error);
   }
-}
+};
 
 export const getSellerDetails = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -464,7 +473,7 @@ export const uploadPincodes = async (req: ExtendedRequest, res: Response, next: 
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
-    const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
+    const json = await csvtojson().fromString(req.file.buffer.toString("utf8"));
 
     const pincodes = json.map((bill: any) => {
       return {
@@ -475,17 +484,16 @@ export const uploadPincodes = async (req: ExtendedRequest, res: Response, next: 
       };
     });
 
-    const bulkOperations = pincodes.map(pincodeObj => ({
+    const bulkOperations = pincodes.map((pincodeObj) => ({
       updateMany: {
         filter: { Pincode: pincodeObj.Pincode },
         update: { $set: pincodeObj },
         upsert: true,
-      }
+      },
     }));
 
     try {
       const result = await PincodeModel.bulkWrite(bulkOperations);
-
     } catch (err) {
       return next(err);
     }
@@ -504,16 +512,16 @@ export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: 
     const [couriers, b2bCouriers] = await Promise.all([
       CourierModel.find()
         .populate({
-          path: 'vendor_channel_id',
-          select: '-token -refreshToken'
+          path: "vendor_channel_id",
+          select: "-token -refreshToken",
         })
         .lean(),
       B2BCalcModel.find()
         .populate({
-          path: 'vendor_channel_id',
-          select: '-token -refreshToken'
+          path: "vendor_channel_id",
+          select: "-token -refreshToken",
         })
-        .lean()
+        .lean(),
     ]);
 
     if (!couriers.length && !b2bCouriers.length) {
@@ -521,9 +529,9 @@ export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: 
     }
 
     const mapWithNickname = (couriersList: any[]) => {
-      return couriersList.map(courier => {
+      return couriersList.map((courier) => {
         const { vendor_channel_id, ...courierData } = courier;
-        const nameWNickname = `${courierData.name} ${vendor_channel_id?.nickName || ''}`.trim();
+        const nameWNickname = `${courierData.name} ${vendor_channel_id?.nickName || ""}`.trim();
         return {
           ...courierData,
           nameWNickname,
@@ -533,7 +541,7 @@ export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: 
 
     const [courierWNickName, b2bCouriersWNickName] = await Promise.all([
       mapWithNickname(couriers),
-      mapWithNickname(b2bCouriers)
+      mapWithNickname(b2bCouriers),
     ]);
 
     return res.status(200).send({
@@ -544,43 +552,48 @@ export const getAllCouriers = async (req: ExtendedRequest, res: Response, next: 
   } catch (err) {
     return next(err);
   }
-}
+};
 
 // B2C
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const sellerId = req.query?.sellerId! as string
+    const sellerId = req.query?.sellerId! as string;
 
     if (!sellerId || !isValidObjectId(sellerId)) {
       return res.status(400).send({ valid: false, message: "Invalid or missing sellerId" });
     }
 
-    const seller = await SellerModel.findById(sellerId).select('vendors').lean();
+    const seller = await SellerModel.findById(sellerId).select("vendors").lean();
     if (!seller) {
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
 
     const [couriers, customPricings] = await Promise.all([
-      CourierModel.find({ _id: { $in: seller?.vendors } }).populate("vendor_channel_id").lean(),
+      CourierModel.find({ _id: { $in: seller?.vendors } })
+        .populate("vendor_channel_id")
+        .lean(),
       CustomPricingModel.find({ sellerId, vendorId: { $in: seller?.vendors } })
         .populate({
-          path: 'vendorId',
+          path: "vendorId",
           populate: {
-            path: 'vendor_channel_id'
-          }
+            path: "vendor_channel_id",
+          },
         })
         .lean(),
     ]);
 
     // @ts-ignore
-    const customPricingMap = new Map(customPricings.map(courier => [courier?.vendorId?._id.toString(), courier]));
+    const customPricingMap = new Map(customPricings.map((courier) => [courier?.vendorId?._id.toString(), courier]));
 
     const couriersWithNickname = couriers.map((courier) => {
       const customPricing = customPricingMap.get(courier._id.toString());
       // @ts-ignore
       const { vendor_channel_id, ...courierData } = customPricing || courier;
       // @ts-ignore
-      let nameWithNickname = `${courierData?.name || courierData?.vendorId?.name} ${vendor_channel_id?.nickName || courierData?.vendorId?.vendor_channel_id?.nickName}`.trim();
+      let nameWithNickname = `${courierData?.name || courierData?.vendorId?.name} ${
+        //@ts-ignore
+        vendor_channel_id?.nickName || courierData?.vendorId?.vendor_channel_id?.nickName
+      }`.trim();
       if (customPricing) {
         // @ts-ignore
         courierData._id = courierData.vendorId?._id;
@@ -598,10 +611,10 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
       couriers: couriersWithNickname,
     });
   } catch (err) {
-    console.log(err, 'err')
+    console.log(err, "err");
     return next(err);
   }
-}
+};
 
 // B2C
 export const manageSellerCourier = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
@@ -619,17 +632,20 @@ export const manageSellerCourier = async (req: ExtendedRequest, res: Response, n
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
 
-
     const [validNewCouriers, validCustomCouriers] = await Promise.all([
-      CourierModel.find({ _id: { $in: couriers } }).select("_id").lean(),
-      CustomPricingModel.find({ sellerId, _id: { $in: couriers } }).select("_id").lean()
+      CourierModel.find({ _id: { $in: couriers } })
+        .select("_id")
+        .lean(),
+      CustomPricingModel.find({ sellerId, _id: { $in: couriers } })
+        .select("_id")
+        .lean(),
     ]);
 
-    const validNewCourierIds = new Set(validNewCouriers.map(courier => courier._id.toString()));
-    const validCustomCourierIds = new Set(validCustomCouriers.map(courier => courier._id.toString()));
+    const validNewCourierIds = new Set(validNewCouriers.map((courier) => courier._id.toString()));
+    const validCustomCourierIds = new Set(validCustomCouriers.map((courier) => courier._id.toString()));
     const mergedCourierIds = new Set([...validCustomCourierIds, ...validNewCourierIds]);
 
-    seller.vendors = Array.from(mergedCourierIds).map(id => new Types.ObjectId(id));
+    seller.vendors = Array.from(mergedCourierIds).map((id) => new Types.ObjectId(id));
     await seller.save();
 
     return res.status(200).send({
@@ -637,7 +653,7 @@ export const manageSellerCourier = async (req: ExtendedRequest, res: Response, n
       message: "Couriers managed successfully",
     });
   } catch (err) {
-    console.log(err, 'err');
+    console.log(err, "err");
 
     return next(err);
   }
@@ -658,26 +674,31 @@ export const getSellerB2BCouriers = async (req: ExtendedRequest, res: Response, 
     }
 
     const [couriers, customPricings] = await Promise.all([
-      B2BCalcModel.find({ _id: { $in: seller?.b2bVendors || [] } }).populate("vendor_channel_id").lean(),
+      B2BCalcModel.find({ _id: { $in: seller?.b2bVendors || [] } })
+        .populate("vendor_channel_id")
+        .lean(),
       CustomB2BPricingModel.find({ sellerId, B2BVendorId: { $in: seller?.b2bVendors || [] } })
         .populate({
-          path: 'B2BVendorId',
+          path: "B2BVendorId",
           populate: {
-            path: 'vendor_channel_id'
-          }
+            path: "vendor_channel_id",
+          },
         })
         .lean(),
     ]);
 
     // @ts-ignore
-    const customPricingMap = new Map(customPricings.map(courier => [courier?.B2BVendorId?._id.toString(), courier]));
+    const customPricingMap = new Map(customPricings.map((courier) => [courier?.B2BVendorId?._id.toString(), courier]));
 
     const couriersWithNickname = couriers.map((courier) => {
       const customPricing = customPricingMap.get(courier._id.toString());
       // @ts-ignore
       const { vendor_channel_id, ...courierData } = customPricing || courier;
       // @ts-ignore
-      let nameWithNickname = `${courierData?.name || courierData?.B2BVendorId?.name} ${vendor_channel_id?.nickName || courierData?.B2BVendorId?.vendor_channel_id?.nickName}`.trim();
+      let nameWithNickname = `${courierData?.name || courierData?.B2BVendorId?.name} ${
+        //@ts-ignore
+        vendor_channel_id?.nickName || courierData?.B2BVendorId?.vendor_channel_id?.nickName
+      }`.trim();
       if (customPricing) {
         // @ts-ignore
         courierData._id = courierData.B2BVendorId?._id;
@@ -695,10 +716,10 @@ export const getSellerB2BCouriers = async (req: ExtendedRequest, res: Response, 
       couriers: couriersWithNickname,
     });
   } catch (err) {
-    console.log(err, 'err')
+    console.log(err, "err");
     return next(err);
   }
-}
+};
 
 // B2B
 export const manageB2BSellerCourier = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
@@ -716,17 +737,20 @@ export const manageB2BSellerCourier = async (req: ExtendedRequest, res: Response
       return res.status(404).send({ valid: false, message: "Seller not found" });
     }
 
-
     const [validNewCouriers, validCustomCouriers] = await Promise.all([
-      B2BCalcModel.find({ _id: { $in: couriers } }).select("_id").lean(),
-      CustomB2BPricingModel.find({ sellerId, _id: { $in: couriers } }).select("_id").lean()
+      B2BCalcModel.find({ _id: { $in: couriers } })
+        .select("_id")
+        .lean(),
+      CustomB2BPricingModel.find({ sellerId, _id: { $in: couriers } })
+        .select("_id")
+        .lean(),
     ]);
 
-    const validNewCourierIds = new Set(validNewCouriers.map(courier => courier._id.toString()));
-    const validCustomCourierIds = new Set(validCustomCouriers.map(courier => courier._id.toString()));
+    const validNewCourierIds = new Set(validNewCouriers.map((courier) => courier._id.toString()));
+    const validCustomCourierIds = new Set(validCustomCouriers.map((courier) => courier._id.toString()));
     const mergedCourierIds = new Set([...validCustomCourierIds, ...validNewCourierIds]);
 
-    seller.b2bVendors = Array.from(mergedCourierIds).map(id => new Types.ObjectId(id));
+    seller.b2bVendors = Array.from(mergedCourierIds).map((id) => new Types.ObjectId(id));
     await seller.save();
 
     return res.status(200).send({
@@ -734,7 +758,7 @@ export const manageB2BSellerCourier = async (req: ExtendedRequest, res: Response
       message: "Couriers managed successfully",
     });
   } catch (err) {
-    console.log(err, 'err');
+    console.log(err, "err");
 
     return next(err);
   }
@@ -761,7 +785,9 @@ export const updateB2BVendor4Seller = async (req: ExtendedRequest, res: Response
           let savedPricing = await CustomB2BPricingModel.findOne({ B2BVendorId: B2BVendorId, sellerId: sellerId });
           savedPricing = await CustomB2BPricingModel.findByIdAndUpdate(savedPricing?._id, { ...body }, { new: true });
 
-          return res.status(200).send({ valid: true, message: "Vendor not found. Custom pricing updated for user", savedPricing });
+          return res
+            .status(200)
+            .send({ valid: true, message: "Vendor not found. Custom pricing updated for user", savedPricing });
         } else {
           const toAdd = {
             B2BVendorId: B2BVendorId,
@@ -770,7 +796,9 @@ export const updateB2BVendor4Seller = async (req: ExtendedRequest, res: Response
           };
           const savedPricing = new CustomB2BPricingModel(toAdd);
           await savedPricing.save();
-          return res.status(200).send({ valid: true, message: "Vendor not found. Custom pricing created for user", savedPricing });
+          return res
+            .status(200)
+            .send({ valid: true, message: "Vendor not found. Custom pricing created for user", savedPricing });
         }
       } else {
         // Vendor found, update its pricing
@@ -780,7 +808,11 @@ export const updateB2BVendor4Seller = async (req: ExtendedRequest, res: Response
         let savedPricing;
         if (previouslySavedPricing) {
           // Update custom pricing
-          savedPricing = await CustomB2BPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
+          savedPricing = await CustomB2BPricingModel.findByIdAndUpdate(
+            previouslySavedPricing._id,
+            { ...body },
+            { new: true }
+          );
           return res.status(200).send({ valid: true, message: "Vendor priced updated for user", savedPricing });
         } else {
           const toAdd = {
@@ -791,7 +823,7 @@ export const updateB2BVendor4Seller = async (req: ExtendedRequest, res: Response
             ...body,
           };
 
-          console.log(toAdd, "toAdd")
+          console.log(toAdd, "toAdd");
           savedPricing = new CustomB2BPricingModel(toAdd);
           savedPricing = await savedPricing.save();
           return res.status(200).send({ valid: true, message: "Vendor priced updated for user", savedPricing });
@@ -803,7 +835,7 @@ export const updateB2BVendor4Seller = async (req: ExtendedRequest, res: Response
     }
     return res.status(200).send({ valid: false, message: "Not implemented yet" });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
 };
 
@@ -813,14 +845,14 @@ export const uploadDisputeCSV = async (req: ExtendedRequest, res: Response) => {
   }
 
   const alreadyExistingBills = await ClientBillingModal.find({}).select(["orderRefId", "awb", "rtoAwb"]);
-  const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
+  const json = await csvtojson().fromString(req.file.buffer.toString("utf8"));
 
   const csvdisputes = json.map((order: any) => {
     return {
-      awb: (order["AWB"])?.toString(),
+      awb: order["AWB"]?.toString(),
       clientWeight: Number(order["Client Weight"] || 0),
       chargedWeight: Number(order["Charged Weight"]),
-      isAccept: Boolean(order["Accept/Reject"].toLowerCase() === "accept")
+      isAccept: Boolean(order["Accept/Reject"].toLowerCase() === "accept"),
     };
   });
 
@@ -832,11 +864,11 @@ export const uploadDisputeCSV = async (req: ExtendedRequest, res: Response) => {
 
   try {
     const errorWorkbook = new exceljs.Workbook();
-    const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
+    const errorWorksheet = errorWorkbook.addWorksheet("Error Sheet");
 
     errorWorksheet.columns = [
-      { header: 'Awb', key: 'awb', width: 20 },
-      { header: 'Error Message', key: 'errors', width: 40 },
+      { header: "Awb", key: "awb", width: 20 },
+      { header: "Error Message", key: "errors", width: 40 },
     ];
 
     const errorRows: any = [];
@@ -856,101 +888,105 @@ export const uploadDisputeCSV = async (req: ExtendedRequest, res: Response) => {
       }
     });
 
-    const orderAwbs = disputes.map(order => order.awb);
+    const orderAwbs = disputes.map((order) => order.awb);
     const orders = await B2COrderModel.find({
       $or: [{ awb: { $in: orderAwbs } }],
     }).populate(["productId", "pickupAddress"]);
 
-    const updatedDispute = await Promise.all(disputes.map(async (dispute) => {
-      if (!dispute.isAccept) return {}
+    const updatedDispute = await Promise.all(
+      disputes.map(async (dispute) => {
+        if (!dispute.isAccept) return {};
 
-      const order: any = orders.find(o => o.awb === dispute.awb);
-      if (!order) {
-        throw new Error(`Order not found for AWB: ${dispute.awb}`);
-      }
-
-      const bill = await ClientBillingModal.findOne({ awb: dispute.awb });
-
-      if (!bill) {
-        throw new Error("Billing Not Found!")
-      }
-
-      let vendor: any = await CustomPricingModel.findOne({
-        sellerId: order.sellerId,
-        vendorId: bill.carrierID
-      }).populate({
-        path: 'vendorId',
-        populate: {
-          path: 'vendor_channel_id'
+        const order: any = orders.find((o) => o.awb === dispute.awb);
+        if (!order) {
+          throw new Error(`Order not found for AWB: ${dispute.awb}`);
         }
-      });
 
-      if (!vendor) {
-        vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
-      }
+        const bill = await ClientBillingModal.findOne({ awb: dispute.awb });
 
-      const csvBody = {
-        weight: dispute.chargedWeight,
-        paymentType: bill.shipmentType,
-        collectableAmount: Math.max(0, order.amount2Collect),
-      };
+        if (!bill) {
+          throw new Error("Billing Not Found!");
+        }
 
-      const { totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor); // csv calc 
+        let vendor: any = await CustomPricingModel.findOne({
+          sellerId: order.sellerId,
+          vendorId: bill.carrierID,
+        }).populate({
+          path: "vendorId",
+          populate: {
+            path: "vendor_channel_id",
+          },
+        });
 
-      let fwExcessCharge: any = bill.fwExcessCharge;
-      if (Number(fwCharge) > Number(bill.rtoCharge)) {
-        fwExcessCharge = (fwCharge - Number(bill.rtoCharge)).toFixed(2)
-      }
+        if (!vendor) {
+          vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
+        }
 
-      const rtoCharge = (totalCharge - (codCharge || 0)).toFixed(2)
+        const csvBody = {
+          weight: dispute.chargedWeight,
+          paymentType: bill.shipmentType,
+          collectableAmount: Math.max(0, order.amount2Collect),
+        };
 
-      const billingAmount = bill.isRTOApplicable ? Math.max(0, ((totalCharge - order.shipmentCharges) + Number(rtoCharge))).toFixed(2) : (Math.max(0, totalCharge - order.shipmentCharges)).toFixed(2);
+        const { totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor); // csv calc
 
-      await Promise.all([
-        bill.updateOne({
-          codValue: codCharge,
-          fwExcessCharge,
-          rtoCharge,
-          orderWeight: order.orderWeight,
-          billingAmount: billingAmount, // fw+RTO without COD Charge
-          chargedWeight: dispute.chargedWeight,
-        }),
+        let fwExcessCharge: any = bill.fwExcessCharge;
+        if (Number(fwCharge) > Number(bill.rtoCharge)) {
+          fwExcessCharge = (fwCharge - Number(bill.rtoCharge)).toFixed(2);
+        }
 
-        MonthlyBilledAWBModel.findOneAndUpdate(
-          { sellerId: order.sellerId, awb: order.awb },
-          {
-            billingAmount: billingAmount,
+        const rtoCharge = (totalCharge - (codCharge || 0)).toFixed(2);
+
+        const billingAmount = bill.isRTOApplicable
+          ? Math.max(0, totalCharge - order.shipmentCharges + Number(rtoCharge)).toFixed(2)
+          : Math.max(0, totalCharge - order.shipmentCharges).toFixed(2);
+
+        await Promise.all([
+          bill.updateOne({
+            codValue: codCharge,
+            fwExcessCharge,
+            rtoCharge,
+            orderWeight: order.orderWeight,
+            billingAmount: billingAmount, // fw+RTO without COD Charge
             chargedWeight: dispute.chargedWeight,
-          },
-          {
-            new: true,
-            setDefaultsOnInsert: true,
-            upsert: true,
-          }
-        ),
-      ]);
+          }),
 
-      return {
-        updateOne: {
-          filter: { awb: bill.awb },
-          update: {
-            $set: {
-              accepted: true
+          MonthlyBilledAWBModel.findOneAndUpdate(
+            { sellerId: order.sellerId, awb: order.awb },
+            {
+              billingAmount: billingAmount,
+              chargedWeight: dispute.chargedWeight,
+            },
+            {
+              new: true,
+              setDefaultsOnInsert: true,
+              upsert: true,
             }
-          },
-          upsert: true
-        }
-      };
-    }));
+          ),
+        ]);
 
-    const validDispute = updatedDispute.filter(x => !!x)
+        return {
+          updateOne: {
+            filter: { awb: bill.awb },
+            update: {
+              $set: {
+                accepted: true,
+              },
+            },
+            upsert: true,
+          },
+        };
+      })
+    );
+
+    const validDispute = updatedDispute.filter((x) => !!x);
     // @ts-ignore
     await SellerDisputeModel.bulkWrite(validDispute);
 
     if (errorRows.length > 0) {
       errorWorksheet.addRows(errorRows);
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", "attachment; filename=error_report.csv");
       await errorWorkbook.csv.write(res);
       return res.end();
     }
@@ -960,7 +996,7 @@ export const uploadDisputeCSV = async (req: ExtendedRequest, res: Response) => {
     console.error("Error in uploadDisputeCSV:", error);
     return res.status(500).send({ valid: false, message: "An error occurred while processing the request" });
   }
-}
+};
 
 export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   if (!req.file || !req.file.buffer) {
@@ -968,14 +1004,14 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
   }
 
   const alreadyExistingBills = await ClientBillingModal.find({}).select(["orderRefId", "awb", "rtoAwb"]);
-  const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
+  const json = await csvtojson().fromString(req.file.buffer.toString("utf8"));
 
   const csvBills = json.map((bill: any) => {
     const isForwardApplicable = Boolean(bill["Forward Applicable"]?.toUpperCase() === "TRUE");
     const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "TRUE");
 
     return {
-      awb: (bill["Awb"])?.toString(),
+      awb: bill["Awb"]?.toString(),
       codValue: Number(bill["COD Value"] || 0),
       shipmentType: bill["Shipment Type"].toUpperCase() === "COD" ? 1 : 0,
       chargedWeight: Number(bill["Charged Weight"]),
@@ -994,11 +1030,11 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
   try {
     const errorWorkbook = new exceljs.Workbook();
-    const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
+    const errorWorksheet = errorWorkbook.addWorksheet("Error Sheet");
 
     errorWorksheet.columns = [
-      { header: 'Awb', key: 'awb', width: 20 },
-      { header: 'Error Message', key: 'errors', width: 40 },
+      { header: "Awb", key: "awb", width: 20 },
+      { header: "Error Message", key: "errors", width: 40 },
     ];
 
     const errorRows: any = [];
@@ -1018,21 +1054,21 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       }
     });
 
-    const orderAwbs = bills.map(bill => bill.awb);
+    const orderAwbs = bills.map((bill) => bill.awb);
     const orders = await B2COrderModel.find({
       $or: [{ awb: { $in: orderAwbs } }],
     }).populate(["productId", "pickupAddress"]);
 
     const orderRefIdToSellerIdMap = new Map();
-    orders.forEach(order => {
+    orders.forEach((order) => {
       orderRefIdToSellerIdMap.set(order.order_reference_id || order.client_order_reference_id, order.sellerId);
     });
 
-    const currentMonth = format(new Date(), 'yyyy-MM-dd');
+    const currentMonth = format(new Date(), "yyyy-MM-dd");
 
     // Handling missing AWBs: collect AWBs not found in the database
-    bills.forEach(bill => {
-      const order = orders.find(o => o.awb === bill.awb);
+    bills.forEach((bill) => {
+      const order = orders.find((o) => o.awb === bill.awb);
       if (!order) {
         errorRows.push({ awb: bill.awb, errors: "AWB not found in the database" });
       }
@@ -1041,156 +1077,164 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     if (errorRows.length > 0) {
       errorWorksheet.addRows(errorRows);
 
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", "attachment; filename=error_report.csv");
 
       await errorWorkbook.csv.write(res);
       return res.end();
     }
 
-    const billsWithCharges = await Promise.all(bills.map(async (bill) => {
-      const order: any = orders.find(o => o.awb === bill.awb);
-      if (!order) {
-        throw new Error(`Order not found for AWB: ${bill.awb}`);
-      }
-
-      let vendor: any = await CustomPricingModel.findOne({
-        sellerId: order.sellerId,
-        vendorId: bill.carrierID
-      }).populate({
-        path: 'vendorId',
-        populate: {
-          path: 'vendor_channel_id'
+    const billsWithCharges = await Promise.all(
+      bills.map(async (bill) => {
+        const order: any = orders.find((o) => o.awb === bill.awb);
+        if (!order) {
+          throw new Error(`Order not found for AWB: ${bill.awb}`);
         }
-      });
 
-      if (!vendor) {
-        vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
-      }
+        let vendor: any = await CustomPricingModel.findOne({
+          sellerId: order.sellerId,
+          vendorId: bill.carrierID,
+        }).populate({
+          path: "vendorId",
+          populate: {
+            path: "vendor_channel_id",
+          },
+        });
 
-      let weightSlab = vendor?.weightSlab || vendor?.vendorId?.weightSlab
-      const csvWeight = Math.max(bill.chargedWeight, weightSlab);
-
-      const csvBody = {
-        weight: csvWeight,
-        paymentType: bill.shipmentType,
-        collectableAmount: Math.max(0, order.amount2Collect),
-      };
-
-      const orderBody = {
-        weight: order.orderWeight,
-        paymentType: order.payment_mode,
-        collectableAmount: Math.max(0, order.amount2Collect),
-      }
-
-      const { incrementPrice, totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor); // csv calc 
-
-      let orderShippingCalc: any;
-      let fwExcessCharge: any = 0;
-      if (bill.chargedWeight > order.orderWeight) {
-        orderShippingCalc = await calculateShippingCharges(bill.zone, orderBody, vendor); // customer calc
-
-        if (totalCharge > orderShippingCalc.totalCharge) {
-          fwExcessCharge = (totalCharge - orderShippingCalc.totalCharge).toFixed(2)
+        if (!vendor) {
+          vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
         }
-      }
 
-      const baseWeight = (vendor?.weightSlab || vendor?.vendorId?.weightSlab) || 0; // Courier weight
-      const incrementWeight = bill.chargedWeight - Number(order.orderWeight) - baseWeight;
+        let weightSlab = vendor?.weightSlab || vendor?.vendorId?.weightSlab;
+        const csvWeight = Math.max(bill.chargedWeight, weightSlab);
 
-      const rtoCharge = (totalCharge - (codCharge || 0)).toFixed(2)
+        const csvBody = {
+          weight: csvWeight,
+          paymentType: bill.shipmentType,
+          collectableAmount: Math.max(0, order.amount2Collect),
+        };
 
-      const billingAmount = bill.isRTOApplicable ? Math.max(0, ((totalCharge - order.shipmentCharges) + Number(rtoCharge))).toFixed(2) : (Math.max(0, totalCharge - order.shipmentCharges)).toFixed(2);
+        const orderBody = {
+          weight: order.orderWeight,
+          paymentType: order.payment_mode,
+          collectableAmount: Math.max(0, order.amount2Collect),
+        };
 
-      const existingMonthBill: any = await MonthlyBilledAWBModel.findOne({
-        sellerId: order.sellerId,
-        awb: order.awb,
-      });
+        const { incrementPrice, totalCharge, codCharge, fwCharge } = await calculateShippingCharges(
+          bill.zone,
+          csvBody,
+          vendor
+        ); // csv calc
 
-      if (existingMonthBill && existingMonthBill.isRTOApplicable === true) {
-        errorRows.push({ awb: bill.awb, errors: "Not Allowd: Awb is already billed for forward and RTO" });
-        return;
-      }
+        let orderShippingCalc: any;
+        let fwExcessCharge: any = 0;
+        if (bill.chargedWeight > order.orderWeight) {
+          orderShippingCalc = await calculateShippingCharges(bill.zone, orderBody, vendor); // customer calc
 
-      bill.isForwardApplicable = bill.isRTOApplicable === true ? true : bill.isForwardApplicable;
+          if (totalCharge > orderShippingCalc.totalCharge) {
+            fwExcessCharge = (totalCharge - orderShippingCalc.totalCharge).toFixed(2);
+          }
+        }
 
-      const monthBill = await MonthlyBilledAWBModel.findOneAndUpdate(
-        { sellerId: order.sellerId, awb: order.awb },
-        {
+        const baseWeight = vendor?.weightSlab || vendor?.vendorId?.weightSlab || 0; // Courier weight
+        const incrementWeight = bill.chargedWeight - Number(order.orderWeight) - baseWeight;
+
+        const rtoCharge = (totalCharge - (codCharge || 0)).toFixed(2);
+
+        const billingAmount = bill.isRTOApplicable
+          ? Math.max(0, totalCharge - order.shipmentCharges + Number(rtoCharge)).toFixed(2)
+          : Math.max(0, totalCharge - order.shipmentCharges).toFixed(2);
+
+        const existingMonthBill: any = await MonthlyBilledAWBModel.findOne({
           sellerId: order.sellerId,
           awb: order.awb,
-          billingDate: currentMonth,
-          billingAmount: billingAmount,
-          zone: bill.zone,
-          incrementPrice: incrementPrice.incrementPrice,
-          basePrice: incrementPrice.basePrice,
-          chargedWeight: incrementWeight > 0 ? incrementWeight.toString() : "0",
-          baseWeight: baseWeight.toString(),
-          isForwardApplicable: bill.isForwardApplicable,
-          isRTOApplicable: bill.isRTOApplicable,
-        },
-        {
-          new: true,
-          setDefaultsOnInsert: true,
-          upsert: true
+        });
+
+        if (existingMonthBill && existingMonthBill.isRTOApplicable === true) {
+          errorRows.push({ awb: bill.awb, errors: "Not Allowd: Awb is already billed for forward and RTO" });
+          return;
         }
-      );
 
-      // TODO: Zone change Handle! 
-      return {
-        updateOne: {
-          filter: { awb: bill.awb },
-          update: {
-            $set: {
-              ...bill,
-              carrierID: bill.carrierID,
-              sellerId: order.sellerId,
+        bill.isForwardApplicable = bill.isRTOApplicable === true ? true : bill.isForwardApplicable;
 
-              basePrice: incrementPrice.basePrice, // cc
-              baseWeight: baseWeight.toString(),  // cc
-              incrementPrice: incrementPrice.incrementPrice, // cc
-
-              orderRefId: order.order_reference_id,
-              orderCharges: order.shipmentCharges, // applied_weight charge
-              orderWeight: order.orderWeight,
-              codValue: codCharge,
-              rtoAwb: "",
-
-              fwExcessCharge,
-              rtoExcessCharge: fwExcessCharge > 0 && bill.isRTOApplicable ? fwExcessCharge : 0,
-              rtoCharge,
-              fwCharge,
-
-              // if ZONE Change
-              // fwExcessCharge,
-              // rtoExcessCharge,
-              // rtoCharge,
-              // fwCharge,
-
-
-              billingAmount: billingAmount, // fw+RTO without COD Charge 
-              billingDate: format(new Date(), 'yyyy-MM-dd'),
-              vendorWNickName: `${vendor?.name || vendor?.vendorId?.name} ${vendor?.vendor_channel_id?.nickName || vendor?.vendorId?.vendor_channel_id.nickName}`.trim(),
-
-              paymentStatus: paymentStatusInfo.NOT_PAID,
-              recipientName: order.customerDetails.get("name"),
-              fromCity: order?.pickupAddress?.city || order?.pickupAddress?.get("city"),
-              toCity: order.customerDetails.get("city"),
-            }
+        const monthBill = await MonthlyBilledAWBModel.findOneAndUpdate(
+          { sellerId: order.sellerId, awb: order.awb },
+          {
+            sellerId: order.sellerId,
+            awb: order.awb,
+            billingDate: currentMonth,
+            billingAmount: billingAmount,
+            zone: bill.zone,
+            incrementPrice: incrementPrice.incrementPrice,
+            basePrice: incrementPrice.basePrice,
+            chargedWeight: incrementWeight > 0 ? incrementWeight.toString() : "0",
+            baseWeight: baseWeight.toString(),
+            isForwardApplicable: bill.isForwardApplicable,
+            isRTOApplicable: bill.isRTOApplicable,
           },
-          upsert: true
-        }
-      };
-    }));
+          {
+            new: true,
+            setDefaultsOnInsert: true,
+            upsert: true,
+          }
+        );
 
+        // TODO: Zone change Handle!
+        return {
+          updateOne: {
+            filter: { awb: bill.awb },
+            update: {
+              $set: {
+                ...bill,
+                carrierID: bill.carrierID,
+                sellerId: order.sellerId,
 
-    const validBills = billsWithCharges.filter(x => !!x)
+                basePrice: incrementPrice.basePrice, // cc
+                baseWeight: baseWeight.toString(), // cc
+                incrementPrice: incrementPrice.incrementPrice, // cc
+
+                orderRefId: order.order_reference_id,
+                orderCharges: order.shipmentCharges, // applied_weight charge
+                orderWeight: order.orderWeight,
+                codValue: codCharge,
+                rtoAwb: "",
+
+                fwExcessCharge,
+                rtoExcessCharge: fwExcessCharge > 0 && bill.isRTOApplicable ? fwExcessCharge : 0,
+                rtoCharge,
+                fwCharge,
+
+                // if ZONE Change
+                // fwExcessCharge,
+                // rtoExcessCharge,
+                // rtoCharge,
+                // fwCharge,
+
+                billingAmount: billingAmount, // fw+RTO without COD Charge
+                billingDate: format(new Date(), "yyyy-MM-dd"),
+                vendorWNickName: `${vendor?.name || vendor?.vendorId?.name} ${
+                  vendor?.vendor_channel_id?.nickName || vendor?.vendorId?.vendor_channel_id.nickName
+                }`.trim(),
+
+                paymentStatus: paymentStatusInfo.NOT_PAID,
+                recipientName: order.customerDetails.get("name"),
+                fromCity: order?.pickupAddress?.city || order?.pickupAddress?.get("city"),
+                toCity: order.customerDetails.get("city"),
+              },
+            },
+            upsert: true,
+          },
+        };
+      })
+    );
+
+    const validBills = billsWithCharges.filter((x) => !!x);
     // @ts-ignore
     const result = await ClientBillingModal.bulkWrite(validBills);
 
     // await Promise.all(validBills.map(async (bill: any) => {
     //   const sellerId = bill.updateOne.update.$set.sellerId
-    //   // const sellerId = "663379872fc3a04d7cc1e7a1" // for testing 
+    //   // const sellerId = "663379872fc3a04d7cc1e7a1" // for testing
 
     //   const awb = bill.updateOne.filter.awb;
     //   const returnCODCharge = Math.max((bill.updateOne.update.$set.codValue || 0), 0); // Reversed COD Charge
@@ -1240,8 +1284,8 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
     if (errorRows.length > 0) {
       errorWorksheet.addRows(errorRows);
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", "attachment; filename=error_report.csv");
       await errorWorkbook.csv.write(res);
       return res.end();
     }
@@ -1259,7 +1303,7 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
   }
 
   const alreadyExistingBills = await B2BClientBillingModal.find({}).select(["orderRefId", "awb"]);
-  const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
+  const json = await csvtojson().fromString(req.file.buffer.toString("utf8"));
 
   const bills = json.map((bill: any) => {
     const isODAApplicable = Boolean(bill["ODA Applicable"]?.toUpperCase() === "YES");
@@ -1278,11 +1322,11 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
 
   try {
     const errorWorkbook = new exceljs.Workbook();
-    const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
+    const errorWorksheet = errorWorkbook.addWorksheet("Error Sheet");
 
     errorWorksheet.columns = [
-      { header: 'Awb', key: 'awb', width: 20 },
-      { header: 'Error Message', key: 'errors', width: 40 },
+      { header: "Awb", key: "awb", width: 20 },
+      { header: "Error Message", key: "errors", width: 40 },
     ];
 
     const errorRows: any = [];
@@ -1304,85 +1348,98 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
     if (errorRows.length > 0) {
       errorWorksheet.addRows(errorRows);
 
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", "attachment; filename=error_report.csv");
 
       await errorWorkbook.csv.write(res);
       return res.end();
     }
 
-    const orderAwbs = bills.map(bill => bill.awb);
+    const orderAwbs = bills.map((bill) => bill.awb);
     const orders = await B2BOrderModel.find({
-      $or: [
-        { awb: { $in: orderAwbs } },
-      ]
+      $or: [{ awb: { $in: orderAwbs } }],
     }).populate(["pickupAddress", "customer"]);
 
     const orderRefIdToSellerIdMap = new Map();
-    orders.forEach(order => {
+    orders.forEach((order) => {
       orderRefIdToSellerIdMap.set(order.order_reference_id, order.sellerId);
     });
 
-    const billsWithCharges = await Promise.all(bills?.map(async (bill) => {
-      const order: any = orders.find(o => o.awb === bill.awb);
-      if (!order) {
-        throw new Error(`Order not found for AWB: ${bill.awb}`);
-      }
-
-      const courier: any = await B2BCalcModel.findById(bill.carrierID).populate("vendor_channel_id");
-
-      const pickupPincodeData = await PincodeModel.findOne({ Pincode: order.pickupAddress.pincode }).exec();
-      const deliveryPincodeData = await PincodeModel.findOne({ Pincode: order.customer.pincode }).exec();
-
-      if (!pickupPincodeData || !deliveryPincodeData) {
-        return;
-      }
-
-      const fromRegionName = pickupPincodeData.District.toLowerCase(); // convert to lowercase
-      const toRegionName = deliveryPincodeData.District.toLowerCase(); // convert to lowercase
-
-      const Fzone = await regionToZoneMappingLowercase(fromRegionName);
-      const Tzone = await regionToZoneMappingLowercase(toRegionName);
-
-      if (!Fzone || !Tzone) {
-        throw new Error('Zone not found for the given region');
-      }
-
-      const result = await calculateRateAndPrice(courier, Fzone, Tzone, bill.orderWeight, courier?._id?.toString(), fromRegionName, toRegionName, order.amount, bill.otherCharges, bill.isODAApplicable);
-
-      const futureDate = addDays(new Date(), 7);
-
-      return {
-        updateOne: {
-          filter: { awb: bill.awb },
-          update: {
-            $set: {
-              sellerId: order.sellerId,
-              orderRefId: order.order_reference_id,
-              awb: bill.awb,
-              isODAApplicable: bill.isODAApplicable,
-              orderWeight: bill.orderWeight,
-              billingDate: futureDate.toISOString(),
-              billingAmount: result.finalAmount,
-              otherCharges: result.otherExpensesTotal,
-              vendorWNickName: `${courier.name} ${courier.vendor_channel_id.nickName}`,
-            }
-          },
-          upsert: true
+    const billsWithCharges = await Promise.all(
+      bills?.map(async (bill) => {
+        const order: any = orders.find((o) => o.awb === bill.awb);
+        if (!order) {
+          throw new Error(`Order not found for AWB: ${bill.awb}`);
         }
-      };
-    }));
+
+        const courier: any = await B2BCalcModel.findById(bill.carrierID).populate("vendor_channel_id");
+
+        const pickupPincodeData = await PincodeModel.findOne({ Pincode: order.pickupAddress.pincode }).exec();
+        const deliveryPincodeData = await PincodeModel.findOne({ Pincode: order.customer.pincode }).exec();
+
+        if (!pickupPincodeData || !deliveryPincodeData) {
+          return;
+        }
+
+        const fromRegionName = pickupPincodeData.District.toLowerCase(); // convert to lowercase
+        const toRegionName = deliveryPincodeData.District.toLowerCase(); // convert to lowercase
+
+        const Fzone = await regionToZoneMappingLowercase(fromRegionName);
+        const Tzone = await regionToZoneMappingLowercase(toRegionName);
+
+        if (!Fzone || !Tzone) {
+          throw new Error("Zone not found for the given region");
+        }
+
+        const result = await calculateRateAndPrice(
+          courier,
+          Fzone,
+          Tzone,
+          bill.orderWeight,
+          courier?._id?.toString(),
+          fromRegionName,
+          toRegionName,
+          order.amount,
+          bill.otherCharges,
+          bill.isODAApplicable
+        );
+
+        const futureDate = addDays(new Date(), 7);
+
+        return {
+          updateOne: {
+            filter: { awb: bill.awb },
+            update: {
+              $set: {
+                sellerId: order.sellerId,
+                orderRefId: order.order_reference_id,
+                awb: bill.awb,
+                isODAApplicable: bill.isODAApplicable,
+                orderWeight: bill.orderWeight,
+                billingDate: futureDate.toISOString(),
+                billingAmount: result.finalAmount,
+                otherCharges: result.otherExpensesTotal,
+                vendorWNickName: `${courier.name} ${courier.vendor_channel_id.nickName}`,
+              },
+            },
+            upsert: true,
+          },
+        };
+      })
+    );
 
     // @ts-ignore
     await B2BClientBillingModal.bulkWrite(billsWithCharges);
 
     // Schedule wallet balance deduction after 7 days
     setTimeout(async () => {
-      await Promise.all(billsWithCharges.map(async (bill: any) => {
-        if (bill.sellerId && bill.billingAmount) {
-          await updateSellerWalletBalance(bill.sellerId, (bill.billingAmount), false, `AWB: ${bill.awb}, Revised B2B`);
-        }
-      }));
+      await Promise.all(
+        billsWithCharges.map(async (bill: any) => {
+          if (bill.sellerId && bill.billingAmount) {
+            await updateSellerWalletBalance(bill.sellerId, bill.billingAmount, false, `AWB: ${bill.awb}, Revised B2B`);
+          }
+        })
+      );
     }, 7 * 24 * 60 * 60 * 1000);
 
     return res.status(200).send({
@@ -1395,20 +1452,17 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
   }
 };
 
-
 export const getVendorBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const [data, b2bData] = await Promise.all([
-      ClientBillingModal.find({})
-        .populate({
-          path: 'sellerId',
-          select: '-kycDetails'
-        }),
-      B2BClientBillingModal.find({})
-        .populate({
-          path: 'sellerId',
-          select: '-kycDetails'
-        })
+      ClientBillingModal.find({}).populate({
+        path: "sellerId",
+        select: "-kycDetails",
+      }),
+      B2BClientBillingModal.find({}).populate({
+        path: "sellerId",
+        select: "-kycDetails",
+      }),
     ]);
 
     if (!data.length && !b2bData.length) {
@@ -1418,59 +1472,55 @@ export const getVendorBillingData = async (req: ExtendedRequest, res: Response, 
     return res.status(200).send({
       valid: true,
       data: data.reverse(),
-      b2bData: b2bData.reverse()
+      b2bData: b2bData.reverse(),
     });
   } catch (error) {
     return next(error);
   }
-}
+};
 export const getClientBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const [data, b2bData] = await Promise.all([
-      ClientBillingModal.find({})
-        .populate({
-          path: 'sellerId',
-          select: 'name'
-        }),
-      B2BClientBillingModal.find({})
-        .populate({
-          path: 'sellerId',
-          select: 'name'
-        })
+      ClientBillingModal.find({}).populate({
+        path: "sellerId",
+        select: "name",
+      }),
+      B2BClientBillingModal.find({}).populate({
+        path: "sellerId",
+        select: "name",
+      }),
     ]);
-
 
     if (!data.length && !b2bData.length) {
       return res.status(200).send({ valid: false, message: "No Client Billing found" });
     }
 
-    const billedAwbs = data.map(bill => bill.awb);
+    const billedAwbs = data.map((bill) => bill.awb);
     const billsStatus = await MonthlyBilledAWBModel.find({ awb: { $in: billedAwbs } });
 
     const billsWStatus = data.map((bill: any) => {
-      const statusEntry: any = billsStatus.find(status => status.awb === bill.awb);
-      let status = 'Forward Billed'
+      const statusEntry: any = billsStatus.find((status) => status.awb === bill.awb);
+      let status = "Forward Billed";
 
       if (statusEntry?.isRTOApplicable) {
-        status = 'Forward + RTO Billed'
+        status = "Forward + RTO Billed";
       }
 
       return {
         ...bill._doc,
-        status
+        status,
       };
     });
-
 
     return res.status(200).send({
       valid: true,
       data: billsWStatus.reverse(),
-      b2bData: b2bData.reverse()
+      b2bData: b2bData.reverse(),
     });
   } catch (error) {
     return next(error);
   }
-}
+};
 
 export const manageSellerRemittance = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1491,7 +1541,7 @@ export const manageSellerRemittance = async (req: ExtendedRequest, res: Response
   } catch (err) {
     return next(err);
   }
-}
+};
 
 export const getInvoices = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1499,9 +1549,9 @@ export const getInvoices = async (req: ExtendedRequest, res: Response, next: Nex
     const invoices = await InvoiceModel.find({ sellerId });
     return res.status(200).send({ valid: true, invoices });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const getInoviceById = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1510,9 +1560,9 @@ export const getInoviceById = async (req: ExtendedRequest, res: Response, next: 
 
     return res.status(200).send({ valid: true, invoice });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const generateInvoices = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1524,30 +1574,29 @@ export const generateInvoices = async (req: ExtendedRequest, res: Response, next
   } catch (err) {
     return next(err);
   }
-}
+};
 
 export const getSubAdmins = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const subadmins = await SellerModel.find({ issubadmin: true }).select(["name", "subadminpaths"])
+    const subadmins = await SellerModel.find({ issubadmin: true }).select(["name", "subadminpaths"]);
     return res.status(200).send({ valid: true, subadmins });
   } catch (err) {
-    return next(err)
+    return next(err);
   }
-}
+};
 
 export const getAllInvoices = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const invoices = await InvoiceModel.find({}).populate("sellerId", "name");
     return res.status(200).send({ valid: true, invoices });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const updateSubadminPaths = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const { paths } = req.body;
-
 
     if (!paths || !Array.isArray(paths)) {
       return res.status(400).send({ valid: false, message: "Invalid paths array" });
@@ -1577,20 +1626,21 @@ export const deleteSubadmin = async (req: ExtendedRequest, res: Response, next: 
     const deleted = await SellerModel.findByIdAndDelete(req.params.id);
 
     return res.status(200).send({ valid: true, message: "Subadmin deleted successfully", deleted });
-
   } catch (err) {
     return next(err);
   }
-}
+};
 
 export const getDisputes = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const disputes = await SellerDisputeModel.find({ accepted: false }).populate("sellerId", "name").populate("clientBillingId")
+    const disputes = await SellerDisputeModel.find({ accepted: false })
+      .populate("sellerId", "name")
+      .populate("clientBillingId");
     return res.status(200).send({ valid: true, disputes });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const getDisputeById = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1600,9 +1650,9 @@ export const getDisputeById = async (req: ExtendedRequest, res: Response, next: 
 
     return res.status(200).send({ valid: true, dispute, order });
   } catch (error) {
-    return next(error)
+    return next(error);
   }
-}
+};
 
 export const acceptDispute = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1612,7 +1662,7 @@ export const acceptDispute = async (req: ExtendedRequest, res: Response, next: N
       return res.status(404).send({ valid: false, message: "No Dispute found" });
     }
 
-    const order: any = await B2COrderModel.find({ awb: dispute.awb })
+    const order: any = await B2COrderModel.find({ awb: dispute.awb });
     if (!order) {
       throw new Error(`Order not found for AWB: ${dispute.awb}`);
     }
@@ -1620,17 +1670,17 @@ export const acceptDispute = async (req: ExtendedRequest, res: Response, next: N
     const bill = await ClientBillingModal.findOne({ awb: dispute.awb });
 
     if (!bill) {
-      throw new Error("Billing Not Found!")
+      throw new Error("Billing Not Found!");
     }
 
     let vendor: any = await CustomPricingModel.findOne({
       sellerId: order.sellerId,
-      vendorId: bill.carrierID
+      vendorId: bill.carrierID,
     }).populate({
-      path: 'vendorId',
+      path: "vendorId",
       populate: {
-        path: 'vendor_channel_id'
-      }
+        path: "vendor_channel_id",
+      },
     });
 
     if (!vendor) {
@@ -1643,16 +1693,18 @@ export const acceptDispute = async (req: ExtendedRequest, res: Response, next: N
       collectableAmount: Math.max(0, order.amount2Collect),
     };
 
-    const { totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor); // csv calc 
+    const { totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor); // csv calc
 
     let fwExcessCharge: any = bill.fwExcessCharge;
     if (Number(fwCharge) > Number(bill.rtoCharge)) {
-      fwExcessCharge = (fwCharge - Number(bill.rtoCharge)).toFixed(2)
+      fwExcessCharge = (fwCharge - Number(bill.rtoCharge)).toFixed(2);
     }
 
-    const rtoCharge = (totalCharge - (codCharge || 0)).toFixed(2)
+    const rtoCharge = (totalCharge - (codCharge || 0)).toFixed(2);
 
-    const billingAmount = bill.isRTOApplicable ? Math.max(0, ((totalCharge - order.shipmentCharges) + Number(rtoCharge))).toFixed(2) : (Math.max(0, totalCharge - order.shipmentCharges)).toFixed(2);
+    const billingAmount = bill.isRTOApplicable
+      ? Math.max(0, totalCharge - order.shipmentCharges + Number(rtoCharge)).toFixed(2)
+      : Math.max(0, totalCharge - order.shipmentCharges).toFixed(2);
 
     // console.log({
     //   codValue: codCharge,
@@ -1690,11 +1742,10 @@ export const acceptDispute = async (req: ExtendedRequest, res: Response, next: N
     await dispute.save();
 
     return res.status(200).send({ valid: true, message: "Dispute accepted successfully" });
+  } catch (error) {
+    return next(error);
   }
-  catch (error) {
-    return next(error)
-  }
-}
+};
 
 export const rejectDispute = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1703,15 +1754,14 @@ export const rejectDispute = async (req: ExtendedRequest, res: Response, next: N
     if (!dispute) {
       return res.status(404).send({ valid: false, message: "No Dispute found" });
     }
-    dispute.stage = 4
+    dispute.stage = 4;
     dispute.save();
 
     return res.status(200).send({ valid: true, message: "Dispute rejected successfully", dispute });
+  } catch (error) {
+    return next(error);
   }
-  catch (error) {
-    return next(error)
-  }
-}
+};
 
 export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1729,9 +1779,9 @@ export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, n
     awbs.forEach((awb: any) => {
       const bill = bills.find((bill) => bill.awb === awb);
       const order = orders.find((order) => order.awb === awb);
-      const orderCreatedAt = formatDate(`${order?.createdAt}`, 'dd MM yyyy | HH:mm a');
+      const orderCreatedAt = formatDate(`${order?.createdAt}`, "dd MM yyyy | HH:mm a");
       const orderStage = order?.orderStages?.slice(-1)[0];
-      const deliveryDate = formatDate(`${orderStage?.stageDateTime}`, 'dd MM yyyy | HH:mm a')
+      const deliveryDate = formatDate(`${orderStage?.stageDateTime}`, "dd MM yyyy | HH:mm a");
       let forwardCharges = 0;
       let rtoCharges = 0;
       let codCharges = 0;
@@ -1745,7 +1795,6 @@ export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, n
           forwardCharges = Number(bill.rtoCharge);
         }
       }
-
 
       const awbObj = {
         awb,
@@ -1761,7 +1810,7 @@ export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, n
         orderId: bill?.orderRefId,
         createdAt: orderCreatedAt,
         deliveredAt: deliveryDate,
-      }
+      };
       awbTransacs.push(awbObj);
     });
 
@@ -1770,7 +1819,6 @@ export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, n
     return next(error);
   }
 };
-
 
 export const mapInoiceAwbTransactions = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1784,17 +1832,16 @@ export const mapInoiceAwbTransactions = async (req: ExtendedRequest, res: Respon
         let forwardCharges = 0;
         let rtoCharges = 0;
         let codCharges = 0;
-        
-        if(bill){
-            if(bill.isRTOApplicable === false){
-              codCharges = Number(bill.codValue);
-              forwardCharges = Number(bill.rtoCharge);
-            }else{
-              rtoCharges = Number(bill.rtoCharge);
-              forwardCharges = Number(bill.rtoCharge);
-            }
+
+        if (bill) {
+          if (bill.isRTOApplicable === false) {
+            codCharges = Number(bill.codValue);
+            forwardCharges = Number(bill.rtoCharge);
+          } else {
+            rtoCharges = Number(bill.rtoCharge);
+            forwardCharges = Number(bill.rtoCharge);
+          }
         }
-        
 
         const awbObj = {
           awb,
@@ -1808,12 +1855,103 @@ export const mapInoiceAwbTransactions = async (req: ExtendedRequest, res: Respon
           fromCity: bill?.fromCity,
           toCity: bill?.toCity,
           orderId: bill?.orderRefId,
-        }
-        awbTransacs.push(awbObj); 
+        };
+        awbTransacs.push(awbObj);
       });
-      console.log(awbTransacs, 'awbbbbbb'); 
-    })
+      console.log(awbTransacs, "awbbbbbb");
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
 
+export const createNeftPayment = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { invoiceNumber, bankName, paymentReferenceNumber, amount, transactionDate } = req.body;
+    if (!invoiceNumber || !bankName || !paymentReferenceNumber || !amount || !transactionDate) {
+      return res.status(400).send({ valid: false, message: "All fields are required" });
+    }
+    const invoice = await InvoiceModel.findOne({ invoice_id: invoiceNumber }).lean();
+    if (!invoice) {
+      return res.status(404).send({ valid: false, message: "No invoice found for this invoice" });
+    }
+    const neftPayment = new NeftModel({
+      sellerId: invoice?.sellerId || "",
+      invoiceNumber,
+      bankName,
+      paymentReferenceNumber,
+      amount,
+      transactionDate,
+    });
+
+    const accessToken = await generateAccessToken();
+    if (!accessToken) return;
+
+    const seller = await SellerModel.findOne({ sellerId: invoice?.sellerId });
+    if (!seller) return;
+
+    const zoho_contact_id = seller.zoho_contact_id;
+    if (!zoho_contact_id) return;
+
+    const rechargeBody = {
+      customer_id: zoho_contact_id,
+      amount: amount,
+    };
+    const rechargeRes = await axios.post(
+      `https://www.zohoapis.in/books/v3/customerpayments?organization_id=60014023368`,
+      rechargeBody,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+      }
+    );
+    const paymentId = rechargeRes.data.payment.payment_id;
+    const creditsBody = {
+      invoice_payments: [
+        {
+          payment_id: paymentId,
+          amount_applied: amount,
+        },
+      ],
+    };
+    const applyCredits = await axios.post(
+      `https://www.zohoapis.in/books/v3/invoices/${invoiceNumber}/credits?organization_id=60014023368`,
+      creditsBody,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+      }
+    );
+
+    const invoicePdf = await axios.get(
+      `https://www.zohoapis.in/books/v3/invoices/${invoiceNumber}?organization_id=60014023368&accept=pdf`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+        responseType: "arraybuffer",
+      }
+    );
+
+    const pdfBase64 = Buffer.from(invoicePdf.data, "binary").toString("base64");
+    await InvoiceModel.findOneAndUpdate({ invoice_id: invoiceNumber }, { $set: { invoicePdf: pdfBase64 } });
+    await seller.save();
+    await neftPayment.save();
+    return res.status(200).send({ valid: true, message: "NEFT Payment created successfully", neftPayment });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+export const getNeftPayments = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const neftPayments = await NeftModel.find({}).populate("sellerId", "name");
+    return res.status(200).send({ valid: true, neftPayments });
   } catch (error) {
     return next(error);
   }

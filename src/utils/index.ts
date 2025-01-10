@@ -2,7 +2,7 @@ import mongoose, { isValidObjectId, Types } from "mongoose";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
 import { startOfWeek, addDays, getDay, format, startOfDay } from "date-fns";
-import { getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getMarutiToken, getSellerChannelConfig, getShiprocketToken, getSMARTRToken, getSmartShipToken, MetroCitys, NorthEastStates, validateEmail } from "./helpers";
+import { generateAccessToken, getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getMarutiToken, getSellerChannelConfig, getShiprocketToken, getSMARTRToken, getSmartShipToken, MetroCitys, NorthEastStates, validateEmail } from "./helpers";
 import { COURRIER_ASSIGNED_ORDER_DESCRIPTION, DELIVERED, IN_TRANSIT, MANIFEST_ORDER_DESCRIPTION, PICKUP_SCHEDULED_DESCRIPTION, READY_TO_SHIP, RETURN_CONFIRMED, RTO, SHIPMENT_CANCELLED_ORDER_DESCRIPTION, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, SHIPROCKET_MANIFEST_ORDER_STATUS, SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS, SMARTSHIP_MANIFEST_ORDER_STATUS } from "./lorrigo-bucketing-info";
 import { DeliveryDetails, IncrementPrice, PickupDetails, Vendor, Body } from "../types/rate-cal";
 import SellerModel from "../models/seller.model";
@@ -15,6 +15,7 @@ import APIs from "./constants/third_party_apis";
 import ShipmentResponseModel from "../models/shipment-response.model";
 import { randomUUID } from "crypto";
 import Counter from "../models/counter.model";
+import InvoiceModel from "../models/invoice.model";
 
 
 
@@ -199,6 +200,204 @@ export async function sendMail({ user }: { user: { email: string; name: string; 
       message: "Failed to send email: " + error.message,
     };
   }
+}
+
+export async function sendInvoicePaymentLink({ user, invoiceId }: { user: { email: string; name: string }, invoiceId: string }) {
+  const invoice = await InvoiceModel.findOne({ invoice_id: invoiceId });
+  const accessToken = await generateAccessToken();
+  if (!accessToken) return;
+  const invoiceZoho = await axios.get(
+    `https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=60014023368`,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+      }
+    }
+  );
+  const date = invoiceZoho.data.invoice.date;
+  const dueDate = invoiceZoho.data.invoice.due_date;
+  const dueAmount = invoiceZoho.data.invoice.balance;
+  const seller = await SellerModel.findById(invoice?.sellerId);
+  if (!seller) {
+    throw new Error('Seller not found');
+  }
+  const invoicePdf = invoice?.pdf;
+  if (!invoicePdf) {
+    throw new Error('Invoice PDF not found or is invalid');
+  }
+  const name = seller.name;
+  
+  const invoicePaymentTemplate = `
+    <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html dir="ltr" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            background-color: #dadada;
+        }
+        
+        .logo {
+            width: 150px;
+            margin-bottom: 20px;
+        }
+        
+        .header-banner {
+            background-color: #cc0000;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .invoice-box {
+            background-color: #eeeeee;
+            padding: 30px;
+            margin: 20px 0;
+            text-align: center;
+            border: 1px solid #cc0000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .invoice-amount {
+            font-size: 24px;
+            color: #333;
+            margin: 20px 0;
+        }
+        
+        .amount {
+            color: #cc0000;
+            font-size: 32px;
+            font-weight: bold;
+        }
+        
+        .invoice-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            max-width: 400px;
+            margin: 20px auto;
+            text-align: left;
+        }
+        
+        .pay-button {
+            background-color: #cc0000;
+            color: white;
+            border: none;
+            padding: 12px 40px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 20px 0;
+            transition: background-color 0.3s;
+        }
+        
+        .pay-button:hover {
+            background-color: #ff0000;
+        }
+        
+        .footer {
+            color: #444;
+            margin-top: 20px;
+        }
+
+        p {
+            color: #333;
+        }
+
+        h2, h3 {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        
+        <div class="header-banner">
+            <h2>Invoice ${invoiceId}</h2>
+        </div>
+        
+        <p>Dear ${name},</p>
+        
+        <p>Thank you for your business. Your invoice can be viewed, printed and downloaded as PDF from the link below. You can also choose to pay it online.</p>
+        
+        <div class="invoice-box">
+            <h3>INVOICE AMOUNT</h3>
+            <div class="amount">₹${dueAmount}</div>
+            
+            <div class="invoice-details">
+                <span>Invoice No</span>
+                <span>${invoiceId}</span>
+                
+                <span>Invoice Date</span>
+                <span>${date}</span>
+                
+                <span>Due Date</span>
+                <span>${dueDate}</span>
+            </div>
+            
+            <button class="pay-button">PAY NOW</button>
+        </div>
+        
+        <div class="footer">
+            <p>Regards,<br>
+            logistics<br>
+            DIAFORAISON SERVICES PRIVATE LIMITED</p>
+        </div>
+    </div>
+</body>
+</html>
+    `;
+
+    let transporter = nodemailer.createTransport({
+      service: "Gmail",
+      auth: {
+        user: process.env.SMTP_ID,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+  
+    let mailOptions = {
+      from: `"Lorrigo Logistic" <${process.env.SMTP_ID}>`,
+      to: user.email,
+      subject: "Invoice Payment Link | Lorrigo",
+      // text: "You are receiving this because you (or someone else) have requested the reset of the password for your account.\n\n",
+      html: invoicePaymentTemplate,
+      attachments: [
+      {
+        filename: `Invoice-${invoiceId}.pdf`,
+        content: invoicePdf,
+        encoding: 'base64',
+      },
+    ],
+    };
+  
+    try {
+      let info = await transporter.sendMail(mailOptions);
+      console.log("Email sent");
+      
+      return {
+        status: 200,
+        message: "Email sent successfully",
+      };
+    } catch (error: any) {
+      console.error("Error occurred:", error.message);
+      return {
+        status: 500,
+        message: "Failed to send email: " + error.message,
+      };
+    }
+    
 }
 
 export function generateRemittanceId(companyName: string, sellerId: string, currentDate: string) {

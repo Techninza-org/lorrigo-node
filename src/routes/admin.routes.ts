@@ -35,7 +35,9 @@ import {
     getDisputeById,
     uploadDisputeCSV,
     getAllInvoices,
-    invoiceAwbListAdmin
+    invoiceAwbListAdmin,
+    createNeftPayment,
+    getNeftPayments
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -170,5 +172,11 @@ adminRouter.get("/invoices", AdminAuthMiddleware, getAllInvoices)
 
 //@ts-ignore
 adminRouter.get("/invoice-awbs/:id", invoiceAwbListAdmin )
+
+//@ts-ignore
+adminRouter.post('/create-neft', AdminAuthMiddleware, createNeftPayment)
+
+//@ts-ignore
+adminRouter.get('/neft', AdminAuthMiddleware, getNeftPayments)
 
 export default adminRouter;
