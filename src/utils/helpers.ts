@@ -1387,7 +1387,7 @@ export function getSmartshipBucketing(status: number) {
   );
 }
 
-export function getSmartRBucketing(status: string, desc: string, reasonCode: string) {
+export function getSmartRBucketing(status: string, reasonCode: string) {
   type SSTYPE = {
     description: string;
     reasonCode?: string;
@@ -1553,12 +1553,12 @@ export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: 
     StatusType === "UD"
       ? forwardStatusMapping
       : StatusType === "RT"
-      ? rtoStatusMapping
-      : StatusType === "PP"
-      ? returnStatusMapping
-      : StatusType === "DL"
-      ? deliveredStatusMapping
-      : null;
+        ? rtoStatusMapping
+        : StatusType === "PP"
+          ? returnStatusMapping
+          : StatusType === "DL"
+            ? deliveredStatusMapping
+            : null;
 
   return (
     (statusMapping && statusMapping[Status as keyof typeof statusMapping]) || {
@@ -1704,40 +1704,40 @@ export const calculateSellerInvoiceAmount = async () => {
           lastInvoiceDate = lastInvoiceGenerationDate[0].createdAt;
         }
 
-        const billedOrders = await ClientBillingModal.find({
+        const billedOrders: any = await ClientBillingModal.find({
           sellerId,
-          createdAt: { $gt: lastInvoiceDate, $lt: today },
+          billingDate: { $gt: lastInvoiceDate, $lt: today },
         })
           .select("awb isDisputeRaised disputeId isRTOApplicable")
           .populate("disputeId");
 
         const allOrders = await B2COrderModel.find({
           sellerId,
-          awb: { $in: billedOrders.map((item) => item.awb) },
-          // "orderStages.stageDateTime": { $gt: lastInvoiceDate, $lt: today },
+          awb: { $in: billedOrders.map((item: any) => item.awb) },
+          // "orderStages.stageDateTime": { $gt: lastInvoiceDate, $lt: today }, // applying date filter
         })
           .select(["productId", "awb"])
           .populate("productId");
 
-        // @ts-ignore
         const billedAwb = billedOrders
-        //@ts-ignore
-          .filter((item) => !item.isDisputeRaised || (!item.isDisputeRaised && item.disputeId?.accepted))
+          .filter((item: any) => !item.isDisputeRaised || (!item.isDisputeRaised && item.disputeId?.accepted))
           .map((order: any) => order.awb);
 
-        // @ts-ignore
         const awbNotBilledDueToDispute = billedOrders
-        //@ts-ignore
-          .filter((item) => item.isDisputeRaised === true && !item.disputeId?.accepted)
-          .map((x) => x.awb);
+          .filter((item: any) => item.isDisputeRaised === true && !item.disputeId?.accepted)
+          .map((x: any) => x.awb);
 
         const lastMonthRecord = await NotInInvoiceAwbModel.findOne({ sellerId });
 
-        await NotInInvoiceAwbModel.create({
-          monthOf: format(startOfMonth, "MMM"),
-          notBilledAwb: awbNotBilledDueToDispute,
-          sellerId,
-        });
+        await NotInInvoiceAwbModel.updateOne(
+          { sellerId },
+          {
+            monthOf: format(startOfMonth, "MMM"),
+            notBilledAwb: awbNotBilledDueToDispute,
+            sellerId,
+          },
+          { upsert: true }
+        );
 
         const lastMonthDisputeAwbs = lastMonthRecord?.notBilledAwb || [];
 
@@ -1905,6 +1905,7 @@ export async function createAdvanceAndInvoice(
       invoice_id: invoiceId,
       pdf: pdfBase64,
       date: invoiceRes.data.invoice.date,
+      zohoAmt: invoiceTotalZoho,
       amount: totalAmount.toFixed(2),
     });
 
@@ -1914,6 +1915,95 @@ export async function createAdvanceAndInvoice(
     console.log("Completed for seller", seller.name);
   } catch (err) {
     console.log(err);
+  }
+}
+
+interface ZohoInvoice {
+  invoice_id: string;
+  customer_id: string;
+  status: string;
+  balance: number;
+}
+
+interface DBInvoice {
+  invoice_id: string;
+  status: string;
+  dueAmount: string;
+}
+
+export async function syncInvoices(invoices: { data: { invoices: ZohoInvoice[] } }, zohoId: string) {
+  try {
+    // Filter invoices for the specific seller
+    const sellerInvoices = invoices.data.invoices.filter(
+      (invoice) => invoice.customer_id === zohoId
+    );
+
+    // Separate paid and unpaid invoices in a single pass
+    const { paid, unpaid } = sellerInvoices.reduce(
+      (acc, invoice) => {
+        if (invoice.status === "paid") {
+          acc.paid.push(invoice);
+        } else {
+          acc.unpaid.push(invoice);
+        }
+        return acc;
+      },
+      { paid: [] as ZohoInvoice[], unpaid: [] as ZohoInvoice[] }
+    );
+
+    // Create lookup maps for quick access
+    const invoiceLookup = new Map(
+      sellerInvoices.map(invoice => [invoice.invoice_id, invoice])
+    );
+
+    // Fetch both paid and unpaid invoices concurrently
+    const [paidInvoices, unpaidInvoices] = await Promise.all([
+      InvoiceModel.find({ 
+        invoice_id: { $in: paid.map(inv => inv.invoice_id) }
+      }),
+      InvoiceModel.find({ 
+        invoice_id: { $in: unpaid.map(inv => inv.invoice_id) }
+      })
+    ]);
+
+    // Prepare bulk operations for both paid and unpaid invoices
+    const bulkOps = [
+      ...paidInvoices.map(invoice => ({
+        updateOne: {
+          filter: { _id: invoice._id },
+          update: {
+            $set: {
+              status: 'paid',
+              dueAmount: (invoiceLookup.get(invoice.invoice_id)?.balance || 0).toString()
+            }
+          }
+        }
+      })),
+      ...unpaidInvoices.map(invoice => ({
+        updateOne: {
+          filter: { _id: invoice._id },
+          update: {
+            $set: {
+              status: 'unpaid',
+              dueAmount: (invoiceLookup.get(invoice.invoice_id)?.balance || 0).toString()
+            }
+          }
+        }
+      }))
+    ];
+
+    // Execute bulk update if there are operations to perform
+    if (bulkOps.length > 0) {
+      await InvoiceModel.bulkWrite(bulkOps);
+    }
+
+    // Return updated invoices
+    const allInvoices = [...paidInvoices, ...unpaidInvoices];
+    return { valid: true, invoices: allInvoices };
+    
+  } catch (error) {
+    console.error('Error syncing invoices:', error);
+    throw error;
   }
 }
 
@@ -2124,9 +2214,11 @@ export async function refundExtraInvoiceAmount() {
       }
       const billTotal = forwardCharges + rtoCharges + codCharges;
       const refundAmount = billTotal - totalAmount;
-      console.log(refundAmount, "refundAmount", awb);
+      console.log({ isRefund: billTotal < totalAmount, amt: refundAmount }, "refundAmount", awb);
+      return { isRefund: billTotal < totalAmount, amt: refundAmount }
     });
   } catch (err) {
     console.log(err);
   }
 }
+// refundExtraInvoiceAmount()

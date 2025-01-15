@@ -24,10 +24,6 @@ import adminRouter from "./routes/admin.routes";
 import { getSpecificOrder } from "./controllers/order.controller";
 import apicache from "apicache";
 import path from "path";
-import PaymentTransactionModal from "./models/payment.transaction.modal";
-import SellerModel from "./models/seller.model";
-import RemittanceModel from "./models/remittance-modal";
-
 
 const app = express();
 app.use(cors({ origin: "*" }));
@@ -75,6 +71,17 @@ if (!config.MONGODB_URI) {
 //       const deletedTxn = await PaymentTransactionModal.findByIdAndDelete(txn._id);
 //     }
 //   }
+// }
+
+// async function update() {
+//   const clientBills = (await ClientBillingModal.find()).filter(x => (Number(x.chargedWeight) <= Number(x.baseWeight)) && (Number(x.fwExcessCharge) !== 0 || Number(x.rtoExcessCharge) !== 0))
+//   for (const bills of clientBills) {
+//     await bills.updateOne({
+//       fwExcessCharge: "0",
+//       rtoExcessCharge: "0"
+//     })
+//   }
+
 // }
 
 

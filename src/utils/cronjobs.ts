@@ -171,7 +171,7 @@ export const CONNECT_SHIPROCKET_B2B = async (): Promise<void> => {
     const token = `Bearer ${responseBody.access}`;
 
     Logger.plog("Shiprocket token refreshed successfully");
-  } catch (err) {
+  } catch (err: any) {
     console.error(err);
     Logger.err("Error refreshing Shiprocket token: ", err.message);
   }
@@ -292,7 +292,7 @@ export const trackOrder_Smartship = async () => {
           orderWithOrderReferenceId.orderStages.push({
             stage: bucketInfo.bucket,
             action: bucketInfo.bucket === RTO ? `RTO ${bucketInfo.description}` : bucketInfo.description,
-            stageDateTime: handleDateFormat(requiredResponse.date_time),
+            stageDateTime: handleDateFormat(requiredResponse.date_time ?? ""),
             activity: requiredResponse.action,
             location: requiredResponse.location,
           });
@@ -405,9 +405,9 @@ export const trackOrder_Smartr = async () => {
               location: shipment_status.state,
             });
             if (bucketInfo.bucket === RTO && ordersReferenceIdOrders.bucket !== RTO) {
-              const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-              await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb}, RTO charges`)
-              if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb}, RTO COD charges`)
+              const rtoCharges = await shipmentAmtCalcToWalletDeduction(ordersReferenceIdOrders.awb)
+              await updateSellerWalletBalance(ordersReferenceIdOrders.sellerId, rtoCharges.rtoCharges, false, `${ordersReferenceIdOrders.awb}, RTO charges`)
+              if (rtoCharges.cod) await updateSellerWalletBalance(ordersReferenceIdOrders.sellerId, rtoCharges.cod, true, `${ordersReferenceIdOrders.awb}, RTO COD charges`)
             }
             try {
               await ordersReferenceIdOrders.save();
@@ -714,6 +714,7 @@ export default async function runCron() {
     cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);
     cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
     cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);
+    cron.schedule(expression4every12Hrs, syncInvoicePdfs);
 
     Logger.log("Cron jobs scheduled successfully");
   } else {
@@ -860,14 +861,14 @@ export const scheduleShipmentCheck = async () => {
 
 
 export const updatePaymentAlertStatus = async () => {
-  try{
-    const invoices = await InvoiceModel.find({status: 'pending', isPrepaidInvoice: false})
-    for(let i=0; i<invoices.length; i++){
+  try {
+    const invoices = await InvoiceModel.find({ status: 'pending', isPrepaidInvoice: false })
+    for (let i = 0; i < invoices.length; i++) {
       const seller = await SellerModel.findById(invoices[i].sellerId)
       seller.showPaymentAlert === true;
       await seller?.save()
     }
-  }catch(err){
+  } catch (err) {
     console.log("Error in updatePaymentAlertStatus", err)
   }
 }
@@ -960,3 +961,79 @@ function delay(ms: number): Promise<void> {
 //     console.error("Error while updating Zoho users:", error);
 //   }
 // }
+
+async function syncInvoicePdfs(): Promise<void> {
+  try {
+    // Get all invoices that need PDF updates
+    const invoices = await InvoiceModel.find({
+      status: { $ne: "paid" }
+    });
+
+    if (invoices.length === 0) {
+      console.log('No invoices need PDF updates');
+      return;
+    }
+
+    const accessToken = await generateAccessToken();
+
+    await processZohoBatch(invoices, accessToken);
+
+    console.log('Completed PDF sync for all invoices');
+  } catch (error) {
+    console.error('Error in syncInvoicePdfs:', error);
+  }
+}
+
+async function fetchInvoicePdf(invoiceId: string, accessToken: string): Promise<string> {
+  try {
+    const response = await axios.get(
+      `https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=60014023368&accept=pdf`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+        responseType: "arraybuffer",
+      }
+    );
+
+    return Buffer.from(response.data, "binary").toString("base64");
+  } catch (error) {
+    console.error(`Error fetching PDF for invoice ${invoiceId}:`, error);
+    throw error;
+  }
+}
+
+async function processZohoBatch(invoices: any[], accessToken: string): Promise<void> {
+  const FIVE_MINUTES = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+  for (let i = 0; i < invoices.length; i += 3) {
+    const batch = invoices.slice(i, i + 3);
+    
+    try {
+      for (const invoice of batch) {
+        try {
+          const pdfBase64 = await fetchInvoicePdf(invoice.invoice_id, accessToken);
+          
+          await InvoiceModel.findOneAndUpdate(
+            { invoice_id: invoice.invoice_id },
+            { $set: { pdf: pdfBase64 } }
+          );
+          
+          console.log(`Successfully updated PDF for invoice ${invoice.invoice_id}`);
+          
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error) {
+          console.error(`Failed to process invoice ${invoice.invoice_id}:`, error);
+        }
+      }
+
+      // Add a delay between batches
+      if (i + 3 < invoices.length) {
+        await new Promise(resolve => setTimeout(resolve, FIVE_MINUTES)); // 2 second delay between batches
+      }
+    } catch (error) {
+      console.error(`Error processing batch starting at index ${i}:`, error);
+    }
+  }
+}

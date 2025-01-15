@@ -1070,6 +1070,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
 
       let weightSlab = vendor?.weightSlab || vendor?.vendorId?.weightSlab
       const csvWeight = Math.max(bill.chargedWeight, weightSlab);
+      const orderWeight = Math.max(order.orderWeight, weightSlab);
 
       const csvBody = {
         weight: csvWeight,
@@ -1078,7 +1079,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
       };
 
       const orderBody = {
-        weight: order.orderWeight,
+        weight: orderWeight,
         paymentType: order.payment_mode,
         collectableAmount: Math.max(0, order.amount2Collect),
       }
@@ -1526,6 +1527,103 @@ export const generateInvoices = async (req: ExtendedRequest, res: Response, next
   }
 }
 
+export const postpaidInvoicePayment = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+
+    const body = req.body;
+    const { invoiceNumber, amount, paymentReference, transactionDate, bankName } = body
+
+    const invoice = await InvoiceModel.findById(invoiceNumber);
+    if (!invoice) return res.status(404).json({ message: "No Invoice found" })
+
+    const invoiceId = invoice.invoice_id
+
+    const seller = await SellerModel.findById(invoice?.sellerId);
+    if (!seller) return;
+
+    const zoho_contact_id = seller.zoho_contact_id
+
+    const accessToken = await generateAccessToken();
+    if (!accessToken) return;
+
+    const invoiceRes = await axios.get(
+      `https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=60014023368`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+      }
+    );
+
+    const invoiceTotalZoho = invoiceRes.data.invoice.total;
+
+    // pay-in-due
+    let status = ""
+    if (amount < invoiceTotalZoho) {
+      status = "Pay-In-Due"
+    }else { 
+      status = "Paid"
+    }
+
+    const rechargeBody = {
+      customer_id: zoho_contact_id,
+      amount: amount,
+    }
+
+    const rechargeRes = await axios.post(
+      `https://www.zohoapis.in/books/v3/customerpayments?organization_id=60014023368`,
+      rechargeBody,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+      }
+    );
+    const paymentId = rechargeRes.data.payment.payment_id;
+    const creditsBody = {
+      invoice_payments: [
+        {
+          payment_id: paymentId,
+          amount_applied: amount,
+        },
+      ],
+    };
+    const applyCredits = await axios.post(
+      `https://www.zohoapis.in/books/v3/invoices/${invoiceId}/credits?organization_id=60014023368`,
+      creditsBody,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+      }
+    );
+
+    const invoicePdf = await axios.get(
+      `https://www.zohoapis.in/books/v3/invoices/${invoiceId}?organization_id=60014023368&accept=pdf`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+        responseType: "arraybuffer",
+      }
+    );
+    const pdfBase64 = Buffer.from(invoicePdf.data, "binary").toString("base64");
+
+    await invoice.updateOne({
+      pdf: pdfBase64,
+      status: status,
+      date: invoiceRes.data.invoice.date,
+    })
+    return res.status(200).send({ valid: true, message: "Payment Successfull!" });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export const getSubAdmins = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const subadmins = await SellerModel.find({ issubadmin: true }).select(["name", "subadminpaths"])
@@ -1771,7 +1869,6 @@ export const mapInoiceAwbTransactions = async (req: ExtendedRequest, res: Respon
         }
         awbTransacs.push(awbObj);
       });
-      console.log(awbTransacs, 'awbbbbbb');
     })
 
   } catch (error) {

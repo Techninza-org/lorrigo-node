@@ -35,7 +35,8 @@ import {
     getDisputeById,
     uploadDisputeCSV,
     getAllInvoices,
-    invoiceAwbListAdmin
+    invoiceAwbListAdmin,
+    postpaidInvoicePayment
 } from "../controllers/admin.controller";
 import { handleAdminLogin } from "../controllers/auth.controller";
 import multer from 'multer';
@@ -169,6 +170,9 @@ adminRouter.post("/disputes/reject", AdminAuthMiddleware, rejectDispute)
 adminRouter.get("/invoices", AdminAuthMiddleware, getAllInvoices)
 
 //@ts-ignore
-adminRouter.get("/invoice-awbs/:id", invoiceAwbListAdmin )
+adminRouter.get("/invoice-awbs/:id", invoiceAwbListAdmin)
+
+//@ts-ignore
+adminRouter.post("/invoice/payment", postpaidInvoicePayment)
 
 export default adminRouter;

@@ -10,7 +10,7 @@ import ClientBillingModal from "../models/client.billing.modal";
 import crypto, { randomUUID } from "crypto";
 import PaymentTransactionModal from "../models/payment.transaction.modal";
 import { rechargeWalletInfo } from "../utils/recharge-wallet-info";
-import { generateAccessToken } from "../utils/helpers";
+import { generateAccessToken, syncInvoices } from "../utils/helpers";
 import InvoiceModel from "../models/invoice.model";
 import CustomPricingModel from "../models/custom_pricing.model";
 import CourierModel from "../models/courier.model";
@@ -804,37 +804,8 @@ export const getInvoicesFromZoho = async (req: ExtendedRequest, res: Response, n
       }
     );
 
-    const sellerInvoices = invoices.data.invoices.filter((invoice: any) => invoice.customer_id === zohoId);
-
-    const paidInvoices = sellerInvoices.filter((invoice: any) => invoice.status === "paid");
-
-    const unpaidInvoices = sellerInvoices.filter((invoice: any) => invoice.status !== "paid");
-
-
-    const paidInvoiceIds = paidInvoices.map((invoice: any) => invoice.invoice_id);
-
-    const unpaidInvoiceIds = unpaidInvoices.map((invoice: any) => invoice.invoice_id);
-
-    const paidInvoiceFromDB = await InvoiceModel.find({ invoice_id: { $in: paidInvoiceIds } });
-
-    paidInvoiceFromDB.forEach((invoice: any) => {
-      const zohoInvoice = sellerInvoices.find((zohoInvoice: any) => zohoInvoice.invoice_id === invoice.invoice_id);
-
-      invoice.status = 'paid';
-      invoice.dueAmount = zohoInvoice?.balance.toString();
-    });
-
-    const unpaidInvoiceFromDB = await InvoiceModel.find({ invoice_id: { $in: unpaidInvoiceIds } });
-
-    unpaidInvoiceFromDB.forEach((invoice: any) => {
-      const zohoInvoice = sellerInvoices.find((zohoInvoice: any) => zohoInvoice.invoice_id === invoice.invoice_id);
-
-      invoice.status = 'unpaid';
-      invoice.dueAmount = zohoInvoice?.balance.toString();
-    });
-
-    const allInvoices = [...paidInvoiceFromDB, ...unpaidInvoiceFromDB];
-    return res.status(200).send({ valid: true, invoices: allInvoices });
+    const result = await syncInvoices(invoices, zohoId);
+    return res.status(200).send(result);
 
   } catch (error) {
     return next(error);
@@ -859,7 +830,7 @@ export const invoiceAwbList = async (req: ExtendedRequest, res: Response, next: 
 
     const awbs = invoice.invoicedAwbs ?? [];
 
-    const result = await generateListInoviceAwbs(awbs, req.params.id)
+    const result = await generateListInoviceAwbs(awbs, invoice.invoice_id)
 
     return res.status(200).send({ valid: true, awbTransacs: result });
   } catch (error) {
