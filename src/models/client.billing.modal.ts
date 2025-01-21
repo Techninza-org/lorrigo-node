@@ -12,7 +12,7 @@ const modal = new mongoose.Schema({
   rtoAwb: { type: String, required: false },
 
   recipientName: { type: String, required: true },
-  fromCity: { type: String, required: true },
+  fromCity: { type: String, required: false },
   toCity: { type: String, required: true },
 
   shipmentType: { type: Number, required: true },  // COD --> 1, Prepaid-->0
