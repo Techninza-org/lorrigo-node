@@ -770,7 +770,6 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
       }
     }
 
-    console.log(i, "numner")
   } catch (error) {
     console.log("Error walletDeductionForBilledOrderOnEvery7Days:", error);
   }
