@@ -27,9 +27,9 @@ const modal = new mongoose.Schema({
   rtoExcessCharge: { type: String, required: true },
   zone: { type: String, required: true },
 
-  orderZone: { type: String, required: true },
-  newZone: { type: String, required: true },
-  zoneChangeCharge: { type: String, required: true },
+  orderZone: { type: String, required: false },
+  newZone: { type: String, required: false },
+  zoneChangeCharge: { type: String, required: false },
 
   isForwardApplicable: { type: Boolean, required: true },
   isRTOApplicable: { type: Boolean, required: true },
