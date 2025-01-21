@@ -14,7 +14,7 @@ import csvtojson from "csvtojson";
 import exceljs from "exceljs";
 import { format, formatDate } from "date-fns";
 import InvoiceModel from "../models/invoice.model";
-import { calculateSellerInvoiceAmount, generateAccessToken } from "../utils/helpers";
+import { calculateSellerInvoiceAmount, calculateZone, generateAccessToken } from "../utils/helpers";
 import axios from "axios";
 import B2BCalcModel from "../models/b2b.calc.model";
 import { isValidPayload } from "../utils/helpers";
@@ -895,7 +895,7 @@ export const uploadDisputeCSV = async (req: ExtendedRequest, res: Response) => {
         collectableAmount: Math.max(0, order.amount2Collect),
       };
 
-      const { totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor); // csv calc 
+      const { totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor, await calculateZone(order.pickupAddress.pincode, order.customerDetails.pincode), dispute.chargedWeight); // csv calc 
 
       let fwExcessCharge: any = bill.fwExcessCharge;
       if (Number(fwCharge) > Number(bill.rtoCharge)) {
@@ -1084,17 +1084,21 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         collectableAmount: Math.max(0, order.amount2Collect),
       }
 
-      const { incrementPrice, totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor); // csv calc 
+      const orderZone = await calculateZone(order.pickupAddress.pincode, order.customerDetails.pincode)
+
+      const { incrementPrice, totalCharge, codCharge, fwCharge, weightDiffCharge, zoneChangeCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor, orderZone, orderWeight); // csv calc 
 
       let orderShippingCalc: any;
-      let fwExcessCharge: any = 0;
-      if (bill.chargedWeight > order.orderWeight) {
-        orderShippingCalc = await calculateShippingCharges(bill.zone, orderBody, vendor); // customer calc
+      let fwExcessCharge = weightDiffCharge;
 
-        if (totalCharge > orderShippingCalc.totalCharge) {
-          fwExcessCharge = (totalCharge - orderShippingCalc.totalCharge).toFixed(2)
-        }
-      }
+
+      // if (bill.chargedWeight > order.orderWeight) {
+      //   orderShippingCalc = await calculateShippingCharges(bill.zone, orderBody, vendor); // customer calc
+
+      //   if (totalCharge > orderShippingCalc.totalCharge) {
+      //     fwExcessCharge = (totalCharge - orderShippingCalc.totalCharge).toFixed(2)
+      //   }
+      // }
 
       const baseWeight = (vendor?.weightSlab || vendor?.vendorId?.weightSlab) || 0; // Courier weight
       const incrementWeight = bill.chargedWeight - Number(order.orderWeight) - baseWeight;
@@ -1137,7 +1141,6 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         }
       );
 
-      // TODO: Zone change Handle! 
       return {
         updateOne: {
           filter: { awb: bill.awb },
@@ -1162,12 +1165,9 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
               rtoCharge,
               fwCharge,
 
-              // if ZONE Change
-              // fwExcessCharge,
-              // rtoExcessCharge,
-              // rtoCharge,
-              // fwCharge,
-
+              orderZone: orderZone,
+              newZone: bill.zone,
+              zoneChangeCharge: zoneChangeCharge,
 
               billingAmount: billingAmount, // fw+RTO without COD Charge 
               billingDate: format(new Date(), 'yyyy-MM-dd'),
@@ -1562,7 +1562,7 @@ export const postpaidInvoicePayment = async (req: ExtendedRequest, res: Response
     let status = ""
     if (amount < invoiceTotalZoho) {
       status = "Pay-In-Due"
-    }else { 
+    } else {
       status = "Paid"
     }
 
@@ -1741,7 +1741,7 @@ export const acceptDispute = async (req: ExtendedRequest, res: Response, next: N
       collectableAmount: Math.max(0, order.amount2Collect),
     };
 
-    const { totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor); // csv calc 
+    const { totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor, await calculateZone(order.pickupAddress.pincode, order.customerDetails.pincode), order.orderWeight); // csv calc 
 
     let fwExcessCharge: any = bill.fwExcessCharge;
     if (Number(fwCharge) > Number(bill.rtoCharge)) {

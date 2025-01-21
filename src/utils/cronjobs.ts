@@ -22,6 +22,7 @@ import envConfig from "../utils/config";
 import ClientBillingModal from "../models/client.billing.modal";
 import { paymentStatusInfo } from "./recharge-wallet-info";
 import InvoiceModel from "../models/invoice.model";
+import PaymentTransactionModal from "../models/payment.transaction.modal";
 
 const BATCH_SIZE = 130;
 const API_DELAY = 120000; // 2 minutes in milliseconds
@@ -683,6 +684,8 @@ export const track_B2B_SHIPROCKET = async () => {
 export default async function runCron() {
   console.log("Running cron scheduler");
 
+  walletDeductionForBilledOrderOnEvery7Days()
+
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   const expression4every5Minutes = "*/5 * * * *";
@@ -700,8 +703,8 @@ export default async function runCron() {
     cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     cron.schedule(expression4every2Minutes, scheduleShipmentCheck);
 
+    cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
     // Need to fix
-    // cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
     // cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
 
 
@@ -740,29 +743,38 @@ export default async function runCron() {
 // }
 
 
-// const walletDeductionForBilledOrderOnEvery7Days = async () => {
-//   try {
-//     const sevenDaysAgo = new Date();
-//     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+const walletDeductionForBilledOrderOnEvery7Days = async () => {
+  try {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-//     const billedOrders = await ClientBillingModal.find({
-//       billingDate: { $lt: sevenDaysAgo },
-//       paymentStatus: paymentStatusInfo.NOT_PAID,
-//       isDisputeRaised: false
-//     });
+    const billedOrders = await ClientBillingModal.find({
+      // billingDate: { $lt: sevenDaysAgo },
+      paymentStatus: paymentStatusInfo.NOT_PAID,
+      isDisputeRaised: false
+    });
 
-//     if (billedOrders.length > 0) {
-//       for (const order of billedOrders) {
-//         await updateSellerWalletBalance(order.sellerId, Number(order.fwExcessCharge), false, `AWB: ${order.awb}, Revised`)
-//         order.paymentStatus = paymentStatusInfo.PAID;
-//         order.save();
-//       }
-//     }
+    if (billedOrders.length > 0) {
+      for (const order of billedOrders) {
+        order.fwExcessCharge > 0 ?? await updateSellerWalletBalance(order.sellerId, Number(order.fwExcessCharge), false, `AWB: ${order.awb}, FW Excess Charge`)
+        order.rtoExcessCharge > 0 ?? await updateSellerWalletBalance(order.sellerId, Number(order.rtoExcessCharge), false, `AWB: ${order.awb}, RTO Excess Charge`)
+        if (order.rtoExcessCharge) {
+          const isCodRefund = await PaymentTransactionModal.findOne({ desc: { $regex: `${order.awb}, RTO COD charges` } }) ? true : false
+          if (!isCodRefund) {
+            await updateSellerWalletBalance(order.sellerId, Number(order.codValue), true, `AWB: ${order.awb}, COD Refund`)
+          }
+        }
+        order.zoneChangeCharge > 0 ?? await updateSellerWalletBalance(order.sellerId, Number(order.zoneChangeCharge), false, `AWB: ${order.awb}, Zone Change Charge ${order.orderZone} --> ${order.newZone} `)
+        order.paymentStatus = paymentStatusInfo.PAID;
+        order.save();
+      }
+    }
 
-//   } catch (error) {
-//     console.log("Error walletDeductionForBilledOrderOnEvery7Days:", error);
-//   }
-// }
+    console.log(i, "numner")
+  } catch (error) {
+    console.log("Error walletDeductionForBilledOrderOnEvery7Days:", error);
+  }
+}
 
 const processShiprocketOrders = async (orders) => {
   for (const orderWithOrderReferenceId of orders) {
@@ -1009,19 +1021,19 @@ async function processZohoBatch(invoices: any[], accessToken: string): Promise<v
 
   for (let i = 0; i < invoices.length; i += 3) {
     const batch = invoices.slice(i, i + 3);
-    
+
     try {
       for (const invoice of batch) {
         try {
           const pdfBase64 = await fetchInvoicePdf(invoice.invoice_id, accessToken);
-          
+
           await InvoiceModel.findOneAndUpdate(
             { invoice_id: invoice.invoice_id },
             { $set: { pdf: pdfBase64 } }
           );
-          
+
           console.log(`Successfully updated PDF for invoice ${invoice.invoice_id}`);
-          
+
           await new Promise(resolve => setTimeout(resolve, 500));
         } catch (error) {
           console.error(`Failed to process invoice ${invoice.invoice_id}:`, error);

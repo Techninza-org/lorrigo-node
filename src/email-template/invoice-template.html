@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice</title>
+</head>
+
+<body style="font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; background-color: #dadada;">
+    <div style="max-width: 800px; margin: 0 auto; background-color: #ffffff; padding: 20px; border: 1px solid #ccc;">
+        <img src="https://lorrigo.in/_next/static/media/lorrigologo.e54a51f3.svg" alt="Lorrigo Logo"
+            style="width: 150px; margin-bottom: 20px; display: block;">
+
+        <div style="background-color: #cc0000; color: white; padding: 20px; text-align: center; margin: 20px 0;">
+            <h2 style="margin: 0; font-size: 24px;">Invoice #{{invoiceId}}</h2>
+        </div>
+
+        <p>Dear {{userName}},</p>
+
+        <p>Thank you for your business. Your invoice can be viewed, printed, and downloaded as a PDF from the link
+            below. You can also choose to pay it online.</p>
+
+        <div
+            style="background-color: #eeeeee; padding: 30px; margin: 20px 0; text-align: center; border: 1px solid #cc0000; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+            <h3 style="margin: 0; font-size: 20px;">INVOICE AMOUNT</h3>
+            <div style="color: #cc0000; font-size: 32px; font-weight: bold; margin: 20px 0;">{{invoiceAmt}}</div>
+
+            <div style="text-align: left; max-width: 400px; margin: 20px auto; display: table;">
+                <div style="display: table-row;">
+                    <div style="display: table-cell; padding: 5px;">Invoice No</div>
+                    <div style="display: table-cell; padding: 5px;">{{invoiceId}}</div>
+                </div>
+                <div style="display: table-row;">
+                    <div style="display: table-cell; padding: 5px;">Invoice Date</div>
+                    <div style="display: table-cell; padding: 5px;">{{invoiceDate}}</div>
+                </div>
+                <div style="display: table-row;">
+                    <div style="display: table-cell; padding: 5px;">Due Date</div>
+                    <div style="display: table-cell; padding: 5px;">{{invoiceDueDate}}</div>
+                </div>
+            </div>
+
+            <a href="#"
+                style="display: inline-block; background-color: #cc0000; color: white; text-decoration: none; padding: 12px 40px; font-size: 16px; margin: 20px 0; transition: background-color 0.3s;">PAY
+                NOW</a>
+        </div>
+
+        <div style="color: #444; margin-top: 20px; text-align: center;">
+            <p>Regards,<br>
+                logistics<br>
+                DIAFORAISON SERVICES PRIVATE LIMITED</p>
+        </div>
+    </div>
+</body>
+
+</html>

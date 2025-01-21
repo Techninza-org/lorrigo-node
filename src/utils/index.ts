@@ -632,30 +632,48 @@ export async function sendMailToScheduleShipment({ orders, pickupDate }: { order
 export async function calculateShippingCharges(
   zone: string,
   body: Body,
-  vendor: any
+  vendor: any,
+  orderZone: string,
+  orderWeight: number
 ): Promise<{
   totalCharge: number;
   codCharge: number;
   incrementPrice: IncrementPrice;
   orderWeight: number;
   fwCharge: number;
+  weightDiffCharge: number;
+  zoneChangeCharge: number;
 }> {
-  const orderWeight = body.weight
+  const chargedWeight = body.weight;
+
+  const weightDifference = chargedWeight - orderWeight;
 
   const increment_price = getIncrementPriceByZone(zone, vendor);
   if (!increment_price) {
     throw new Error("Invalid increment price");
   }
 
-  const { totalCharge, codCharge, fwCharge } = calculateTotalCharge(orderWeight, increment_price, body, vendor);
+  const { totalCharge, codCharge, fwCharge } = calculateTotalCharge(chargedWeight, increment_price, body, vendor);
+
+  const weightDiffCharge = weightDifference > 0
+    ? weightDifference * increment_price.incrementPrice
+    : 0;
+
+  const zoneChangeCharge = zone !== orderZone ? vendor.zoneChangeFee || 0 : 0;
+
+  const finalCharge = totalCharge + weightDiffCharge + zoneChangeCharge;
+
   return {
-    totalCharge,
+    totalCharge: finalCharge,
     codCharge,
     incrementPrice: increment_price,
-    orderWeight,
-    fwCharge
+    orderWeight: chargedWeight,
+    fwCharge,
+    weightDiffCharge,
+    zoneChangeCharge,
   };
 }
+
 
 function getIncrementPriceByZone(
   zone: string,
