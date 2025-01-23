@@ -1848,6 +1848,7 @@ export async function createAdvanceAndInvoice(
     );
 
     const invoiceId = invoiceRes.data.invoice.invoice_id;
+    const invoice_number = invoiceRes.data.invoice.invoice_number;
     const invoiceTotalZoho = invoiceRes.data.invoice.total;
 
     if (isPrepaid) {
@@ -1903,6 +1904,7 @@ export async function createAdvanceAndInvoice(
       isPrepaidInvoice: seller.config?.isPrepaid,
       sellerId: seller._id,
       invoice_id: invoiceId,
+      invoice_number: invoice_number,
       pdf: pdfBase64,
       date: invoiceRes.data.invoice.date,
       zohoAmt: invoiceTotalZoho,
