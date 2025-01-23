@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: #ff0000;
+            color: #fff;
+            padding: 10px;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }
+        .summary {
+            margin: 20px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .summary h4 {
+            margin-bottom: 10px;
+        }
+        .summary p {
+            margin: 5px 0;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Monthly Wallet Transaction Summary</h2>
+        </div>
+        <p>Dear <strong>{{userName}}</strong>,</p>
+        <p>Here is a summary of your wallet transactions for the month of <strong>{{Month}}, {{Year}}</strong>.</p>
+        
+        <div class="summary">
+            <h4>Monthly Transaction Summary:</h4>
+            <p><strong>Total Amount Added:</strong> {{totalAdded}}</p>
+            <p><strong>Total Amount Spent:</strong> {{totalSpent}}</p>
+            <p><strong>Closing Balance:</strong> {{lastWalletBalance}}</p>
+        </div>
+        
+        <p>For more details about your transactions, please log in to your wallet account.</p>
+        <p>If you have any questions or concerns, please feel free to contact our support team at <a href="mailto:noreply@lorrigo.com">noreply@lorrigo.com</a></p>
+        
+        <div class="footer">
+            <p>Thank you for choosing DIAFORAISON SERVICES PRIVATE LIMITED.</p>
+        </div>
+    </div>
+</body>
+</html>

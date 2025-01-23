@@ -24,6 +24,8 @@ import adminRouter from "./routes/admin.routes";
 import { getSpecificOrder } from "./controllers/order.controller";
 import apicache from "apicache";
 import path from "path";
+import PaymentTransactionModal from "./models/payment.transaction.modal";
+import SellerModel from "./models/seller.model";
 
 const app = express();
 app.use(cors({ origin: "*" }));
@@ -46,26 +48,27 @@ if (!config.MONGODB_URI) {
 }
 
 // async function revertRevisedMoneyNTxnToday() {
-//   const today = new Date();
-//   today.setHours(0, 0, 0, 0);
-//   const threeDaysAgo = new Date(today);
-//   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-//   const tomorrow = new Date(today);
-//   tomorrow.setDate(tomorrow.getDate() + 1);
+//   // const today = new Date();
+//   // today.setHours(0, 0, 0, 0);
+//   // const threeDaysAgo = new Date(today);
+//   // threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+//   // const tomorrow = new Date(today);
+//   // tomorrow.setDate(tomorrow.getDate() + 1);
 
 //   const revisedTxn = await PaymentTransactionModal.find({
 //     // createdAt: {
 //     //   $gte: threeDaysAgo,
 //     //   $lt: today,
 //     // },
-//     desc: { $regex: " RTO Charge Applied" }
+//     desc: { $regex: " COD Refund" }
 //   });
+//   console.log(revisedTxn.length)
 
 //   for (const txn of revisedTxn) {
 //     const seller = await SellerModel.findById(txn.sellerId);
-//     console.log(seller?.name, txn.amount);
+//     console.log(seller?.name, txn.amount, txn.desc);
 //     if (seller) {
-//       seller.walletBalance += Number(txn.amount);
+//       seller.walletBalance -= Number(txn.amount); // - to duduct and + to add
 //       await seller.save();
 
 //       const deletedTxn = await PaymentTransactionModal.findByIdAndDelete(txn._id);

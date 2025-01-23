@@ -1039,21 +1039,21 @@ export const calculateZone = async (pickupPincode: PincodePincode, deliveryPinco
   if (!pickupDetails || !deliveryDetails) throw new Error("Invalid pickup or delivery pincode");
 
   if (pickupDetails.District === deliveryDetails.District) {
-    return "Zone A";
+    return "A";
   } else if (pickupDetails.StateName === deliveryDetails.StateName) {
-    return "Zone B";
+    return "B";
   } else if (
     MetroCitys.find((city) => city === pickupDetails?.District) &&
     MetroCitys.find((city) => city === deliveryDetails?.District)
   ) {
-    return "Zone C";
+    return "C";
   } else if (
     NorthEastStates.find((state) => state === pickupDetails?.StateName) ||
     NorthEastStates.find((state) => state === deliveryDetails?.StateName)
   ) {
-    return "Zone E";
+    return "E";
   } else {
-    return "Zone D";
+    return "D";
   }
 };
 

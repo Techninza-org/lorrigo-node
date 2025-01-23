@@ -453,8 +453,8 @@ export const validateClientBillingFeilds = (value: any, fieldName: string, bill:
       }
       break;
     case 'chargedWeight':
-      if (!value || isNaN(value)) {
-        return "Charged weight is required and must be a number";
+      if (isNaN(value) || value < 0) {
+        return "Charged weight is required and must be a valid number";
       }
       break;
     case 'zone':
@@ -629,12 +629,18 @@ export async function sendMailToScheduleShipment({ orders, pickupDate }: { order
   }
 }
 
+// EW
+//  phele bill zone lo with new weight isme zone and weigth charge include hoga - old order wight's fwcharge = weight diff  : 167.45
+
+// Zone change case only
+//  phele order zone lo or weight diff nikal lo : 213.64
+//  bill zone lo with new weight isme zone and weigth charge include hoga - pichle excess weight charge minus krdo = zoneDiff = 167.45 - 213.64 : -46.19 
 export async function calculateShippingCharges(
   zone: string,
   body: Body,
   vendor: any,
   orderZone: string,
-  orderWeight: number
+  orderWeight: number,
 ): Promise<{
   totalCharge: number;
   codCharge: number;
@@ -646,34 +652,40 @@ export async function calculateShippingCharges(
 }> {
   const chargedWeight = body.weight;
 
-  const weightDifference = chargedWeight - orderWeight;
+  const [incrementPrice, orderZoneIncrementPrice] = await Promise.all([
+    getIncrementPriceByZone(zone, vendor),
+    getIncrementPriceByZone(orderZone, vendor),
+  ]);
 
-  const increment_price = getIncrementPriceByZone(zone, vendor);
-  if (!increment_price) {
+  if (!incrementPrice || !orderZoneIncrementPrice) {
     throw new Error("Invalid increment price");
   }
 
-  const { totalCharge, codCharge, fwCharge } = calculateTotalCharge(chargedWeight, increment_price, body, vendor);
+  const [oldZoneCharge, chargedZoneCharge, orderZoneCharge] = await Promise.all([
+    calculateTotalCharge(orderWeight, incrementPrice, body, vendor),
+    calculateTotalCharge(chargedWeight, incrementPrice, body, vendor),
+    calculateTotalCharge(chargedWeight, orderZoneIncrementPrice, body, vendor),
+  ]);
 
-  const weightDiffCharge = weightDifference > 0
-    ? weightDifference * increment_price.incrementPrice
-    : 0;
+  const { totalCharge: oldZoneTotalCharge, codCharge, fwCharge } = oldZoneCharge;
+  const { fwCharge: chargedZoneFwCharge } = chargedZoneCharge;
+  const { fwCharge: orderZoneFwCharge } = orderZoneCharge;
 
-  const zoneChangeCharge = zone !== orderZone ? vendor.zoneChangeFee || 0 : 0;
+  const weightDiffCharge = Math.max(chargedZoneFwCharge - fwCharge, 0);
+  const zoneChangeCharge = zone !== orderZone ? Math.max(chargedZoneFwCharge - orderZoneFwCharge, 0) : 0;
 
-  const finalCharge = totalCharge + weightDiffCharge + zoneChangeCharge;
+  const finalCharge = oldZoneTotalCharge + weightDiffCharge + zoneChangeCharge;
 
   return {
     totalCharge: finalCharge,
     codCharge,
-    incrementPrice: increment_price,
+    incrementPrice,
     orderWeight: chargedWeight,
     fwCharge,
     weightDiffCharge,
     zoneChangeCharge,
   };
 }
-
 
 function getIncrementPriceByZone(
   zone: string,
@@ -685,10 +697,10 @@ function getIncrementPriceByZone(
     return vendor.withinZone;
   } else if (zone.toUpperCase() === "C") {
     return vendor.withinMetro;
-  } else if (zone.toUpperCase() === "E") {
-    return vendor?.northEast;
-  } else {
+  } else if (zone.toUpperCase() === "D") {
     return vendor?.withinRoi;
+  } else {
+    return vendor?.northEast; // Zone E
   }
 }
 
@@ -728,7 +740,7 @@ function calculateTotalCharge(
   const adjustedOrderWeight = orderWeight - (vendor.weightSlab || vendor.vendorId.weightSlab);
   // @ts-ignore
   const weightIncrementRatio = Math.ceil(adjustedOrderWeight / (vendor.incrementWeight || vendor.vendorId.incrementWeight));
-  totalCharge += incrementPrice.incrementPrice * weightIncrementRatio;
+  totalCharge += (incrementPrice.incrementPrice * weightIncrementRatio);
   const fwCharge = totalCharge;
 
   if (body.paymentType === 1) {
@@ -1743,4 +1755,13 @@ export const generateListInoviceAwbs = async (awbs: string[], invoiceNo: string)
     awbTransacs.push(awbObj);
   });
   return awbTransacs;
+}
+
+export function formatCurrencyForIndia(amount: number): string {
+  const formatter = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+  });
+
+  return formatter.format(amount);
 }

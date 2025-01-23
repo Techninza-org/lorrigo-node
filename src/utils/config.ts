@@ -14,6 +14,9 @@ const PORT = Number(process.env.PORT) || 8000;
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+const SMTP_ID = process.env.SMTP_ID;
+const SMTP_PASS = process.env.SMTP_PASS;
+
 const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET;
 
 const SMART_SHIP_USERNAME = "logistics@lorrigo.com";
@@ -128,7 +131,9 @@ const envConfig = {
   MARUTI_PASSWORD,
   MARUTI_REFRESH_TOKEN,
 
-  SHIPROCKET_B2B_API_BASEURL
+  SHIPROCKET_B2B_API_BASEURL,
+  SMTP_ID,
+  SMTP_PASS,
 
 };
 

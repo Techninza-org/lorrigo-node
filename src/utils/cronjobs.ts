@@ -9,12 +9,11 @@ import EnvModel from "../models/env.model";
 import https from "node:https";
 import Logger from "./logger";
 import { RequiredTrackResponse, TrackResponse } from "../types/b2c";
-import { generateRemittanceId, getFridayDate, getNextToNextFriday, nextFriday, shipmentAmtCalcToWalletDeduction, updateSellerWalletBalance } from ".";
+import { formatCurrencyForIndia, generateListInoviceAwbs, generateRemittanceId, getFridayDate, getNextToNextFriday, shipmentAmtCalcToWalletDeduction, updateSellerWalletBalance } from ".";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
 import { CANCELED, CANCELLATION_REQUESTED_ORDER_STATUS, CANCELLED_ORDER_DESCRIPTION, DELIVERED, ORDER_TO_TRACK, RTO } from "./lorrigo-bucketing-info";
-import { addDays, format, formatISO, parse, addDays, isFriday, nextFriday, parseISO, differenceInCalendarDays } from "date-fns";
-import { getNextToNextFriday } from ".";
+import { addDays, format, formatISO, parse, isFriday, nextFriday, parseISO, differenceInCalendarDays } from "date-fns";
 import fs from "fs"
 import path from "path"
 import { setTimeout } from 'timers/promises';
@@ -23,6 +22,7 @@ import ClientBillingModal from "../models/client.billing.modal";
 import { paymentStatusInfo } from "./recharge-wallet-info";
 import InvoiceModel from "../models/invoice.model";
 import PaymentTransactionModal from "../models/payment.transaction.modal";
+import emailService from "./email.service";
 
 const BATCH_SIZE = 130;
 const API_DELAY = 120000; // 2 minutes in milliseconds
@@ -443,7 +443,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
         bucket: DELIVERED, // Assuming 1 represents DELIVERED
         payment_mode: 1, // COD
         // createdAt: { $gte: currMonth }, // Filter for current month's orders
-      }).populate('productId').lean() as OrderDocument[];
+      }).populate('productId').lean()
 
       // Check for orders already included in any remittance
       const remittedOrderIds = new Set(
@@ -454,8 +454,8 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
 
       const unremittedOrders = orders.filter((order) => !remittedOrderIds.has(order._id.toString()));
 
-      const ordersGroupedByDate: { [key: string]: OrderDocument[] } = unremittedOrders.reduce(
-        (acc: { [key: string]: OrderDocument[] }, order) => {
+      const ordersGroupedByDate = unremittedOrders.reduce(
+        (acc, order) => {
           const length = order?.orderStages?.length;
           const deliveryDate = order?.orderStages[length - 1]?.stageDateTime;
           const deliveryDateOnly = format(deliveryDate, 'yyyy-MM-dd');
@@ -684,8 +684,6 @@ export const track_B2B_SHIPROCKET = async () => {
 export default async function runCron() {
   console.log("Running cron scheduler");
 
-  walletDeductionForBilledOrderOnEvery7Days()
-
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   const expression4every5Minutes = "*/5 * * * *";
@@ -702,12 +700,10 @@ export default async function runCron() {
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     cron.schedule(expression4every2Minutes, scheduleShipmentCheck);
-
     cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
+
     // Need to fix
     // cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
-
-
 
     cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
     cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
@@ -718,6 +714,7 @@ export default async function runCron() {
     cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
     cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);
     cron.schedule(expression4every12Hrs, syncInvoicePdfs);
+    cron.schedule(expression4every12Hrs, emailInvoiceWithPaymnetLink);
 
     Logger.log("Cron jobs scheduled successfully");
   } else {
@@ -751,29 +748,101 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
     const billedOrders = await ClientBillingModal.find({
       // billingDate: { $lt: sevenDaysAgo },
       paymentStatus: paymentStatusInfo.NOT_PAID,
-      isDisputeRaised: false
+      isDisputeRaised: false,
     });
 
-    if (billedOrders.length > 0) {
-      for (const order of billedOrders) {
-        order.fwExcessCharge > 0 ?? await updateSellerWalletBalance(order.sellerId, Number(order.fwExcessCharge), false, `AWB: ${order.awb}, FW Excess Charge`)
-        order.rtoExcessCharge > 0 ?? await updateSellerWalletBalance(order.sellerId, Number(order.rtoExcessCharge), false, `AWB: ${order.awb}, RTO Excess Charge`)
-        if (order.rtoExcessCharge) {
-          const isCodRefund = await PaymentTransactionModal.findOne({ desc: { $regex: `${order.awb}, RTO COD charges` } }) ? true : false
-          if (!isCodRefund) {
-            await updateSellerWalletBalance(order.sellerId, Number(order.codValue), true, `AWB: ${order.awb}, COD Refund`)
-          }
-        }
-        order.zoneChangeCharge > 0 ?? await updateSellerWalletBalance(order.sellerId, Number(order.zoneChangeCharge), false, `AWB: ${order.awb}, Zone Change Charge ${order.orderZone} --> ${order.newZone} `)
-        order.paymentStatus = paymentStatusInfo.PAID;
-        order.save();
-      }
+    if (billedOrders.length === 0) {
+      return;
     }
 
+    await Promise.all(
+      billedOrders.map(async (order) => {
+        const updates = [];
+
+        // Handle FW Excess Charge
+        if (order.fwExcessCharge > 0) {
+          updates.push(
+            updateSellerWalletBalance(
+              order.sellerId,
+              Number(order.fwExcessCharge),
+              false,
+              `AWB: ${order.awb}, FW Excess Charge`
+            )
+          );
+        }
+
+        if (order.rtoExcessCharge > 0) {
+          updates.push(
+            updateSellerWalletBalance(
+              order.sellerId,
+              Number(order.rtoExcessCharge),
+              false,
+              `AWB: ${order.awb}, RTO Excess Charge`
+            )
+          );
+
+          if (order.isRTOApplicable) {
+            const paymentTransactions = await PaymentTransactionModal.find({
+              desc: {
+                $in: [
+                  `${order.awb}, RTO charges`,
+                  `${order.awb}, RTO COD charges`,
+                ],
+              },
+            });
+
+            const isRtoChargeDeducted = paymentTransactions.some((pt) =>
+              pt.desc.includes("RTO charges")
+            );
+            const isRtoCODRefund = paymentTransactions.some((pt) =>
+              pt.desc.includes("RTO COD charges")
+            );
+
+            if (!isRtoChargeDeducted) {
+              updates.push(
+                updateSellerWalletBalance(
+                  order.sellerId,
+                  Number(order.rtoCharge),
+                  false,
+                  `AWB: ${order.awb}, RTO charges`
+                )
+              );
+            }
+
+            if (!isRtoCODRefund) {
+              updates.push(
+                updateSellerWalletBalance(
+                  order.sellerId,
+                  Number(order.codValue),
+                  true,
+                  `AWB: ${order.awb}, COD Refund`
+                )
+              );
+            }
+          }
+        }
+
+        if (order.zoneChangeCharge > 0) {
+          updates.push(
+            updateSellerWalletBalance(
+              order.sellerId,
+              Number(order.zoneChangeCharge),
+              false,
+              `AWB: ${order.awb}, Zone Change Charge ${order.orderZone} --> ${order.newZone}`
+            )
+          );
+        }
+
+        order.paymentStatus = paymentStatusInfo.PAID;
+        updates.push(order.save());
+
+        await Promise.all(updates);
+      })
+    );
   } catch (error) {
-    console.log("Error walletDeductionForBilledOrderOnEvery7Days:", error);
+    console.error("Error in walletDeductionForBilledOrderOnEvery7Days:", error);
   }
-}
+};
 
 const processShiprocketOrders = async (orders) => {
   for (const orderWithOrderReferenceId of orders) {
@@ -1046,5 +1115,129 @@ async function processZohoBatch(invoices: any[], accessToken: string): Promise<v
     } catch (error) {
       console.error(`Error processing batch starting at index ${i}:`, error);
     }
+  }
+}
+
+// Email
+async function emailInvoiceWithPaymnetLink(): Promise<void> {
+  try {
+    const invoices = await InvoiceModel.find({ status: { $ne: "paid" } }).populate('sellerId');
+
+    if (!invoices || invoices.length === 0) {
+      console.log('No invoices need email reminders');
+      return;
+    }
+
+    const emailTemplatePath = path.join(__dirname, '../email-template/invoice-template.html');
+    const emailTemplate = fs.readFileSync(emailTemplatePath, 'utf8');
+
+    for (const invoice of invoices) {
+      const seller: any = invoice.sellerId;
+      if (!seller || !seller.email) {
+        console.warn(`No email found for seller of invoice ID: ${invoice.invoice_id}`);
+        continue;
+      }
+
+      // Fill dynamic placeholders in the template
+      const filledEmail = emailTemplate
+        .replaceAll('{{invoiceId}}', invoice.invoice_id || '')
+        .replaceAll('{{userName}}', seller.name || 'Seller')
+        .replaceAll('{{invoiceAmt}}', formatCurrencyForIndia(invoice.dueAmount) || '0')
+        .replaceAll('{{invoiceDate}}', invoice.date || 'N/A');
+
+      await emailService.sendEmailWithCSV(
+        seller.email,
+        "Invoice Payment Reminder",
+        filledEmail,
+        await generateListInoviceAwbs(invoice?.invoicedAwbs || [], invoice.invoice_id),
+        "Invoice AWBs",
+        Buffer.from(invoice.pdf, 'base64'),
+        "Invoice"
+      );
+    }
+  } catch (error) {
+    console.error('Error in emailInvoiceWithPaymnetLink:', error);
+  }
+}
+
+async function emailSellerMonthlyWalletSummary(): Promise<void> {
+  try {
+    const walletSummaries = await PaymentTransactionModal.aggregate([
+      // Step 1: Filter transactions for the last 30 days
+      {
+        $match: {
+          createdAt: {
+            $gte: new Date(new Date().setDate(new Date().getDate() - 30)), // Last 30 days
+          },
+        },
+      },
+      // Step 2: Join with the Seller collection to get seller details
+      {
+        $lookup: {
+          from: "sellers", // Collection name for SellerModel
+          localField: "sellerId", // Field in transactions to join
+          foreignField: "_id", // Field in SellerModel to join
+          as: "sellerInfo", // Output field with seller data
+        },
+      },
+      // Step 3: Filter only prepaid sellers
+      {
+        $match: {
+          "sellerInfo.config.isPrepaid": true,
+        },
+      },
+      // Step 4: Unwind the sellerInfo array to access individual fields
+      {
+        $unwind: "$sellerInfo",
+      },
+      // Step 5: Group transactions by sellerId and calculate aggregations
+      {
+        $group: {
+          _id: "$sellerId", // Group by sellerId
+          totalAdded: {
+            $sum: {
+              $cond: [{ $eq: ["$code", "PAYMENT_SUCCESS"] }, { $toDouble: "$amount" }, 0],
+            },
+          },
+          totalSpent: {
+            $sum: {
+              $cond: [{ $eq: ["$code", "DEBIT"] }, { $toDouble: "$amount" }, 0],
+            },
+          },
+          lastWalletBalance: { $last: "$lastWalletBalance" }, // Most recent wallet balance
+          sellerName: { $first: "$sellerInfo.name" }, // Seller name from sellerInfo
+          sellerEmail: { $first: "$sellerInfo.email" }, // Seller email from sellerInfo
+        },
+      },
+      // Step 6: Project the final fields to include in the result
+      {
+        $project: {
+          _id: 1, // Seller ID
+          sellerName: 1,
+          sellerEmail: 1,
+          totalAdded: 1,
+          totalSpent: 1,
+          lastWalletBalance: 1,
+        },
+      },
+    ]);
+
+    const emailTemplatePath = path.join(__dirname, '../email-template/monthly-wallet-txn.html');
+    const emailTemplate = fs.readFileSync(emailTemplatePath, 'utf8');
+
+    // Fill dynamic placeholders in the template
+    const filledEmail = emailTemplate
+      .replaceAll('{{invoiceId}}', invoice.invoice_id || '')
+      .replaceAll('{{userName}}', seller.name || 'Seller')
+      .replaceAll('{{invoiceAmt}}', formatCurrencyForIndia(invoice.dueAmount) || '0')
+      .replaceAll('{{invoiceDate}}', invoice.date || 'N/A');
+
+    await emailService.sendEmail(
+      seller.email,
+      "Monthly Wallet Summary",
+      filledEmail,
+    );
+  } catch (error) {
+    console.error('Error in emailInvoiceWithPaymnetLink:', error);
   }
 }

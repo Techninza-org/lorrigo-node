@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import type { ExtendedRequest } from "../utils/middleware";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import { DELIVERED, IN_TRANSIT, NDR, NEW, READY_TO_SHIP, RTO } from "../utils/lorrigo-bucketing-info";
-import { Types, isValidObjectId } from "mongoose";
+import mongoose, { Types, isValidObjectId } from "mongoose";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
 import { calculateShippingCharges, convertToISO, csvJSON, generateListInoviceAwbs, updateSellerWalletBalance, validateB2BClientBillingFeilds, validateClientBillingFeilds, validateDisputeFeilds } from "../utils";
@@ -963,296 +963,237 @@ export const uploadDisputeCSV = async (req: ExtendedRequest, res: Response) => {
 }
 
 export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  if (!req.file || !req.file.buffer) {
+  if (!req.file?.buffer) {
     return res.status(400).send({ valid: false, message: "No file uploaded" });
   }
 
-  const alreadyExistingBills = await ClientBillingModal.find({}).select(["orderRefId", "awb", "rtoAwb"]);
-  const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
-
-  const csvBills = json.map((bill: any) => {
-    const isForwardApplicable = Boolean(bill["Forward Applicable"]?.toUpperCase() === "TRUE");
-    const isRTOApplicable = Boolean(bill["RTO Applicable"]?.toUpperCase() === "TRUE");
-
-    return {
-      awb: (bill["Awb"])?.toString(),
-      codValue: Number(bill["COD Value"] || 0),
-      shipmentType: bill["Shipment Type"].toUpperCase() === "COD" ? 1 : 0,
-      chargedWeight: Number(bill["Charged Weight"]),
-      zone: bill["Zone"],
-      carrierID: bill["Carrier ID"],
-      isForwardApplicable,
-      isRTOApplicable,
-    };
-  });
-
-  const bills = csvBills.filter((bill: any) => !!bill.awb);
-
-  if (bills.length < 1) {
-    return res.status(200).send({ valid: false, message: "empty payload" });
-  }
-
   try {
+    const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
+    const bills = json.map(parseBillFromCSV).filter(bill => !!bill.awb);
+
+    if (bills.length < 1) {
+      return res.status(200).send({ valid: false, message: "empty payload" });
+    }
+
     const errorWorkbook = new exceljs.Workbook();
-    const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
-
-    errorWorksheet.columns = [
-      { header: 'Awb', key: 'awb', width: 20 },
-      { header: 'Error Message', key: 'errors', width: 40 },
-    ];
-
+    const errorWorksheet = initializeErrorWorksheet(errorWorkbook);
     const errorRows: any = [];
 
-    // Validate each bill and collect errors for invalid fields
-    bills.forEach((bill) => {
-      const errors: string[] = [];
-      Object.entries(bill).forEach(([fieldName, value]) => {
-        const error = validateClientBillingFeilds(value, fieldName, bill, alreadyExistingBills);
-        if (error) {
-          errors.push(error);
-        }
-      });
-
-      if (errors.length > 0) {
-        errorRows.push({ awb: bill.awb, errors: errors.join(", ") });
-      }
-    });
-
+    // Validate bills and collect AWBs
     const orderAwbs = bills.map(bill => bill.awb);
     const orders = await B2COrderModel.find({
       $or: [{ awb: { $in: orderAwbs } }],
     }).populate(["productId", "pickupAddress"]);
 
-    const orderRefIdToSellerIdMap = new Map();
-    orders.forEach(order => {
-      orderRefIdToSellerIdMap.set(order.order_reference_id || order.client_order_reference_id, order.sellerId);
-    });
-
-    const currentMonth = format(new Date(), 'yyyy-MM-dd');
-
-    // Handling missing AWBs: collect AWBs not found in the database
+    // Collect missing AWBs
     bills.forEach(bill => {
-      const order = orders.find(o => o.awb === bill.awb);
-      if (!order) {
+      if (!orders.find(o => o.awb === bill.awb)) {
         errorRows.push({ awb: bill.awb, errors: "AWB not found in the database" });
       }
     });
 
-    if (errorRows.length > 0) {
-      errorWorksheet.addRows(errorRows);
+    // Process valid bills
+    const walletUpdates: Array<{
+      sellerId: string;
+      amount: number;
+      isCredit: boolean;
+      description: string;
+    }> = [];
 
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+    const billsWithCharges = await Promise.all(
+      bills.map(async bill => {
+        const order = orders.find(o => o.awb === bill.awb);
+        if (!order || !order.pickupAddress) return null;
 
-      await errorWorkbook.csv.write(res);
-      return res.end();
-    }
+        const vendor = await getVendorInfo(order.sellerId.toString(), order.carrierId ?? bill.carrierID);
+        if (!vendor) return null;
 
-    const billsWithCharges = await Promise.all(bills.map(async (bill) => {
-      const order: any = orders.find(o => o.awb === bill.awb);
-      if (!order) {
-        throw new Error(`Order not found for AWB: ${bill.awb}`);
-      }
+        // @ts-ignore
+        const orderZone = await calculateZone(order.pickupAddress.get("pincode"), order.customerDetails.get("pincode"));
 
-      let vendor: any = await CustomPricingModel.findOne({
-        sellerId: order.sellerId,
-        vendorId: bill.carrierID
-      }).populate({
-        path: 'vendorId',
-        populate: {
-          path: 'vendor_channel_id'
+        const { charges, incrementPrice } = await processCharges(bill, order, vendor, orderZone);
+
+        const paymentTransactions = await PaymentTransactionModal.find({
+          desc: {
+            $in: [
+              `${bill.awb}, RTO charges`,
+              `${bill.awb}, RTO COD charges`
+            ]
+          }
+        });
+
+        const isRTOApplicable = order.bucket === 5 || bill.isRTOApplicable;
+        const isRtoChargeDeducted = paymentTransactions.some(pt =>
+          pt.desc.includes("RTO charges")
+        );
+        const isRtoCODRefund = paymentTransactions.some(pt =>
+          pt.desc.includes("RTO COD charges")
+        );
+
+        if (isRTOApplicable) {
+          if (!isRtoChargeDeducted && charges.fwCharge > 0) {
+            walletUpdates.push({
+              sellerId: order.sellerId.toString(),
+              amount: charges.fwCharge,
+              isCredit: false,
+              description: `AWB: ${bill.awb}, ~RTO charges`
+            });
+          }
+
+          if (!isRtoCODRefund && order.payment_mode === 1 && charges.codCharge > 0) {
+            walletUpdates.push({
+              sellerId: order.sellerId.toString(),
+              amount: charges.codCharge,
+              isCredit: true,
+              description: `AWB: ${bill.awb}, ~RTO COD charges`
+            });
+          }
         }
-      });
 
-      if (!vendor) {
-        vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
+        return createBillingUpdateOperation(bill, order, vendor, charges, incrementPrice, orderZone);
+      })
+    );
+
+    const validBills = billsWithCharges.filter(Boolean);
+
+    // Perform all updates in a transaction
+    const session = await mongoose.startSession();
+    await session.withTransaction(async () => {
+      // await ClientBillingModal.bulkWrite(validBills.filter(bill => bill !== null), { session });
+      // @ts-ignore
+      const result = await ClientBillingModal.bulkWrite(validBills);
+
+      // Execute all wallet updates
+      for (const update of walletUpdates) {
+        await updateSellerWalletBalance(
+          update.sellerId,
+          update.amount,
+          update.isCredit,
+          update.description,
+        );
       }
-
-      let weightSlab = vendor?.weightSlab || vendor?.vendorId?.weightSlab
-      const csvWeight = Math.max(bill.chargedWeight, weightSlab);
-      const orderWeight = Math.max(order.orderWeight, weightSlab);
-
-      const csvBody = {
-        weight: csvWeight,
-        paymentType: bill.shipmentType,
-        collectableAmount: Math.max(0, order.amount2Collect),
-      };
-
-      const orderBody = {
-        weight: orderWeight,
-        paymentType: order.payment_mode,
-        collectableAmount: Math.max(0, order.amount2Collect),
-      }
-
-      const orderZone = await calculateZone(order.pickupAddress.pincode, order.customerDetails.pincode)
-
-      const { incrementPrice, totalCharge, codCharge, fwCharge, weightDiffCharge, zoneChangeCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor, orderZone, orderWeight); // csv calc 
-
-      let orderShippingCalc: any;
-      let fwExcessCharge = weightDiffCharge;
-
-
-      // if (bill.chargedWeight > order.orderWeight) {
-      //   orderShippingCalc = await calculateShippingCharges(bill.zone, orderBody, vendor); // customer calc
-
-      //   if (totalCharge > orderShippingCalc.totalCharge) {
-      //     fwExcessCharge = (totalCharge - orderShippingCalc.totalCharge).toFixed(2)
-      //   }
-      // }
-
-      const baseWeight = (vendor?.weightSlab || vendor?.vendorId?.weightSlab) || 0; // Courier weight
-      const incrementWeight = bill.chargedWeight - Number(order.orderWeight) - baseWeight;
-
-      const rtoCharge = (totalCharge - (codCharge || 0)).toFixed(2)
-
-      const billingAmount = bill.isRTOApplicable ? Math.max(0, ((totalCharge - order.shipmentCharges) + Number(rtoCharge))).toFixed(2) : (Math.max(0, totalCharge - order.shipmentCharges)).toFixed(2);
-
-      const existingMonthBill: any = await MonthlyBilledAWBModel.findOne({
-        sellerId: order.sellerId,
-        awb: order.awb,
-      });
-
-      if (existingMonthBill && existingMonthBill.isRTOApplicable === true) {
-        errorRows.push({ awb: bill.awb, errors: "Not Allowd: Awb is already billed for forward and RTO" });
-        return;
-      }
-
-      bill.isForwardApplicable = bill.isRTOApplicable === true ? true : bill.isForwardApplicable;
-
-      const monthBill = await MonthlyBilledAWBModel.findOneAndUpdate(
-        { sellerId: order.sellerId, awb: order.awb },
-        {
-          sellerId: order.sellerId,
-          awb: order.awb,
-          billingDate: currentMonth,
-          billingAmount: billingAmount,
-          zone: bill.zone,
-          incrementPrice: incrementPrice.incrementPrice,
-          basePrice: incrementPrice.basePrice,
-          chargedWeight: incrementWeight > 0 ? incrementWeight.toString() : "0",
-          baseWeight: baseWeight.toString(),
-          isForwardApplicable: bill.isForwardApplicable,
-          isRTOApplicable: bill.isRTOApplicable,
-        },
-        {
-          new: true,
-          setDefaultsOnInsert: true,
-          upsert: true
-        }
-      );
-
-      return {
-        updateOne: {
-          filter: { awb: bill.awb },
-          update: {
-            $set: {
-              ...bill,
-              carrierID: bill.carrierID,
-              sellerId: order.sellerId,
-
-              basePrice: incrementPrice.basePrice, // cc
-              baseWeight: baseWeight.toString(),  // cc
-              incrementPrice: incrementPrice.incrementPrice, // cc
-
-              orderRefId: order.order_reference_id,
-              orderCharges: order.shipmentCharges, // applied_weight charge
-              orderWeight: order.orderWeight,
-              codValue: codCharge,
-              rtoAwb: "",
-
-              fwExcessCharge,
-              rtoExcessCharge: fwExcessCharge > 0 && bill.isRTOApplicable ? fwExcessCharge : 0,
-              rtoCharge,
-              fwCharge,
-
-              orderZone: orderZone,
-              newZone: bill.zone,
-              zoneChangeCharge: zoneChangeCharge,
-
-              billingAmount: billingAmount, // fw+RTO without COD Charge 
-              billingDate: format(new Date(), 'yyyy-MM-dd'),
-              vendorWNickName: `${vendor?.name || vendor?.vendorId?.name} ${vendor?.vendor_channel_id?.nickName || vendor?.vendorId?.vendor_channel_id.nickName}`.trim(),
-
-              paymentStatus: paymentStatusInfo.NOT_PAID,
-              recipientName: order.customerDetails.get("name"),
-              fromCity: order?.pickupAddress?.city || order?.pickupAddress?.get("city"),
-              toCity: order.customerDetails.get("city"),
-            }
-          },
-          upsert: true
-        }
-      };
-    }));
-
-
-    const validBills = billsWithCharges.filter(x => !!x)
-    // @ts-ignore
-    const result = await ClientBillingModal.bulkWrite(validBills);
-
-    // await Promise.all(validBills.map(async (bill: any) => {
-    //   const sellerId = bill.updateOne.update.$set.sellerId
-    //   // const sellerId = "663379872fc3a04d7cc1e7a1" // for testing 
-
-    //   const awb = bill.updateOne.filter.awb;
-    //   const returnCODCharge = Math.max((bill.updateOne.update.$set.codValue || 0), 0); // Reversed COD Charge
-    //   const fwExcessCharge = Math.max((bill.updateOne.update.$set.fwExcessCharge || 0), 0); // use as fw + RTO excess charge
-    //   const isRTOApplied = bill.updateOne.update.$set.isRTOApplicable // use to check RTO applied or not
-    //   const isForwardApplied = bill.updateOne.update.$set.isForwardApplicable // use to check RTO applied or not
-    //   const rtoCharge = bill.updateOne.update.$set.rtoCharge // use as fw/RTO
-
-    //   if (sellerId) {
-    //     // if (isForwardApplied) {
-    //     // console.log("for Fw: ONLY\n\n")
-
-    //     // // Excess weight charge
-    //     // if (fwExcessCharge > 0) {
-    //     //   console.log("Forward Excess Weight Charge ", fwExcessCharge)
-    //     //   // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, Forward Excess Weight Charge`);
-    //     // }
-    //     // }
-
-    //     if (isRTOApplied && fwExcessCharge <= 0) {
-
-    //       const isRTOChargeAlreadyReversed = await PaymentTransactionModal.find({
-    //         desc: { $regex: `${awb} RTO` }
-    //       })
-
-    //       const isRTOCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO charges")) ? true : false
-    //       const isRTOCODCharged = isRTOChargeAlreadyReversed.find(x => x.desc.includes("RTO COD charges")) ? true : false
-
-    //       if (!isRTOCharged && rtoCharge > 0) {
-    //         // console.log(awb + "paise kt : RTO Charge \n\n ")
-    //         // await updateSellerWalletBalance(sellerId, Number(rtoCharge), false, `AWB: ${awb}, RTO Charge Applied`);
-    //       }
-    //       if (!isRTOCODCharged && returnCODCharge > 0) {
-    //         // console.log(awb + "paise Add : COD Charge \n\n ")
-    //         // await updateSellerWalletBalance(sellerId, Number(returnCODCharge), true, `AWB: ${awb}, COD Charge Reversed`);
-    //       }
-
-    //       // Excess weight charge, it happens only after disptue accept or reject
-    //       // if (fwExcessCharge > 0) {
-    //       // console.log(fwExcessCharge, "fwExcessCharge")
-    //       // await updateSellerWalletBalance(sellerId, Number(fwExcessCharge), false, `AWB: ${awb}, RTO Excess Weight Charge`);
-    //       // }
-    //     }
-
-    //   }
-    // }));
+    });
+    await session.endSession();
 
     if (errorRows.length > 0) {
-      errorWorksheet.addRows(errorRows);
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
-      await errorWorkbook.csv.write(res);
-      return res.end();
+      return sendErrorReport(res, errorWorksheet, errorRows);
     }
 
     return res.status(200).send({ valid: true, message: "Billing data uploaded successfully" });
   } catch (error) {
     console.error("Error in uploadClientBillingCSV:", error);
-    return res.status(500).send({ valid: false, message: "An error occurred while processing the request" });
+    return res.status(500).send({ valid: false, message: `An error occurred while processing the request: ${error}` });
   }
 };
+
+// Helper functions for uploadClientBillingCSV -------------------------
+const parseBillFromCSV = (bill: any) => ({
+  awb: bill["Awb"]?.toString(),
+  codValue: Number(bill["COD Value"] || 0),
+  shipmentType: bill["Shipment Type"].toUpperCase() === "COD" ? 1 : 0,
+  chargedWeight: Number(bill["Charged Weight"]),
+  zone: bill["Zone"],
+  carrierID: bill["Carrier ID"],
+  isForwardApplicable: Boolean(bill["Forward Applicable"]?.toUpperCase() === "TRUE"),
+  isRTOApplicable: Boolean(bill["RTO Applicable"]?.toUpperCase() === "TRUE"),
+});
+
+const initializeErrorWorksheet = (workbook: any) => {
+  const worksheet = workbook.addWorksheet('Error Sheet');
+  worksheet.columns = [
+    { header: 'Awb', key: 'awb', width: 20 },
+    { header: 'Error Message', key: 'errors', width: 40 },
+  ];
+  return worksheet;
+};
+
+const getVendorInfo = async (sellerId: string, carrierId: string) => {
+  let vendor = await CustomPricingModel.findOne({
+    sellerId,
+    vendorId: carrierId
+  }).populate({
+    path: 'vendorId',
+    populate: {
+      path: 'vendor_channel_id'
+    }
+  });
+
+  if (!vendor) {
+    vendor = await CourierModel.findById(carrierId).populate("vendor_channel_id");
+  }
+
+  return vendor;
+};
+
+const processCharges = async (bill: any, order: any, vendor: any, orderZone: string) => {
+  const weightSlab = vendor?.weightSlab || vendor?.vendorId?.weightSlab;
+  const csvBody = {
+    weight: Math.max(bill.chargedWeight, weightSlab),
+    paymentType: bill.shipmentType,
+    collectableAmount: Math.max(0, order.amount2Collect),
+  };
+
+  const { incrementPrice, totalCharge, codCharge, fwCharge, weightDiffCharge, zoneChangeCharge } = await calculateShippingCharges(
+    bill.zone,
+    csvBody,
+    vendor,
+    orderZone,
+    Math.max(order.orderWeight, weightSlab),
+  );
+
+  return {
+    charges: { totalCharge, codCharge, fwCharge, weightDiffCharge, zoneChangeCharge },
+    incrementPrice
+  };
+};
+
+const createBillingUpdateOperation = (bill: any, order: any, vendor: any, charges: any, incrementPrice: any, orderZone: string) => ({
+  updateOne: {
+    filter: { awb: bill.awb },
+    update: {
+      $set: {
+        ...bill,
+        sellerId: order.sellerId,
+        basePrice: incrementPrice.basePrice,
+        baseWeight: (vendor?.weightSlab || vendor?.vendorId?.weightSlab || 0).toString(),
+        incrementPrice: incrementPrice.incrementPrice,
+        orderRefId: order.order_reference_id,
+        orderCharges: order.shipmentCharges,
+        orderWeight: order.orderWeight,
+        codValue: charges.codCharge,
+        rtoAwb: "",
+        rtoCharge: bill.isRTOApplicable ? charges.fwCharge : 0,
+        orderZone,
+        newZone: bill.zone,
+        billingAmount: bill.isRTOApplicable ?
+          Math.max(0, ((charges.totalCharge - order.shipmentCharges) + Number(charges.rtoCharge))).toFixed(2) :
+          Math.max(0, charges.totalCharge - order.shipmentCharges).toFixed(2),
+        billingDate: format(new Date(), 'yyyy-MM-dd'),
+        vendorWNickName: `${vendor?.name || vendor?.vendorId?.name} ${vendor?.vendor_channel_id?.nickName || vendor?.vendorId?.vendor_channel_id.nickName}`.trim(),
+        paymentStatus: paymentStatusInfo.NOT_PAID,
+        recipientName: order.customerDetails.get("name"),
+        fromCity: order?.pickupAddress?.city || order?.pickupAddress?.get("city"),
+        toCity: order.customerDetails.get("city"),
+
+        fwExcessCharge: charges.weightDiffCharge,
+        rtoExcessCharge: charges.weightDiffCharge > 0 && bill.isRTOApplicable ? charges.weightDiffCharge : 0,
+        fwCharge: charges.fwCharge,
+        zoneChangeCharge: charges.zoneChangeCharge,
+
+      }
+    },
+    upsert: true
+  }
+});
+
+const sendErrorReport = async (res: Response, worksheet: any, errorRows: any[]) => {
+  worksheet.addRows(errorRows);
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+  await worksheet.csv.write(res);
+  return res.end();
+};
+// Helper functions End for uploadClientBillingCSV -------------------------
 
 export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   if (!req.file || !req.file.buffer) {

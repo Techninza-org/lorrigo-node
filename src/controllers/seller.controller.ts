@@ -21,6 +21,9 @@ import SellerDisputeModel from "../models/dispute.model";
 import { format, formatDate } from "date-fns";
 import { generateListInoviceAwbs, generateUniqueNumber } from "../utils";
 import { B2COrderModel } from "../models/order.model";
+import emailService from "../utils/email.service";
+import path from "path";
+import fs from "fs";
 
 export const getSellerCouriers = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -735,6 +738,18 @@ export const confirmInvoicePayment = async (req: ExtendedRequest, res: Response,
     const seller = await SellerModel.findById(sellerId);
     seller?.showPaymentAlert === false;
     await seller?.save();
+
+    if (seller && updateSellerInvoice && rechargeWalletViaPhoenpeData.success) {
+      const emailTemplate = fs.readFileSync(path.join(__dirname, '../email-template/payment-confirm.html'), 'utf8');
+      const filledEmail = emailTemplate
+        .replaceAll('{{invoiceId}}', updateSellerInvoice?.invoice_id)
+        .replaceAll('{{userName}}', seller.name)
+        .replaceAll('{{invoiceAmt}}', (updateSellerInvoice.zohoAmt))
+        .replaceAll('{{invoiceDate}}', updateSellerInvoice.date)
+        .replaceAll('{{currDate}}', updateSellerInvoice.date)
+
+      await emailService.sendEmail(seller.email, "Invoice Payment Confirmation", filledEmail)
+    }
 
     return res.status(200).send({
       valid: true,
