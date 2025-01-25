@@ -26,6 +26,7 @@ import apicache from "apicache";
 import path from "path";
 import PaymentTransactionModal from "./models/payment.transaction.modal";
 import SellerModel from "./models/seller.model";
+import ClientBillingModal from "./models/client.billing.modal";
 
 const app = express();
 app.use(cors({ origin: "*" }));
@@ -77,14 +78,20 @@ if (!config.MONGODB_URI) {
 // }
 
 // async function update() {
-//   const clientBills = (await ClientBillingModal.find()).filter(x => (Number(x.chargedWeight) <= Number(x.baseWeight)) && (Number(x.fwExcessCharge) !== 0 || Number(x.rtoExcessCharge) !== 0))
-//   for (const bills of clientBills) {
-//     await bills.updateOne({
-//       fwExcessCharge: "0",
-//       rtoExcessCharge: "0"
-//     })
-//   }
+//   const filterCondition = {
+//     $or: [
+//       { zoneChangeCharge: { $gt: 0 } },
+//       { fwExcessCharge: { $gt: 0 } },
+//       { rtoExcessCharge: { $gt: 0 } },
+//     ],
+//   };
 
+//   // Define the update operation
+//   const updateOperation = { disputeRaisedBySystem: true };
+
+//   // Perform the update
+//   const result = await ClientBillingModal.updateMany(filterCondition, updateOperation);
+//   console.log(result, "result")
 // }
 
 

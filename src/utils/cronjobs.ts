@@ -746,9 +746,8 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const billedOrders = await ClientBillingModal.find({
-      // billingDate: { $lt: sevenDaysAgo },
-      paymentStatus: paymentStatusInfo.NOT_PAID,
-      isDisputeRaised: false,
+      billingDate: { $lt: sevenDaysAgo },
+      disputeRaisedBySystem: true
     });
 
     if (billedOrders.length === 0) {
@@ -785,17 +784,17 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
             const paymentTransactions = await PaymentTransactionModal.find({
               desc: {
                 $in: [
-                  `${order.awb}, RTO charges`,
-                  `${order.awb}, RTO COD charges`,
+                  `${order.awb}, RTO-charges`,
+                  `${order.awb}, RTO-COD-charges`,
                 ],
               },
             });
 
             const isRtoChargeDeducted = paymentTransactions.some((pt) =>
-              pt.desc.includes("RTO charges")
+              pt.desc.includes("RTO-charges")
             );
             const isRtoCODRefund = paymentTransactions.some((pt) =>
-              pt.desc.includes("RTO COD charges")
+              pt.desc.includes("RTO-COD-charges")
             );
 
             if (!isRtoChargeDeducted) {
@@ -804,7 +803,7 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
                   order.sellerId,
                   Number(order.rtoCharge),
                   false,
-                  `AWB: ${order.awb}, RTO charges`
+                  `AWB: ${order.awb}, RTO-charges`
                 )
               );
             }
@@ -815,7 +814,7 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
                   order.sellerId,
                   Number(order.codValue),
                   true,
-                  `AWB: ${order.awb}, COD Refund`
+                  `AWB: ${order.awb}, COD-Refund`
                 )
               );
             }
@@ -834,6 +833,7 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
         }
 
         order.paymentStatus = paymentStatusInfo.PAID;
+        order.disputeRaisedBySystem = false;
         updates.push(order.save());
 
         await Promise.all(updates);

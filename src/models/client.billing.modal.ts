@@ -6,6 +6,8 @@ const modal = new mongoose.Schema({
   carrierID: { type: mongoose.Types.ObjectId, ref: "Courier", required: true },
   disputeId: { type: mongoose.Types.ObjectId, ref: "Dispute" },
   disputeAcceptedBySeller: { type: Boolean, default: false },
+  disputeRaisedBySystem: { type: Boolean, default: false }, // New key
+  isDisputeRaised: { type: Boolean, default: false },
 
   orderRefId: { type: String, required: true },
   awb: { type: String, required: true },
@@ -39,7 +41,6 @@ const modal = new mongoose.Schema({
   basePrice: { type: String, required: false },
   baseWeight: { type: String, required: false },
   vendorWNickName: { type: String, required: false },
-  isDisputeRaised: { type: Boolean, default: false },
   paymentStatus: { type: String, default: paymentStatusInfo.NOT_PAID },
 
   billingDate: { type: Date, default: Date.now },
