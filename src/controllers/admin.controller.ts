@@ -1030,6 +1030,15 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
           pt.desc.includes("RTO COD charges")
         );
 
+        if(charges.zoneChangeCharge > 0 ){
+          walletUpdates.push({
+            sellerId: order.sellerId.toString(),
+            amount: charges.zoneChangeCharge,
+            isCredit: false,
+            description: `AWB: ${order.awb}, Zone Change Charge ${orderZone} --> ${bill.zone}`
+          });
+        }
+
         if (isRTOApplicable) {
           if (!isRtoChargeDeducted && charges.fwCharge > 0) {
             walletUpdates.push({
@@ -1179,7 +1188,7 @@ const createBillingUpdateOperation = (bill: any, order: any, vendor: any, charge
         rtoExcessCharge: charges.weightDiffCharge > 0 && bill.isRTOApplicable ? charges.weightDiffCharge : 0,
         fwCharge: charges.fwCharge,
         zoneChangeCharge: charges.zoneChangeCharge,
-
+        disputeRaisedBySystem: charges.weightDiffCharge > 0
       }
     },
     upsert: true

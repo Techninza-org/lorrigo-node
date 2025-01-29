@@ -1688,27 +1688,29 @@ export const calculateSellerInvoiceAmount = async () => {
     // const delay = 1;
     const delay = 5000;
 
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    const today = new Date();
+    const lastInvoiceGenerationDate = await InvoiceModel.find({}).sort({ createdAt: -1 });
+    let lastInvoiceDate;
+    if (!lastInvoiceGenerationDate || lastInvoiceGenerationDate.length === 0) {
+      lastInvoiceDate = startOfMonth;
+    } else {
+      lastInvoiceDate = lastInvoiceGenerationDate[0].createdAt;
+    }
+
     const processBatch = async (batch: any[]) => {
       for (const seller of batch) {
         const sellerId = seller._id;
         const zoho_contact_id = seller?.zoho_contact_id;
 
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        const today = new Date();
-        const lastInvoiceGenerationDate = await InvoiceModel.find({}).sort({ createdAt: -1 });
-        let lastInvoiceDate;
-        if (!lastInvoiceGenerationDate || lastInvoiceGenerationDate.length === 0) {
-          lastInvoiceDate = startOfMonth;
-        } else {
-          lastInvoiceDate = lastInvoiceGenerationDate[0].createdAt;
-        }
+        // If seller invoice already generated then skip it, handle calculation for lastMonth dispute 
 
         const billedOrders: any = await ClientBillingModal.find({
           sellerId,
-          billingDate: { $gt: lastInvoiceDate, $lt: today },
-        })
-          .select("awb isDisputeRaised disputeId isRTOApplicable")
+          billingDate: { $gt: startOfMonth, $lt: today },
+        }).sort({ billingDate: -1 })
+          .select("awb isDisputeRaised disputeId isRTOApplicable disputeRaisedBySystem")
           .populate("disputeId");
 
         const allOrders = await B2COrderModel.find({
@@ -1719,35 +1721,36 @@ export const calculateSellerInvoiceAmount = async () => {
           .select(["productId", "awb"])
           .populate("productId");
 
-        const billedAwb = billedOrders
-          .filter((item: any) => !item.isDisputeRaised || (!item.isDisputeRaised && item.disputeId?.accepted))
-          .map((order: any) => order.awb);
-
         const awbNotBilledDueToDispute = billedOrders
-          .filter((item: any) => item.isDisputeRaised === true && !item.disputeId?.accepted)
+          .filter((item: any) => ((item.isDisputeRaised === true) || (item.disputeRaisedBySystem === true)) && !item.disputeId?.accepted)
           .map((x: any) => x.awb);
 
         const lastMonthRecord = await NotInInvoiceAwbModel.findOne({ sellerId });
 
-        await NotInInvoiceAwbModel.updateOne(
-          { sellerId },
-          {
-            monthOf: format(startOfMonth, "MMM"),
-            notBilledAwb: awbNotBilledDueToDispute,
-            sellerId,
-          },
-          { upsert: true }
-        );
+        if (awbNotBilledDueToDispute.length > 0) {
+          await NotInInvoiceAwbModel.updateOne(
+            { sellerId },
+            {
+              monthOf: format(startOfMonth, "MMM"),
+              notBilledAwb: awbNotBilledDueToDispute,
+              sellerId,
+            },
+            { upsert: true }
+          );
+        }
 
         const lastMonthDisputeAwbs = lastMonthRecord?.notBilledAwb || [];
 
-        const orders = allOrders.filter((order: any) => billedAwb.includes(order?.awb));
+        let lastMonthAwbs = []
+        if (lastMonthDisputeAwbs.length > 0) {
+          // @ts-ignore
+          lastMonthAwbs = (await ClientBillingModal.find({ awb: { $in: lastMonthDisputeAwbs } }).populate("disputeId")).filter((item) => item.disputeId?.accepted === true);
+        }
+
+        const orders = allOrders.filter((order: any) => !awbNotBilledDueToDispute.includes(order?.awb));
 
         // Combine current and last month's AWBs
         const awbToBeInvoiced = [...orders.map((order: any) => order.awb), ...lastMonthDisputeAwbs];
-
-        // const allWalletRecharge = await PaymentTransactionModal.find({ sellerId, desc: { $regex: "Wallet Recharge" }, createdAt: { $gt: lastInvoiceDate, $lt: today }, });
-        // let totalWalletRecharge = Math.max(allWalletRecharge.reduce((acc, curr) => acc + parseFloat(curr.amount), 0), 0);
 
         let totalAmount = 0;
         const bills = await ClientBillingModal.find({ awb: { $in: awbToBeInvoiced } });
@@ -1760,14 +1763,12 @@ export const calculateSellerInvoiceAmount = async () => {
           if (bill) {
             if (bill.isRTOApplicable === false) {
               codCharges = Number(bill.codValue);
-              forwardCharges = Number(bill.rtoCharge);
+              forwardCharges = Number(bill.fwCharge);
             } else {
-              rtoCharges = Number(bill.rtoCharge);
-              forwardCharges = Number(bill.rtoCharge);
+              rtoCharges = Number(bill.fwCharge);
+              forwardCharges = Number(bill.fwCharge);
             }
-            // if(bill.fwExcessCharge){
-            //   excessCharges = Number(bill.fwExcessCharge);
-            // }
+
           }
 
           totalAmount += forwardCharges + rtoCharges + codCharges;
@@ -1960,10 +1961,10 @@ export async function syncInvoices(invoices: { data: { invoices: ZohoInvoice[] }
 
     // Fetch both paid and unpaid invoices concurrently
     const [paidInvoices, unpaidInvoices] = await Promise.all([
-      InvoiceModel.find({ 
+      InvoiceModel.find({
         invoice_id: { $in: paid.map(inv => inv.invoice_id) }
       }),
-      InvoiceModel.find({ 
+      InvoiceModel.find({
         invoice_id: { $in: unpaid.map(inv => inv.invoice_id) }
       })
     ]);
@@ -2002,7 +2003,7 @@ export async function syncInvoices(invoices: { data: { invoices: ZohoInvoice[] }
     // Return updated invoices
     const allInvoices = [...paidInvoices, ...unpaidInvoices];
     return { valid: true, invoices: allInvoices };
-    
+
   } catch (error) {
     console.error('Error syncing invoices:', error);
     throw error;

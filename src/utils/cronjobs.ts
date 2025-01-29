@@ -712,6 +712,8 @@ export default async function runCron() {
     cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
     cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);
     cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
+
+    // Email Cron
     cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);
     cron.schedule(expression4every12Hrs, syncInvoicePdfs);
     cron.schedule(expression4every12Hrs, emailInvoiceWithPaymnetLink);
@@ -821,16 +823,16 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
           }
         }
 
-        if (order.zoneChangeCharge > 0) {
-          updates.push(
-            updateSellerWalletBalance(
-              order.sellerId,
-              Number(order.zoneChangeCharge),
-              false,
-              `AWB: ${order.awb}, Zone Change Charge ${order.orderZone} --> ${order.newZone}`
-            )
-          );
-        }
+        // if (order.zoneChangeCharge > 0) {
+        //   updates.push(
+        //     updateSellerWalletBalance(
+        //       order.sellerId,
+        //       Number(order.zoneChangeCharge),
+        //       false,
+        //       `AWB: ${order.awb}, Zone Change Charge ${order.orderZone} --> ${order.newZone}`
+        //     )
+        //   );
+        // }
 
         order.paymentStatus = paymentStatusInfo.PAID;
         order.disputeRaisedBySystem = false;

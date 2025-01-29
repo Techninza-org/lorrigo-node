@@ -48,52 +48,114 @@ if (!config.MONGODB_URI) {
   process.exit(0);
 }
 
+// RTO
+// $regex: /(RTO charges|~RTO charges|RTO-charges|RTO Charge Applied)$/i
+// $regex: `(AWB: ${awbNumber}|${awbNumber}).*(RTO charges|~RTO charges|RTO-charges|RTO Charge Applied)`,
+
+// Cod 
+// $regex: /(~RTO COD charges|COD Charge Reversed|COD Refund)$/i
+// $regex: `(AWB: ${awbNumber}|${awbNumber}).*(~RTO COD charges|COD Charge Reversed|COD Refund)`,
+
 // async function revertRevisedMoneyNTxnToday() {
-//   // const today = new Date();
-//   // today.setHours(0, 0, 0, 0);
-//   // const threeDaysAgo = new Date(today);
-//   // threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-//   // const tomorrow = new Date(today);
-//   // tomorrow.setDate(tomorrow.getDate() + 1);
+//   try {
+//     const rtoChargeAppliedTxns = await PaymentTransactionModal.find({
+//       desc: {
+//         $regex: /(~RTO COD charges|COD Charge Reversed|COD Refund)$/i
+//       },
+//       // sellerId: "66791386cfe0c278957805af"
+//     }).sort({ createdAt: -1 });
+
+//     for (const txn of rtoChargeAppliedTxns) {
+//       const awbMatch = txn.desc.match(/(?:AWB: )?(\d+)/);
+//       if (!awbMatch) continue;
+
+//       const awbNumber = awbMatch[1];
+
+//       const duplicateRtoTxns = await PaymentTransactionModal.find({
+//         desc: {
+//           $regex: `(AWB: ${awbNumber}|${awbNumber}).*(~RTO COD charges|COD Charge Reversed|COD Refund)`,
+//           $options: 'i'
+//         },
+//         sellerId: txn.sellerId
+//       });
+
+//       if (duplicateRtoTxns.length > 0) {
+//         // console.log(`Duplicate RTO Transactions Found for AWB: ${awbNumber}`, duplicateRtoTxns);
+
+//         // Sort transactions by createdAt (latest first)
+//         // @ts-ignore
+//         duplicateRtoTxns.sort((a, b) => b.createdAt - a.createdAt);
+
+//         // Keep one transaction (oldest), delete others
+//         const transactionToKeep = duplicateRtoTxns[0];
+//         const transactionsToDelete = duplicateRtoTxns.slice(1);
+
+//         // Calculate total refund amount (excluding the one we keep)
+//         const totalRefundAmount = transactionsToDelete.reduce((sum, dTxn) => sum + Number(dTxn.amount), 0);
+
+//         // console.log(`Total Refund Amount for AWB ${awbNumber}: ₹${totalRefundAmount}`);
+
+//         // Fetch seller details
+//         // const seller = await SellerModel.findById(txn.sellerId);
+//         // if (seller) {
+//         //   // Refund the total amount once
+//         //   seller.walletBalance -= totalRefundAmount;
+//         //   await seller.save();
+
+//         //   // Remove all duplicate transactions except one
+//         //   await PaymentTransactionModal.deleteMany({
+//         //     _id: { $in: transactionsToDelete.map(dTxn => dTxn._id) }
+//         //   });
+
+//         //   console.log(`Reverted ₹${totalRefundAmount} to seller ${seller._id} ${seller.name} and removed ${transactionsToDelete.length} duplicate transactions.`);
+//         // }
+//       }
+//     }
+
+//     console.log("Reversion Process Completed.");
+//   } catch (error) {
+//     console.error("Error in revertRevisedMoneyNTxnToday:", error);
+//   }
+// }
+
+// Excess
+// async function excessChargeRefundForMansiOnly() {
 
 //   const revisedTxn = await PaymentTransactionModal.find({
-//     // createdAt: {
-//     //   $gte: threeDaysAgo,
-//     //   $lt: today,
-//     // },
-//     desc: { $regex: " COD Refund" }
+//     sellerId: "66791386cfe0c278957805af",
+//     desc: { $regex: " RTO Excess Charge" }
 //   });
 //   console.log(revisedTxn.length)
 
-//   for (const txn of revisedTxn) {
-//     const seller = await SellerModel.findById(txn.sellerId);
-//     console.log(seller?.name, txn.amount, txn.desc);
-//     if (seller) {
-//       seller.walletBalance -= Number(txn.amount); // - to duduct and + to add
-//       await seller.save();
+//   const totalRefundAmount = revisedTxn.reduce((sum, dTxn) => sum + Number(dTxn.amount), 0);
+//   const allTxnIds = revisedTxn.map(txn => txn._id);
+//   const seller = await SellerModel.findById("66791386cfe0c278957805af");
 
-//       const deletedTxn = await PaymentTransactionModal.findByIdAndDelete(txn._id);
-//     }
+//   if (seller) {
+//     seller.walletBalance += Number(totalRefundAmount); // - to duduct and + to add
+//     await seller.save();
+
+//     await PaymentTransactionModal.deleteMany({
+//       _id: { $in: allTxnIds }
+//     });
 //   }
+
+//   console.log("Reversion Process Completed.");
 // }
 
 // async function update() {
 //   const filterCondition = {
-//     $or: [
-//       { zoneChangeCharge: { $gt: 0 } },
-//       { fwExcessCharge: { $gt: 0 } },
-//       { rtoExcessCharge: { $gt: 0 } },
-//     ],
+//     zoneChangeCharge: { $gt: 0 },
 //   };
 
 //   // Define the update operation
-//   const updateOperation = { disputeRaisedBySystem: true };
+//   const updateOperation = { disputeRaisedBySystem: false };
 
+//   // const result = await ClientBillingModal.find({ zoneChangeCharge: { $gt: 0 }, sellerId: "66791386cfe0c278957805af" })
 //   // Perform the update
 //   const result = await ClientBillingModal.updateMany(filterCondition, updateOperation);
 //   console.log(result, "result")
 // }
-
 
 
 mongoose
@@ -102,7 +164,7 @@ mongoose
     console.log("db connected successfully");
   })
   .catch((err) => {
-    Logger.log(err.message);
+    console.log(err.message);
   });
 
 app.use("/api/auth", authRouter);
