@@ -1691,13 +1691,8 @@ export const calculateSellerInvoiceAmount = async () => {
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     const today = new Date();
-    const lastInvoiceGenerationDate = await InvoiceModel.find({}).sort({ createdAt: -1 });
-    let lastInvoiceDate;
-    if (!lastInvoiceGenerationDate || lastInvoiceGenerationDate.length === 0) {
-      lastInvoiceDate = startOfMonth;
-    } else {
-      lastInvoiceDate = lastInvoiceGenerationDate[0].createdAt;
-    }
+    const threeMonthAgo = new Date();
+    threeMonthAgo.setMonth(today.getMonth() - 3)
 
     const processBatch = async (batch: any[]) => {
       for (const seller of batch) {
@@ -1705,6 +1700,10 @@ export const calculateSellerInvoiceAmount = async () => {
         const zoho_contact_id = seller?.zoho_contact_id;
 
         // If seller invoice already generated then skip it, handle calculation for lastMonth dispute 
+        // case 1: zoho error, hit generate btn again then only generate invoice for them who invoice is not generate for 3 month
+
+        const checkSellerInvoiceAlreadyGenerated = await InvoiceModel.findOne({ sellerId, createdAt: { $gt: startOfMonth, $lt: today } })
+        if (!checkSellerInvoiceAlreadyGenerated) return
 
         const billedOrders: any = await ClientBillingModal.find({
           sellerId,
@@ -1725,7 +1724,12 @@ export const calculateSellerInvoiceAmount = async () => {
           .filter((item: any) => ((item.isDisputeRaised === true) || (item.disputeRaisedBySystem === true)) && !item.disputeId?.accepted)
           .map((x: any) => x.awb);
 
-        const lastMonthRecord = await NotInInvoiceAwbModel.findOne({ sellerId });
+        const lastThreeMonthRecords = await NotInInvoiceAwbModel.find({ sellerId, createdAt: { $gt: threeMonthAgo, $lt: today } });
+        const notBilledAwb: any[] = []
+
+        lastThreeMonthRecords.forEach((item) => {
+          notBilledAwb.push(...item.notBilledAwb || [])
+        })
 
         if (awbNotBilledDueToDispute.length > 0) {
           await NotInInvoiceAwbModel.updateOne(
@@ -1739,7 +1743,7 @@ export const calculateSellerInvoiceAmount = async () => {
           );
         }
 
-        const lastMonthDisputeAwbs = lastMonthRecord?.notBilledAwb || [];
+        const lastMonthDisputeAwbs = notBilledAwb || [];
 
         let lastMonthAwbs = []
         if (lastMonthDisputeAwbs.length > 0) {
@@ -1784,6 +1788,7 @@ export const calculateSellerInvoiceAmount = async () => {
           //   const spentAmount = Number((invoiceAmount * 1.18));
           //   await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
           // }
+          // console.log(zoho_contact_id, totalAmount, awbToBeInvoiced.length, isPrepaid)
 
           await createAdvanceAndInvoice(zoho_contact_id, totalAmount, awbToBeInvoiced, isPrepaid);
         }
