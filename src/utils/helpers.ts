@@ -1702,8 +1702,8 @@ export const calculateSellerInvoiceAmount = async () => {
         // If seller invoice already generated then skip it, handle calculation for lastMonth dispute 
         // case 1: zoho error, hit generate btn again then only generate invoice for them who invoice is not generate for 3 month
 
-        const checkSellerInvoiceAlreadyGenerated = await InvoiceModel.findOne({ sellerId, createdAt: { $gt: startOfMonth, $lt: today } })
-        if (!checkSellerInvoiceAlreadyGenerated) return
+        const checkSellerInvoiceAlreadyGenerated = await InvoiceModel.findOne({ sellerId, createdAt: { $gt: startOfMonth, $lte: today } })
+        if (checkSellerInvoiceAlreadyGenerated) return
 
         const billedOrders: any = await ClientBillingModal.find({
           sellerId,
@@ -1788,7 +1788,7 @@ export const calculateSellerInvoiceAmount = async () => {
           //   const spentAmount = Number((invoiceAmount * 1.18));
           //   await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
           // }
-          // console.log(zoho_contact_id, totalAmount, awbToBeInvoiced.length, isPrepaid)
+          // console.log(zoho_contact_id, seller.name, totalAmount, awbToBeInvoiced.length, isPrepaid)
 
           await createAdvanceAndInvoice(zoho_contact_id, totalAmount, awbToBeInvoiced, isPrepaid);
         }
