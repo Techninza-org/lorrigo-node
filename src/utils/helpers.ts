@@ -1682,7 +1682,7 @@ export const generateAccessToken = async () => {
 
 export const calculateSellerInvoiceAmount = async () => {
   try {
-    const sellers = await SellerModel.find({ zoho_contact_id: { $exists: true } });
+    const sellers = await SellerModel.find({ zoho_contact_id: { $exists: true }});
 
     const batchSize = 3;
     // const delay = 1;
