@@ -714,9 +714,9 @@ export default async function runCron() {
     cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
 
     // Email Cron
-    cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);
+    // cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);
     cron.schedule(expression4every12Hrs, syncInvoicePdfs);
-    cron.schedule(expression4every12Hrs, emailInvoiceWithPaymnetLink);
+    // cron.schedule(expression4every12Hrs, emailInvoiceWithPaymnetLink);
 
     Logger.log("Cron jobs scheduled successfully");
   } else {
