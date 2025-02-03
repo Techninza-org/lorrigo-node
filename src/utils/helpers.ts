@@ -1553,12 +1553,12 @@ export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: 
     StatusType === "UD"
       ? forwardStatusMapping
       : StatusType === "RT"
-        ? rtoStatusMapping
-        : StatusType === "PP"
-          ? returnStatusMapping
-          : StatusType === "DL"
-            ? deliveredStatusMapping
-            : null;
+      ? rtoStatusMapping
+      : StatusType === "PP"
+      ? returnStatusMapping
+      : StatusType === "DL"
+      ? deliveredStatusMapping
+      : null;
 
   return (
     (statusMapping && statusMapping[Status as keyof typeof statusMapping]) || {
@@ -1692,23 +1692,27 @@ export const calculateSellerInvoiceAmount = async () => {
     startOfMonth.setDate(1);
     const today = new Date();
     const threeMonthAgo = new Date();
-    threeMonthAgo.setMonth(today.getMonth() - 3)
+    threeMonthAgo.setMonth(today.getMonth() - 3);
 
     const processBatch = async (batch: any[]) => {
       for (const seller of batch) {
         const sellerId = seller._id;
         const zoho_contact_id = seller?.zoho_contact_id;
 
-        // If seller invoice already generated then skip it, handle calculation for lastMonth dispute 
+        // If seller invoice already generated then skip it, handle calculation for lastMonth dispute
         // case 1: zoho error, hit generate btn again then only generate invoice for them who invoice is not generate for 3 month
 
-        const checkSellerInvoiceAlreadyGenerated = await InvoiceModel.findOne({ sellerId, createdAt: { $gt: startOfMonth, $lte: today } })
-        if (checkSellerInvoiceAlreadyGenerated) return
+        const checkSellerInvoiceAlreadyGenerated = await InvoiceModel.findOne({
+          sellerId,
+          createdAt: { $gt: startOfMonth, $lte: today },
+        });
+        if (checkSellerInvoiceAlreadyGenerated) return;
 
         const billedOrders: any = await ClientBillingModal.find({
           sellerId,
           billingDate: { $gt: startOfMonth, $lt: today },
-        }).sort({ billingDate: -1 })
+        })
+          .sort({ billingDate: -1 })
           .select("awb isDisputeRaised disputeId isRTOApplicable disputeRaisedBySystem")
           .populate("disputeId");
 
@@ -1721,15 +1725,21 @@ export const calculateSellerInvoiceAmount = async () => {
           .populate("productId");
 
         const awbNotBilledDueToDispute = billedOrders
-          .filter((item: any) => ((item.isDisputeRaised === true) || (item.disputeRaisedBySystem === true)) && !item.disputeId?.accepted)
+          .filter(
+            (item: any) =>
+              (item.isDisputeRaised === true || item.disputeRaisedBySystem === true) && !item.disputeId?.accepted
+          )
           .map((x: any) => x.awb);
 
-        const lastThreeMonthRecords = await NotInInvoiceAwbModel.find({ sellerId, createdAt: { $gt: threeMonthAgo, $lt: today } });
-        const notBilledAwb: any[] = []
+        const lastThreeMonthRecords = await NotInInvoiceAwbModel.find({
+          sellerId,
+          createdAt: { $gt: threeMonthAgo, $lt: today },
+        });
+        const notBilledAwb: any[] = [];
 
         lastThreeMonthRecords.forEach((item) => {
-          notBilledAwb.push(...item.notBilledAwb || [])
-        })
+          notBilledAwb.push(...(item.notBilledAwb || []));
+        });
 
         if (awbNotBilledDueToDispute.length > 0) {
           await NotInInvoiceAwbModel.updateOne(
@@ -1745,10 +1755,13 @@ export const calculateSellerInvoiceAmount = async () => {
 
         const lastMonthDisputeAwbs = notBilledAwb || [];
 
-        let lastMonthAwbs = []
+        let lastMonthAwbs = [];
         if (lastMonthDisputeAwbs.length > 0) {
           // @ts-ignore
-          lastMonthAwbs = (await ClientBillingModal.find({ awb: { $in: lastMonthDisputeAwbs } }).populate("disputeId")).filter((item) => item.disputeId?.accepted === true);
+          lastMonthAwbs = (
+            await ClientBillingModal.find({ awb: { $in: lastMonthDisputeAwbs } }).populate("disputeId")
+            //@ts-ignore
+          ).filter((item) => item.disputeId?.accepted === true);
         }
 
         const orders = allOrders.filter((order: any) => !awbNotBilledDueToDispute.includes(order?.awb));
@@ -1772,7 +1785,6 @@ export const calculateSellerInvoiceAmount = async () => {
               rtoCharges = Number(bill.fwCharge);
               forwardCharges = Number(bill.fwCharge);
             }
-
           }
 
           totalAmount += forwardCharges + rtoCharges + codCharges;
@@ -1942,9 +1954,7 @@ interface DBInvoice {
 export async function syncInvoices(invoices: { data: { invoices: ZohoInvoice[] } }, zohoId: string) {
   try {
     // Filter invoices for the specific seller
-    const sellerInvoices = invoices.data.invoices.filter(
-      (invoice) => invoice.customer_id === zohoId
-    );
+    const sellerInvoices = invoices.data.invoices.filter((invoice) => invoice.customer_id === zohoId);
 
     // Separate paid and unpaid invoices in a single pass
     const { paid, unpaid } = sellerInvoices.reduce(
@@ -1960,44 +1970,42 @@ export async function syncInvoices(invoices: { data: { invoices: ZohoInvoice[] }
     );
 
     // Create lookup maps for quick access
-    const invoiceLookup = new Map(
-      sellerInvoices.map(invoice => [invoice.invoice_id, invoice])
-    );
+    const invoiceLookup = new Map(sellerInvoices.map((invoice) => [invoice.invoice_id, invoice]));
 
     // Fetch both paid and unpaid invoices concurrently
     const [paidInvoices, unpaidInvoices] = await Promise.all([
       InvoiceModel.find({
-        invoice_id: { $in: paid.map(inv => inv.invoice_id) }
+        invoice_id: { $in: paid.map((inv) => inv.invoice_id) },
       }),
       InvoiceModel.find({
-        invoice_id: { $in: unpaid.map(inv => inv.invoice_id) }
-      })
+        invoice_id: { $in: unpaid.map((inv) => inv.invoice_id) },
+      }),
     ]);
 
     // Prepare bulk operations for both paid and unpaid invoices
     const bulkOps = [
-      ...paidInvoices.map(invoice => ({
+      ...paidInvoices.map((invoice) => ({
         updateOne: {
           filter: { _id: invoice._id },
           update: {
             $set: {
-              status: 'paid',
-              dueAmount: (invoiceLookup.get(invoice.invoice_id)?.balance || 0).toString()
-            }
-          }
-        }
+              status: "paid",
+              dueAmount: (invoiceLookup.get(invoice.invoice_id)?.balance || 0).toString(),
+            },
+          },
+        },
       })),
-      ...unpaidInvoices.map(invoice => ({
+      ...unpaidInvoices.map((invoice) => ({
         updateOne: {
           filter: { _id: invoice._id },
           update: {
             $set: {
-              status: 'unpaid',
-              dueAmount: (invoiceLookup.get(invoice.invoice_id)?.balance || 0).toString()
-            }
-          }
-        }
-      }))
+              status: "unpaid",
+              dueAmount: (invoiceLookup.get(invoice.invoice_id)?.balance || 0).toString(),
+            },
+          },
+        },
+      })),
     ];
 
     // Execute bulk update if there are operations to perform
@@ -2008,9 +2016,8 @@ export async function syncInvoices(invoices: { data: { invoices: ZohoInvoice[] }
     // Return updated invoices
     const allInvoices = [...paidInvoices, ...unpaidInvoices];
     return { valid: true, invoices: allInvoices };
-
   } catch (error) {
-    console.error('Error syncing invoices:', error);
+    console.error("Error syncing invoices:", error);
     throw error;
   }
 }
@@ -2223,10 +2230,89 @@ export async function refundExtraInvoiceAmount() {
       const billTotal = forwardCharges + rtoCharges + codCharges;
       const refundAmount = billTotal - totalAmount;
       console.log({ isRefund: billTotal < totalAmount, amt: refundAmount }, "refundAmount", awb);
-      return { isRefund: billTotal < totalAmount, amt: refundAmount }
+      return { isRefund: billTotal < totalAmount, amt: refundAmount };
     });
   } catch (err) {
     console.log(err);
   }
 }
-// refundExtraInvoiceAmount()
+
+// export async function reverseExtraRtoCodfor31() {
+//   try {
+//     const sellers = await SellerModel.find({email: 'smritia33@gmail.com'});
+
+//     for (const seller of sellers) {
+//       console.log(seller.name, 'seller');
+      
+//       const sellerId = seller._id;
+
+//       const todayTransactions = await PaymentTransactionModal.find({
+//         sellerId,
+//         createdAt: { $gte: new Date("2025-01-31"), $lt: new Date("2025-02-01") },
+//       });
+
+//       const awbTransactions = todayTransactions.filter((item) =>
+//         item.desc.includes("RTO-charges")
+//       );
+
+//       const awbs = awbTransactions.map((item) =>
+//         item.desc.split(" ")[1].replace(",", "")
+//       );
+
+//       for (const awb of awbs) {
+//         let details: Array<Array<number | string>> = [];
+
+//         const paymentTransactionsRto = await PaymentTransactionModal.find({
+//           desc: {
+//             $in: [
+//               `AWB: ${awb}, RTO-charges`,
+//               `AWB: ${awb}, RTO-COD-charges`,
+//               `${awb}, RTO charges`,
+//               `AWB: ${awb}, RTO charges`,
+//             ],
+//           },
+//         });
+
+//         if (paymentTransactionsRto.length > 1) {
+//           const transacToRevert = paymentTransactionsRto[1];
+//           const refundAmount = parseFloat(transacToRevert.amount);
+//           details.push([refundAmount, "rto"]);
+//           console.log(seller.walletBalance, refundAmount, "rto");
+          
+//           seller.walletBalance += refundAmount;
+//           await seller.save();
+//           console.log(seller.walletBalance, "rto refunded");
+          
+//           await PaymentTransactionModal.findByIdAndDelete(transacToRevert._id);
+//         }
+
+//         const paymentTransactionsCod = await PaymentTransactionModal.find({
+//           desc: {
+//             $in: [
+//               `AWB: ${awb}, COD-Refund`,
+//               `${awb}, COD Refund`,
+//               `AWB: ${awb}, COD Refund`,
+//             ],
+//           },
+//         });
+
+//         if (paymentTransactionsCod.length > 1) {
+//           const transacToRevert = paymentTransactionsCod[1];
+//           const excessAmount = parseFloat(transacToRevert.amount);
+//           details.push([excessAmount, "cod"]);
+//           console.log(seller.walletBalance, excessAmount, "cod");
+          
+//           seller.walletBalance -= excessAmount;
+//           await seller.save();
+//           console.log(seller.walletBalance, "cod took");
+          
+//           await PaymentTransactionModal.findByIdAndDelete(transacToRevert._id);
+//         }
+
+//         console.log(details, awb);
+//       }
+//     }
+//   } catch (err) {
+//     console.error("Error in reverseExtraRtoCodfor31:", err);
+//   }
+// }

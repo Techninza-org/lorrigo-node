@@ -788,15 +788,16 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
                 $in: [
                   `${order.awb}, RTO-charges`,
                   `${order.awb}, RTO-COD-charges`,
+                  `${order.awb}, RTO charges`,
                 ],
               },
             });
 
             const isRtoChargeDeducted = paymentTransactions.some((pt) =>
-              pt.desc.includes("RTO-charges")
+              pt.desc.includes("RTO-charges") || pt.desc.includes("RTO charges")
             );
             const isRtoCODRefund = paymentTransactions.some((pt) =>
-              pt.desc.includes("RTO-COD-charges")
+              pt.desc.includes("RTO-COD-charges") || pt.desc.includes("COD Refund")
             );
 
             if (!isRtoChargeDeducted) {

@@ -374,7 +374,7 @@ export const updateChannelPartner = async (req: ExtendedRequest, res: Response, 
 
 export const getSellerBilling = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const bills = await ClientBillingModal.find({ sellerId: req.seller._id, disputeRaisedBySystem: true });
+    const bills = await ClientBillingModal.find({ sellerId: req.seller._id}); ///add  disputeRaisedBySystem: true  
     const b2bBills = await B2BClientBillingModal.find({ sellerId: req.seller._id });
 
     const billedAwbs = bills.map((bill) => bill.awb);

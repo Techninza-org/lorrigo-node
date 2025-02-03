@@ -58,13 +58,13 @@ sellerRouter.get("/wallet-balance", getSellerWalletBalance);
 sellerRouter.get("/transactions", getSellerTransactionHistory);
 
 //@ts-ignore
-sellerRouter.get("/invoice", cache("5 minutes"), getInvoices)
+sellerRouter.get("/invoice", getInvoices) //cache("5 minutes")
 
 //@ts-ignore
-sellerRouter.get("/invoices", cache("5 minutes"), getInvoicesFromZoho)
+sellerRouter.get("/invoices", getInvoicesFromZoho) //, cache("5 minutes")
 
 //@ts-ignore
-sellerRouter.get("/invoice/:id", cache("1 day"), getInoviceById)
+sellerRouter.get("/invoice/:id", getInoviceById) //, cache("1 day")
 
 //@ts-ignore
 sellerRouter.get('/cod-price', getCodPrice)

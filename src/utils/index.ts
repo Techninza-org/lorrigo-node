@@ -1727,10 +1727,9 @@ export const generateListInoviceAwbs = async (awbs: string[], invoiceNo: string)
     let codCharges = 0;
 
     if (bill) {
-      console.log(bill)
       if (bill.isRTOApplicable === false) {
         codCharges = Number(bill.codValue);
-        forwardCharges = Number(bill.rtoCharge);
+        forwardCharges = Number(bill.fwCharge);
       } else {
         rtoCharges = Number(bill.rtoCharge);
         forwardCharges = Number(bill.rtoCharge);
