@@ -685,40 +685,40 @@ export const rateCalculation = async (
       console.log("error", error);
     }
 
-    try {
-      const smartrToken = await getSMARTRToken();
-      if (!smartrToken) {
-        throw new Error("Failed to retrieve SMARTR token");
-      }
+    // try {
+    //   const smartrToken = await getSMARTRToken();
+    //   if (!smartrToken) {
+    //     throw new Error("Failed to retrieve SMARTR token");
+    //   }
 
-      const isSMARTRServicable = await axios.get(
-        `${config.SMARTR_API_BASEURL}${APIs.SMARTR_PINCODE_SERVICEABILITY}?pincode=${deliveryPincode}`,
-        {
-          headers: {
-            Authorization: `${smartrToken}`,
-          },
-        }
-      );
+    //   const isSMARTRServicable = await axios.get(
+    //     `${config.SMARTR_API_BASEURL}${APIs.SMARTR_PINCODE_SERVICEABILITY}?pincode=${deliveryPincode}`,
+    //     {
+    //       headers: {
+    //         Authorization: `${smartrToken}`,
+    //       },
+    //     }
+    //   );
 
-      if (!isSMARTRServicable.data.errors) {
-        const smartrNiceName = await EnvModel.findOne({ name: "SMARTR" }).select("_id nickName");
-        if (smartrNiceName) {
-          const smartrVendors = vendors.filter(
-            (vendor) => vendor?.vendor_channel_id?.toString() === smartrNiceName._id.toString()
-          );
-          if (smartrVendors.length > 0) {
-            smartrVendors.forEach((vendor) => {
-              commonCouriers.push({
-                ...vendor.toObject(),
-                nickName: smartrNiceName.nickName,
-              });
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.log("error", error);
-    }
+    //   if (!isSMARTRServicable.data.errors) {
+    //     const smartrNiceName = await EnvModel.findOne({ name: "SMARTR" }).select("_id nickName");
+    //     if (smartrNiceName) {
+    //       const smartrVendors = vendors.filter(
+    //         (vendor) => vendor?.vendor_channel_id?.toString() === smartrNiceName._id.toString()
+    //       );
+    //       if (smartrVendors.length > 0) {
+    //         smartrVendors.forEach((vendor) => {
+    //           commonCouriers.push({
+    //             ...vendor.toObject(),
+    //             nickName: smartrNiceName.nickName,
+    //           });
+    //         });
+    //       }
+    //     }
+    //   }
+    // } catch (error) {
+    //   console.log("error", error);
+    // }
 
     try {
       const delhiveryToken = await getDelhiveryToken();

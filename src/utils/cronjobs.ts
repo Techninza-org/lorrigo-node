@@ -710,7 +710,7 @@ export default async function runCron() {
     cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET_B2B);
     cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
     cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
-    cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);
+    // cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);
     cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
 
     // Email Cron
