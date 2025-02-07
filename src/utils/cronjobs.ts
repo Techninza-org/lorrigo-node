@@ -492,7 +492,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
           );
           await RemittanceModel.updateOne({ _id: existingRemittance._id }, existingRemittance);
         } else {
-          const remittanceId = generateRemittanceId(companyName, seller._id.toString(), remittanceDate);
+          const remittanceId = generateRemittanceId(companyName, seller._id.toString(), remittanceDate.toString().slice(0, 10));
           const remittanceAmount = ordersOnSameDate.reduce((sum, order) => sum + Number(order.amount2Collect), 0);
           const remittanceStatus = 'pending';
           const BankTransactionId = 'xxxxxxxxxxxxx'; // Static or replace as needed
