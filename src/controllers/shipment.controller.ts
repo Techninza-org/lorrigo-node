@@ -97,10 +97,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       }
     }
     console.log(order.amount2Collect, "body.charge");
-    
-    if(order.amount2Collect === 0){
-      return res.status(200).send({ valid: false, message: "Order shipment value can't be 0" });
-    }
       order.codCharge = codCharge;
     } catch (err) {
       console.log(err, "error in order");
