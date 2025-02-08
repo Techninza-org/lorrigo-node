@@ -1194,7 +1194,7 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
     const customClientRefOrderId = orderDetails?.client_order_reference_id + "-" + randomInt;
     const pickupPincode = orderDetails.pickupAddress.pincode;
     const deliveryPincode = orderDetails.customerDetails.get("pincode");
-    const weight = orderDetails.orderWeight;
+    const order_weight = orderDetails.orderWeight;
     const orderWeightUnit = orderDetails.orderWeightUnit;
     const boxLength = orderDetails.orderBoxLength;
     const boxWeight = orderDetails.orderBoxWidth;
@@ -1203,6 +1203,9 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
     const paymentType = orderDetails.payment_mode;
     const sellerId = req.seller._id;
     const collectableAmount = orderDetails?.amount2Collect;
+    const volume = orderDetails?.orderBoxLength * orderDetails?.orderBoxWidth * orderDetails?.orderBoxHeight;
+    const volumetricWeight = (volume / 5000).toFixed(2);
+    const weight = volumetricWeight > order_weight ? volumetricWeight : order_weight;
 
     const hubId = orderDetails.pickupAddress.hub_id;
 
