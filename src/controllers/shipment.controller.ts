@@ -75,8 +75,36 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     try {
       order = await B2COrderModel.findOne({ _id: body.orderId, sellerId: req.seller._id });
       if (!order) return res.status(200).send({ valid: false, message: "order not found" });
+      const isISODate = (dateString: string | number | Date) => {
+        const date = new Date(dateString);
+        return date.toISOString() === dateString;
+    };
+    
+    console.log(order.order_invoice_date, "order.invoice_date");
+    
+    if (!order.order_invoice_date) {
+        return res.status(200).send({ valid: false, message: "Please update order invoice date details" });
+    } else if (!isISODate(order.order_invoice_date)) {
+        return res.status(200).send({ valid: false, message: "Invalid date format. Use ISO 8601 format (e.g., 2025-02-07T18:30:00.000Z)" });
+    }
+    console.log(order.sellerDetails, "order.sellerDetails");
+    
+    if(order.sellerDetails){
+      if(order.sellerDetails.get("isSellerAddressAdded") === true){
+        if(order.sellerDetails.get("sellerPincode") === 0 || order.sellerDetails.get("sellerCity") === "" || order.sellerDetails.get("sellerState") === "" || order.sellerDetails.get("sellerAddress") === "" || order.sellerDetails.get("sellerPhone") === 0){ 
+          return res.status(200).send({ valid: false, message: "Please verify your seller address, It is marked as true. Fill pincode, city, state, address, phone" });
+        }
+      }
+    }
+    console.log(order.amount2Collect, "body.charge");
+    
+    if(order.amount2Collect === 0){
+      return res.status(200).send({ valid: false, message: "Order shipment value can't be 0" });
+    }
       order.codCharge = codCharge;
     } catch (err) {
+      console.log(err, "error in order");
+      
       return next(err);
     }
 
@@ -90,6 +118,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       hubDetails = await HubModel.findById(order.pickupAddress);
       if (!hubDetails) return res.status(200).send({ valid: false, message: "Hub details not found" });
     } catch (err) {
+      console.log(err, "error in hub");
+      
       return next(err);
     }
     let productDetails;
@@ -99,6 +129,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         return res.status(200).send({ valid: false, message: "Product details not found" });
       }
     } catch (err) {
+      console.log(err, "error in product");
       return next(err);
     }
 
@@ -198,6 +229,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         );
         externalAPIResponse = response.data;
       } catch (err: unknown) {
+        console.log(err);
+        
         return next(err);
       }
 
@@ -281,7 +314,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           return res.status(200).send({ valid: true, order: updatedOrder, shipment: savedShipmentResponse });
         } catch (err) {
-          console.log(err, "error")
+          console.log(err, "error in saving shipment response");
           return next(err);
         }
       }
@@ -377,11 +410,12 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           return res.status(200).send({ valid: true, order });
         } catch (error: any) {
-          console.log(error, "error");
+          
+          console.log(error, "error in shiprocket");
           return next(error);
         }
       } catch (error: any) {
-        console.log(error, "error");
+        console.log(error, "error in shiprocket 2");
         return next(error);
       }
     } else if (vendorName?.name === "SMARTR") {
