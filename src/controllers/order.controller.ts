@@ -24,6 +24,7 @@ import { convertToISO, registerOrderOnShiprocket, validateBulkOrderField } from 
 import CourierModel from "../models/courier.model";
 import { calculateB2BPriceCouriers, getB2BShiprocketServicableOrder, registerB2BShiprocketOrder } from "../utils/B2B-helper";
 import { OrderDetails } from "../types/b2b";
+import { validateOrderPayload } from "../utils/validation-helper";
 
 // TODO create api to delete orders
 
@@ -35,36 +36,10 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
     const customerDetails = body?.customerDetails;
     const productDetails = body?.productDetails;
 
-    if (
-      !isValidPayload(body, [
-        "order_reference_id",
-        // "total_order_value",
-        "payment_mode",
-        "customerDetails",
-        "productDetails",
-        "pickupAddress",
-      ])
-    )
-      return res.status(200).send({ valid: false, message: "Invalid payload" });
-
-    if (!isValidPayload(productDetails, ["name", "category", "quantity", "taxRate", "taxableValue"]))
-      return res.status(200).send({ valid: false, message: "Invalid payload: productDetails" });
-    if (!isValidPayload(customerDetails, ["name", "phone", "address", "pincode"]))
-      return res.status(200).send({ valid: false, message: "Invalid payload: customerDetails" });
-    if (!isValidObjectId(body.pickupAddress))
-      return res.status(200).send({ valid: false, message: "Invalid pickupAddress" });
-
-    if (!(body.payment_mode === 0 || body.payment_mode === 1))
-      return res.status(200).send({ valid: false, message: "Invalid payment mode" });
-    if (body.payment_mode === 1) {
-      if (!body?.amount2Collect) {
-        return res.status(200).send({ valid: false, message: "Collectable Amount is required" });
-      }
-    }
-    if (body.total_order_value > 50000) {
-      if (!isValidPayload(body, ["ewaybill"]))
-        return res.status(200).send({ valid: false, message: "Ewaybill required." });
-    }
+     const validationResult = validateOrderPayload(body);
+        if (!validationResult.valid) {
+          return res.status(400).send(validationResult);
+        }
 
     try {
       const orderWithOrderReferenceId = await B2COrderModel.findOne({
@@ -120,7 +95,7 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
       productId: savedProduct._id,
       order_reference_id: body?.order_reference_id,
       payment_mode: body?.payment_mode,
-      order_invoice_date: body?.order_invoice_date,
+      order_invoice_date: body?.order_invoice_date || new Date().toISOString(),
       order_invoice_number: body?.order_invoice_number.toString(),
       isContainFragileItem: body?.isContainFragileItem,
       numberOfBoxes: body?.numberOfBoxes, // if undefined, default=> 0

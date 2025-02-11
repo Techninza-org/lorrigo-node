@@ -31,7 +31,7 @@ const B2COrderSchema = new mongoose.Schema({
 
   order_reference_id: { type: String, required: true },
   payment_mode: { type: Number, required: true }, // 0 -> prepaid, 1 -> COD
-  order_invoice_date: { type: String },
+  order_invoice_date: { type: String, default: Date.now },
   order_invoice_number: { type: String },
   isContainFragileItem: { type: Boolean, required: true, default: false },
   numberOfBoxes: { type: Number, required: true, default: 1 },

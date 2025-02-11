@@ -61,9 +61,8 @@ if (!config.MONGODB_URI) {
 //   try {
 //     const rtoChargeAppliedTxns = await PaymentTransactionModal.find({
 //       desc: {
-//         $regex: /(~RTO COD charges|COD Charge Reversed|COD Refund)$/i
+//         $regex: /(~FW Excess Charge|FW Excess Charge|FW Excess Charge)$/i
 //       },
-//       // sellerId: "66791386cfe0c278957805af"
 //     }).sort({ createdAt: -1 });
 
 //     for (const txn of rtoChargeAppliedTxns) {
@@ -74,7 +73,7 @@ if (!config.MONGODB_URI) {
 
 //       const duplicateRtoTxns = await PaymentTransactionModal.find({
 //         desc: {
-//           $regex: `(AWB: ${awbNumber}|${awbNumber}).*(~RTO COD charges|COD Charge Reversed|COD Refund)`,
+//           $regex: `(AWB: ${awbNumber}|${awbNumber}).*(~FW Excess Charge|FW Excess Charge|FW Excess Charge)`,
 //           $options: 'i'
 //         },
 //         sellerId: txn.sellerId
@@ -93,14 +92,15 @@ if (!config.MONGODB_URI) {
 
 //         // Calculate total refund amount (excluding the one we keep)
 //         const totalRefundAmount = transactionsToDelete.reduce((sum, dTxn) => sum + Number(dTxn.amount), 0);
+//         if (totalRefundAmount <= 0) return;
 
 //         // console.log(`Total Refund Amount for AWB ${awbNumber}: ₹${totalRefundAmount}`);
 
 //         // Fetch seller details
-//         // const seller = await SellerModel.findById(txn.sellerId);
+//         const seller = await SellerModel.findById(txn.sellerId);
 //         // if (seller) {
 //         //   // Refund the total amount once
-//         //   seller.walletBalance -= totalRefundAmount;
+//         //   seller.walletBalance += totalRefundAmount;  // - to duduct and + to add *********Be very carefull with + or - sign********* once the operation done txn will lose
 //         //   await seller.save();
 
 //         //   // Remove all duplicate transactions except one

@@ -440,7 +440,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
     for (const seller of sellerIds) {
       const orders = await B2COrderModel.find({
         sellerId: seller._id,
-        bucket: DELIVERED, // Assuming 1 represents DELIVERED
+        bucket: DELIVERED,
         payment_mode: 1, // COD
         // createdAt: { $gte: currMonth }, // Filter for current month's orders
       }).populate('productId').lean()
@@ -476,7 +476,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
         const sevenDaysAfterDelivery = addDays(deliveryDate, 7);
 
         // Find the nearest upcoming Friday after the 7th day
-        const remittanceDate = nextFriday(sevenDaysAfterDelivery);
+        const remittanceDate = format(nextFriday(sevenDaysAfterDelivery), "yyyy-MM-dd");
 
         // Check if a remittance already exists for this seller and remittance date
         const existingRemittance = await RemittanceModel.findOne({
@@ -492,7 +492,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
           );
           await RemittanceModel.updateOne({ _id: existingRemittance._id }, existingRemittance);
         } else {
-          const remittanceId = generateRemittanceId(companyName, seller._id.toString(), remittanceDate.toString().slice(0, 10));
+          const remittanceId = generateRemittanceId(companyName, seller._id.toString(), remittanceDate);
           const remittanceAmount = ordersOnSameDate.reduce((sum, order) => sum + Number(order.amount2Collect), 0);
           const remittanceStatus = 'pending';
           const BankTransactionId = 'xxxxxxxxxxxxx'; // Static or replace as needed

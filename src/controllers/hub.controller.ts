@@ -20,19 +20,16 @@ import {
 import csvtojson from "csvtojson";
 import exceljs from "exceljs";
 import { validateField } from "../utils";
+import { formatPhoneNumber, hubValidatePayload } from "../utils/validation-helper";
 
 // FIXME smartship doesn't expect the hub with same address is the address mateches with some other address hub would not be created.
 export const createHub = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const body = req.body;
 
-    if (!body) return res.status(200).send({ valid: false, message: "payload required" });
-
-    if (!(body?.name && body?.pincode && body?.address1 && body?.phone)) {
-      return res.status(200).send({
-        valid: false,
-        message: "Invalid payload",
-      });
+    const validationResult = hubValidatePayload(body);
+    if (!validationResult.valid) {
+      return res.status(400).send(validationResult);
     }
 
     let {
@@ -52,25 +49,6 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
     pincode = Number(pincode);
     phone = Number(phone);
 
-    if (
-      !(
-        typeof name === "string" &&
-        typeof pincode === "number" &&
-        typeof address1 === "string" &&
-        typeof phone === "number"
-      )
-    ) {
-      return res.status(200).send({
-        valid: false,
-        message: "invalid payload type",
-      });
-    }
-    if (!validatePhone(phone)) {
-      return res.status(200).send({
-        valid: false,
-        message: "invalid phone",
-      });
-    }
     const isAlreadyExists = (await HubModel.findOne({ name, sellerId: req.seller._id }).lean()) !== null;
     // create hub using smartship api
     if (isAlreadyExists) {
@@ -132,7 +110,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       pickup_location: name,
       name: name,
       email: "noreply@lorrigo.com",
-      phone: phone.toString().slice(2, 12),
+      phone: formatPhoneNumber(phone), // Handle both cases
       address: address1,
       address_2: "",
       city: city,
@@ -144,7 +122,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
     const delhiveryHubPayload = {
       name: name,
       email: "noreply@lorrigo.com",
-      phone: phone.toString().slice(2, 12),
+      phone: formatPhoneNumber(phone),
       address: address1,
       city: city,
       country: "India",
@@ -170,7 +148,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       warehouse_code: `wh_${pincode}`, // Custom warehouse code (e.g., based on pincode)
       contact_person_name: contactPersonName,
       contact_person_email: 'noreply@lorrigo.com',
-      contact_person_contact_no: phone,
+      contact_person_contact_no: formatPhoneNumber(phone),
     };
 
 
@@ -212,6 +190,10 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
 
     } catch (err: any) {
       const isExistingHub = err?.response?.data?.errors?.pickup_location?.[0].includes("Address nick name already in use")
+      const isExistingHubButInactive = err?.response?.data?.message?.includes("Address name already exists")
+      if (isExistingHubButInactive) {
+        return res.status(400).send({ valid: false, message: "The address name you entered is already in use. Please choose a unique name."  });
+      }
       if (!isExistingHub) return next(err);
       console.log(err.response.data, "error in shiprocket")
     }

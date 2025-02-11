@@ -10,6 +10,7 @@ import {
   getShiprocketToken,
   getSmartShipToken,
   isValidPayload,
+  rateCalculation,
 } from "../utils/helpers";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import { Types, isValidObjectId } from "mongoose";
@@ -35,6 +36,7 @@ import {
   createDelhiveryShipment,
   handleMarutiShipment,
   handleSmartShipShipment,
+  registerOrderOnShiprocket,
   sendMailToScheduleShipment,
   shipmentAmtCalcToWalletDeduction,
   shiprocketShipment,
@@ -48,22 +50,19 @@ import ClientBillingModal from "../models/client.billing.modal";
 import envConfig from "../utils/config";
 import SellerModel from "../models/seller.model";
 import B2BCalcModel from "../models/b2b.calc.model";
-import { scheduleShipmentCheck } from "../utils/cronjobs";
 
 // TODO: REMOVE THIS CODE: orderType = 0 ? "b2c" : "b2b"
 export async function createShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {
     const body = req.body;
     const seller = req.seller;
+    const users_vendors = req.seller.vendors
     const sellerId = req.seller._id;
     const carrierId = body.carrierId;
-    const codCharge = body.codCharge
+    let codCharge = body.codCharge
 
-    if (seller.config.isPrepaid && (body.charge >= seller.walletBalance || seller.walletBalance <= 0)) {
-      return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
-    }
 
-    if (!isValidPayload(body, ["orderId", "orderType", "carrierId", "carrierNickName", "charge"])) {
+    if (!isValidPayload(body, ["orderId", "orderType", "carrierId", "carrierNickName"])) {
       return res.status(200).send({ valid: false, message: "Invalid payload" });
     }
     if (!isValidObjectId(body?.orderId)) return res.status(200).send({ valid: false, message: "Invalid orderId" });
@@ -73,40 +72,34 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
     let order;
     try {
-      order = await B2COrderModel.findOne({ _id: body.orderId, sellerId: req.seller._id });
+      order = await B2COrderModel.findOne({ _id: body.orderId, sellerId: req.seller._id }).populate("productId pickupAddress");
       if (!order) return res.status(200).send({ valid: false, message: "order not found" });
       const isISODate = (dateString: string | number | Date) => {
         const date = new Date(dateString);
         return date.toISOString() === dateString;
-    };
-    
-    console.log(order.order_invoice_date, "order.invoice_date");
-    
-    if (!order.order_invoice_date) {
+      };
+
+      if (!order.order_invoice_date) {
         return res.status(200).send({ valid: false, message: "Please update order invoice date details" });
-    } else if (!isISODate(order.order_invoice_date)) {
+      } else if (!isISODate(order.order_invoice_date)) {
         return res.status(200).send({ valid: false, message: "Invalid date format. Use ISO 8601 format (e.g., 2025-02-07T18:30:00.000Z)" });
-    }
-    console.log(order.sellerDetails, "order.sellerDetails");
-    
-    if(order.sellerDetails){
-      if(order.sellerDetails.get("isSellerAddressAdded") === true){
-        if(order.sellerDetails.get("sellerPincode") === 0 || order.sellerDetails.get("sellerCity") === "" || order.sellerDetails.get("sellerState") === "" || order.sellerDetails.get("sellerAddress") === "" || order.sellerDetails.get("sellerPhone") === 0){ 
-          return res.status(200).send({ valid: false, message: "Please verify your seller address, It is marked as true. Fill pincode, city, state, address, phone" });
-        }
       }
-    }
-    console.log(order.amount2Collect, "body.charge");
-      order.codCharge = codCharge;
+
+      // if (order.sellerDetails) {
+      //   if (order.sellerDetails.get("isSellerAddressAdded") === true) {
+      //     if (order.sellerDetails.get("sellerPincode") === 0 || order.sellerDetails.get("sellerCity") === "" || order.sellerDetails.get("sellerState") === "" || order.sellerDetails.get("sellerAddress") === "" || order.sellerDetails.get("sellerPhone") === 0) {
+      //       return res.status(200).send({ valid: false, message: "Please verify your seller address, It is marked as true. Fill pincode, city, state, address, phone" });
+      //     }
+      //   }
+      // }
     } catch (err) {
       console.log(err, "error in order");
-      
       return next(err);
     }
 
     // If awb already exist then, stop to create shipment
-    if(order.awb){
-      return res.status(200).send({ valid: false, message: "Shipment Already Exists" });
+    if (order.awb) {
+      return res.status(200).send({ valid: false, message: "Shipment Already Exists", awb: order.awb });
     }
 
     let hubDetails;
@@ -114,10 +107,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       hubDetails = await HubModel.findById(order.pickupAddress);
       if (!hubDetails) return res.status(200).send({ valid: false, message: "Hub details not found" });
     } catch (err) {
-      console.log(err, "error in hub");
-      
       return next(err);
     }
+
     let productDetails;
     try {
       productDetails = await ProductModel.findById(order.productId);
@@ -133,6 +125,65 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
 
     const courier = await CourierModel.findById(body.carrierId);
+
+
+    const randomInt = Math.round(Math.random() * 20)
+    const customClientRefOrderId = order?.client_order_reference_id + "-" + randomInt;
+    const pickupPincode = hubDetails?.pincode;
+    const deliveryPincode = order.customerDetails.get("pincode");
+    const order_weight = order.orderWeight;
+    const orderWeightUnit = order.orderWeightUnit;
+    const boxLength = order.orderBoxLength;
+    const boxWeight = order.orderBoxWidth;
+    const boxHeight = order.orderBoxHeight;
+    const sizeUnit = order.orderSizeUnit;
+    const paymentType = order.payment_mode;
+    const collectableAmount = order?.amount2Collect;
+    const volume = order?.orderBoxLength * order?.orderBoxWidth * order?.orderBoxHeight;
+    const volumetricWeight = (volume / 5000).toFixed(2);
+    const weight = parseFloat(volumetricWeight) > order_weight ? parseFloat(volumetricWeight) : order_weight;
+
+    const hubId = hubDetails?.id;
+
+    let shiprocketOrderID;
+    if (!order.shiprocket_order_id) {
+      const randomInt = Math.round(Math.random() * 20)
+      const customClientRefOrderId = order?.client_order_reference_id + "-" + randomInt;
+      shiprocketOrderID = await registerOrderOnShiprocket(order, customClientRefOrderId);
+    }
+
+    let courierCharge: any = (await rateCalculation(
+      order.shiprocket_order_id || shiprocketOrderID,
+      pickupPincode,
+      deliveryPincode,
+      weight,
+      orderWeightUnit,
+      boxLength,
+      boxWeight,
+      boxHeight,
+      sizeUnit,
+      paymentType as any,
+      [carrierId],
+      sellerId,
+      collectableAmount,
+      hubId,
+      order.isReverseOrder,
+      // @ts-ignore
+    ))
+
+    console.log(courierCharge, "courierCharge");
+
+
+    body.charge = courierCharge[0].charge
+    codCharge = courierCharge[0].cod
+
+    // // update in order
+    order.codCharge = courierCharge[0].cod;
+
+    if (seller.config.isPrepaid && (body.charge >= seller.walletBalance || seller.walletBalance <= 0)) {
+      return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
+    }
+
     if (vendorName?.name === "SMARTSHIP") {
       const smartShipCourier = await CourierModel.findById(body.carrierId);
       const productValueWithTax =
@@ -226,7 +277,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         externalAPIResponse = response.data;
       } catch (err: unknown) {
         console.log(err);
-        
+
         return next(err);
       }
 
@@ -326,6 +377,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           courier_id: shiprocketCourier?.carrierID.toString(),
           is_return: order.isReverseOrder ? 1 : 0,
         }
+
         try {
           const awbResponse = await axios.post(
             config.SHIPROCKET_API_BASEURL + APIs.GENRATE_AWB_SHIPROCKET,
@@ -342,7 +394,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           if (!awb) {
             return res
               .status(200)
-              .send({ valid: false, message: "Internal Server Error, Please use another courier partner" });
+              .send({ valid: false, message: "Looks like we hit a bump. Please contact Lorrigo's support." });
           }
 
           order.awb = awb;
@@ -406,15 +458,14 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           return res.status(200).send({ valid: true, order });
         } catch (error: any) {
-          
+          return res.status(400).send({ valid: false, message: "Courier can't make the journey here!" });
           console.log(error, "error in shiprocket");
-          return next(error);
         }
       } catch (error: any) {
         console.log(error, "error in shiprocket 2");
         return next(error);
       }
-    } else if (vendorName?.name === "SMARTR") {
+    } else if (vendorName?.name === "SMARTR") { // SMARTR discontinued
       const smartrToken = await getSMARTRToken();
       if (!smartrToken) return res.status(200).send({ valid: false, message: "Invalid token" });
 
@@ -1244,7 +1295,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           if (type === "order") {
             // API CALL: 
-            const cancelOrderPayload = { 
+            const cancelOrderPayload = {
               ids: [order.shiprocket_order_id]
             }
             const cancelOrderResponse = await axios.post(

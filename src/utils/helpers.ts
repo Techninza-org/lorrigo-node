@@ -545,7 +545,20 @@ export const rateCalculation = async (
   hubId?: number,
   isReversedOrder?: boolean,
   orderRefId?: string
-) => {
+): Promise<{
+  name: string;
+  cod: number;
+  minWeight: number;
+  charge: number;
+  isReversedCourier: boolean;
+  rtoCharges: number;
+  type: string;
+  expectedPickup: string;
+  carrierID: string;
+  order_zone: string;
+  nickName?: string;
+  orderRefId?: string;
+}[] | {message: string}[]> => {
   try {
     const numPaymentType = Number(paymentType);
     if (!(numPaymentType === 0 || numPaymentType === 1)) throw new Error("Invalid paymentType");
@@ -597,7 +610,7 @@ export const rateCalculation = async (
       const url =
         envConfig.SHIPROCKET_API_BASEURL +
         APIs.SHIPROCKET_ORDER_COURIER +
-        `/?pickup_postcode=${pickupPincode}&delivery_postcode=${deliveryPincode}&weight=${weight}&cod=0&order_id=${shiprocketOrderID}`;
+        `/?pickup_postcode=${pickupPincode}&delivery_postcode=${deliveryPincode}&weight=${weight}&cod=${paymentType}&order_id=${shiprocketOrderID}`;
 
       const config = {
         headers: {
@@ -917,6 +930,7 @@ export const rateCalculation = async (
       orderRefId?: string;
     }[] = [];
 
+    console.log(commonCouriers, 'commonCouriers')
     const loopLength = commonCouriers.length;
 
     for (let i = 0; i < loopLength; i++) {

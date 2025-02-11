@@ -2,7 +2,7 @@ import mongoose, { isValidObjectId, Types } from "mongoose";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
 import { startOfWeek, addDays, getDay, format, startOfDay, formatDate } from "date-fns";
-import { getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getMarutiToken, getSellerChannelConfig, getShiprocketToken, getSMARTRToken, getSmartShipToken, MetroCitys, NorthEastStates, validateEmail } from "./helpers";
+import { getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getMarutiToken, getPincodeDetails, getSellerChannelConfig, getShiprocketToken, getSMARTRToken, getSmartShipToken, MetroCitys, NorthEastStates, validateEmail } from "./helpers";
 import { COURRIER_ASSIGNED_ORDER_DESCRIPTION, DELIVERED, IN_TRANSIT, MANIFEST_ORDER_DESCRIPTION, PICKUP_SCHEDULED_DESCRIPTION, READY_TO_SHIP, RETURN_CONFIRMED, RTO, SHIPMENT_CANCELLED_ORDER_DESCRIPTION, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, SHIPROCKET_MANIFEST_ORDER_STATUS, SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS, SMARTSHIP_MANIFEST_ORDER_STATUS } from "./lorrigo-bucketing-info";
 import { DeliveryDetails, IncrementPrice, PickupDetails, Vendor, Body } from "../types/rate-cal";
 import SellerModel from "../models/seller.model";
@@ -1163,6 +1163,7 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
     const shiprocketToken = await getShiprocketToken();
     if (!shiprocketToken) return "Invalid token"
 
+    const customerPincodeDetails = await getPincodeDetails(orderDetails?.customerDetails.get("pincode"))
     const orderPayload = {
       order_id: customClientRefOrderId,
       order_date: format(orderDetails?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
@@ -1172,7 +1173,7 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
       billing_address: orderDetails?.customerDetails.get("address"),
       billing_city: orderDetails?.customerDetails.get("city"),
       billing_pincode: orderDetails?.customerDetails.get("pincode"),
-      billing_state: orderDetails?.customerDetails.get("state"),
+      billing_state: orderDetails?.customerDetails.get("state") || customerPincodeDetails?.StateName,
       billing_country: "India",
       billing_email: orderDetails?.customerDetails.get("email") || "noreply@lorrigo.com",
       billing_phone: orderDetails?.customerDetails.get("phone").toString().replaceAll(' ', '').slice(3, 13),
@@ -1264,6 +1265,13 @@ export async function shiprocketShipment({ sellerId, carrierId, order, charge, v
       courier_id: shiprocketCourier?.carrierID?.toString(),
       is_return: order.isReverseOrder ? 1 : 0,
     }
+
+    if (!order.shiprocket_shipment_id) {
+      const randomInt = Math.round(Math.random() * 20)
+      const customClientRefOrderId = order?.client_order_reference_id + "-" + randomInt;
+      const shiprocketOrderID = await registerOrderOnShiprocket(order, customClientRefOrderId);
+    }
+
     try {
       const awbResponse = await axios.post(
         envConfig.SHIPROCKET_API_BASEURL + APIs.GENRATE_AWB_SHIPROCKET,
