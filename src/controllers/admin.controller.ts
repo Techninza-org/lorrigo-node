@@ -895,7 +895,7 @@ export const uploadDisputeCSV = async (req: ExtendedRequest, res: Response) => {
         collectableAmount: Math.max(0, order.amount2Collect),
       };
 
-      const { totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor, await calculateZone(order.pickupAddress.pincode, order.customerDetails.pincode), dispute.chargedWeight); // csv calc 
+      const { totalCharge, codCharge, fwCharge } = await calculateShippingCharges(bill.zone, csvBody, vendor, await calculateZone(order.pickupAddress.pincode, order.customerDetails.get("pincode")), dispute.chargedWeight); // csv calc 
 
       let fwExcessCharge: any = bill.fwExcessCharge;
       if (Number(fwCharge) > Number(bill.rtoCharge)) {
