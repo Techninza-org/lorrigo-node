@@ -877,7 +877,7 @@ export const uploadDisputeCSV = async (req: ExtendedRequest, res: Response) => {
 
       let vendor: any = await CustomPricingModel.findOne({
         sellerId: order.sellerId,
-        vendorId: bill.carrierID
+        vendorId: order.carrierId || bill.carrierID
       }).populate({
         path: 'vendorId',
         populate: {
@@ -886,7 +886,7 @@ export const uploadDisputeCSV = async (req: ExtendedRequest, res: Response) => {
       });
 
       if (!vendor) {
-        vendor = await CourierModel.findById(bill.carrierID).populate("vendor_channel_id");
+        vendor = await CourierModel.findById(order.carrierId || bill.carrierID).populate("vendor_channel_id");
       }
 
       const csvBody = {
@@ -1030,7 +1030,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
           pt.desc.includes("RTO COD charges")
         );
 
-        if(charges.zoneChangeCharge > 0 ){
+        if (charges.zoneChangeCharge > 0) {
           walletUpdates.push({
             sellerId: order.sellerId.toString(),
             amount: charges.zoneChangeCharge,
