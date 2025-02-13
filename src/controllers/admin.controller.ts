@@ -820,7 +820,7 @@ export const uploadDisputeCSV = async (req: ExtendedRequest, res: Response) => {
       awb: (order["AWB"])?.toString(),
       clientWeight: Number(order["Client Weight"] || 0),
       chargedWeight: Number(order["Charged Weight"]),
-      isAccept: Boolean(order["Accept/Reject"].toLowerCase() === "accept")
+      isAccept: Boolean(order["Accept/Reject"]?.toLowerCase() === "accept")
     };
   });
 
