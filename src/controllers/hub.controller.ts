@@ -106,12 +106,14 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       },
     };
 
+    const isValidShiprocketAdd = /[\/#-]/.test(address1)
+
     const shiprocketHubPayload = {
       pickup_location: name,
       name: name,
       email: "noreply@lorrigo.com",
       phone: formatPhoneNumber(phone), // Handle both cases
-      address: address1,
+      address: isValidShiprocketAdd ? address1 : address1.replace(" ", "/"),
       address_2: "",
       city: city,
       state: state,
@@ -192,7 +194,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       const isExistingHub = err?.response?.data?.errors?.pickup_location?.[0].includes("Address nick name already in use")
       const isExistingHubButInactive = err?.response?.data?.message?.includes("Address name already exists")
       if (isExistingHubButInactive) {
-        return res.status(400).send({ valid: false, message: "The address name you entered is already in use. Please choose a unique name."  });
+        return res.status(400).send({ valid: false, message: "The address name you entered is already in use. Please choose a unique name." });
       }
       if (!isExistingHub) return next(err);
       console.log(err.response.data, "error in shiprocket")

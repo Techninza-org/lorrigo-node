@@ -40,8 +40,8 @@ const hubSchema = z.object({
    contactPersonName: z.string().min(1, "Contact person name is required")
       .refine((value) => !/\d/.test(value), { message: "Contact person name cannot contain numbers" }),
    phone: z.string().refine(validatePhone, { message: "Invalid phone number" }),
-   address1: z.string().min(1, "Address is required")
-      .refine((value) => /[\/#-]/.test(value), { message: "Address must contain /, #, or -" }),
+   address1: z.string().min(1, "Address is required"),
+      // .refine((value) => /[\/#-]/.test(value), { message: "Address must contain /, #, or -" }),
    address2: z.string().optional(),
    pincode: z.string().min(6, "Pincode is required and must be at least 6 characters"),
    isRTOAddressSame: z.boolean().optional(),
