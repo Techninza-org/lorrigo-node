@@ -115,7 +115,7 @@ export const CONNECT_SHIPROCKET = async (): Promise<void> => {
     // Update existing document or create a new one
     await EnvModel.findOneAndUpdate(
       { name: "SHIPROCKET" },
-      { $set: { nickName: "SR", token: responseBody.token } },
+      { $set: { token: responseBody.token } },
       { upsert: true, new: true }
     );
 
