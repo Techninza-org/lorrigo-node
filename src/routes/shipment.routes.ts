@@ -8,7 +8,8 @@ import {
   getShipmentDetails,
   orderManifest,
   orderReattempt,
-  createBulkShipment
+  createBulkShipment,
+  orderBulkManifest
 } from "../controllers/shipment.controller";
 
 const shipmentRouter = Router();
@@ -27,6 +28,9 @@ shipmentRouter.post("/cancel", cancelShipment);
 
 //@ts-ignore
 shipmentRouter.post("/manifest", orderManifest);
+
+//@ts-ignore
+shipmentRouter.post("/bulk-manifest", orderBulkManifest);
 
 //@ts-ignore
 shipmentRouter.post("/order-reattempt", orderReattempt);

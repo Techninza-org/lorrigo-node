@@ -1725,6 +1725,239 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
   }
 }
 
+export async function orderBulkManifest(req: ExtendedRequest, res: Response, next: NextFunction) {
+  try {
+    const { orderIds, pickupDate } = req.body;
+
+    if (!Array.isArray(orderIds) || orderIds.length === 0 || !pickupDate) {
+      return res.status(400).send({ valid: false, message: "Invalid payload" });
+    }
+
+    const results = await Promise.all(
+      orderIds.map(async (orderId) => {
+        if (!isValidObjectId(orderId)) {
+          return { orderId, valid: false, message: "Invalid Order ID" };
+        }
+
+        let order = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id, awb: { $exists: true } }).populate([
+          "productId", "pickupAddress",
+        ]);
+
+        if (!order) {
+          order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id, awb: { $exists: true } }).populate([
+            "customer", "pickupAddress",
+          ]);
+        }
+
+        if (!order) {
+          return { orderId, valid: false, message: "Order not found" };
+        }
+
+        if (order.orderStages.find(x => x.stage === 67)) {
+          return { orderId, valid: false, message: "Pickup is already scheduled for order ID." };
+        }
+
+        const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
+        const vendorName = await EnvModel.findOne({ nickName: assignedVendorNickname });
+
+        try {
+          let apiResponse = null;
+          if (vendorName?.name === "SMARTSHIP") {
+            const smartshipToken = await getSmartShipToken();
+            if (!smartshipToken) {
+              return { orderId, valid: false, message: "Smartship ENVs not found" };
+            }
+
+            const requestBody = {
+              client_order_reference_ids: [order.client_order_reference_id],
+              preferred_pickup_date: pickupDate.replaceAll(" ", "-"),
+              shipment_type: order.isReverseOrder ? 2 : 1,
+            };
+
+            apiResponse = await axios.post(
+              config.SMART_SHIP_API_BASEURL + APIs.ORDER_MANIFEST,
+              requestBody,
+              { headers: { Authorization: smartshipToken } }
+            );
+          } else if (vendorName?.name === "SHIPROCKET") {
+            const shiprocketToken = await getShiprocketToken();
+            const formattedDate = pickupDate.replaceAll(" ", "-");
+            const schdulePickupPayload = {
+              shipment_id: [order.shiprocket_shipment_id],
+              pickup_date: [formattedDate],
+            };
+            apiResponse = await axios.post(
+              config.SHIPROCKET_API_BASEURL + APIs.GET_MANIFEST_SHIPROCKET,
+              schdulePickupPayload,
+              { headers: { Authorization: shiprocketToken } }
+            );
+          } else if (vendorName?.name === "DELHIVERY") {
+            const delhiveryToken = await getDelhiveryToken();
+            if (!delhiveryToken) {
+              return { orderId, valid: false, message: "Invalid token" };
+            }
+            const hubDetail = await HubModel.findById(order?.pickupAddress);
+            if (!hubDetail) {
+              return { orderId, valid: false, message: "Hub not found" };
+            }
+
+            const delhiveryManifestPayload = {
+              pickup_location: hubDetail?.name,
+              expected_package_count: 1,
+              pickup_date: pickupDate.replaceAll(" ", "-"),
+              pickup_time: "12:23:00",
+            };
+
+            apiResponse = await axios.post(
+              `${envConfig.DELHIVERY_API_BASEURL + APIs.DELHIVERY_MANIFEST_ORDER}`,
+              delhiveryManifestPayload,
+              { headers: { Authorization: delhiveryToken } }
+            );
+          }
+
+          if (apiResponse && apiResponse.data?.data?.errors) {
+            return { orderId, valid: false, message: JSON.stringify(apiResponse.data?.data?.errors) };
+          }
+
+          order.bucket = READY_TO_SHIP;
+          order.orderStages.push({
+            stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
+            action: PICKUP_SCHEDULED_DESCRIPTION,
+            stageDateTime: new Date(),
+          });
+          await order.save();
+
+          return { orderId, valid: true, message: "Order manifest request generated" };
+        } catch (error: any) {
+          return { orderId, valid: false, message: error.message };
+        }
+      })
+    );
+
+    return res.status(200).send({ results });
+  } catch (error) {
+    console.error("Bulk Order Manifest Error:", error);
+    return next(error);
+  }
+}
+
+// export async function asyncOrderBulkManifest(req: ExtendedRequest, res: Response, next: NextFunction) {
+//   try {
+//     const { orderIds, pickupDate } = req.body;
+
+//     if (!Array.isArray(orderIds) || orderIds.length === 0 || !pickupDate) {
+//       return res.status(400).send({ valid: false, message: "Invalid payload" });
+//     }
+
+//     // Send initial response and process orders asynchronously
+//     res.status(202).send({ message: "Processing orders in background" });
+
+//     // Process orders in parallel without blocking response
+//     Promise.allSettled(
+//       orderIds.map(async (orderId) => {
+//         if (!isValidObjectId(orderId)) {
+//           return { orderId, valid: false, message: "Invalid Order ID" };
+//         }
+
+//         let order = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate([
+//           "productId", "pickupAddress",
+//         ]);
+
+//         if (!order) {
+//           order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate([
+//             "customer", "pickupAddress",
+//           ]);
+//         }
+
+//         if (!order) {
+//           return { orderId, valid: false, message: "Order not found" };
+//         }
+
+//         const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
+//         const vendorName = await EnvModel.findOne({ nickName: assignedVendorNickname });
+
+//         try {
+//           let apiResponse = null;
+//           if (vendorName?.name === "SMARTSHIP") {
+//             const smartshipToken = await getSmartShipToken();
+//             if (!smartshipToken) {
+//               return { orderId, valid: false, message: "Smartship ENVs not found" };
+//             }
+
+//             const requestBody = {
+//               client_order_reference_ids: [order.client_order_reference_id],
+//               preferred_pickup_date: pickupDate.replaceAll(" ", "-"),
+//               shipment_type: order.isReverseOrder ? 2 : 1,
+//             };
+
+//             apiResponse = axios.post(
+//               config.SMART_SHIP_API_BASEURL + APIs.ORDER_MANIFEST,
+//               requestBody,
+//               { headers: { Authorization: smartshipToken } }
+//             );
+//           } else if (vendorName?.name === "SHIPROCKET") {
+//             const shiprocketToken = await getShiprocketToken();
+//             const formattedDate = pickupDate.replaceAll(" ", "-");
+//             const schdulePickupPayload = {
+//               shipment_id: [order.shiprocket_shipment_id],
+//               pickup_date: [formattedDate],
+//             };
+//             apiResponse = axios.post(
+//               config.SHIPROCKET_API_BASEURL + APIs.GET_MANIFEST_SHIPROCKET,
+//               schdulePickupPayload,
+//               { headers: { Authorization: shiprocketToken } }
+//             );
+//           } else if (vendorName?.name === "DELHIVERY") {
+//             const delhiveryToken = await getDelhiveryToken();
+//             if (!delhiveryToken) {
+//               return { orderId, valid: false, message: "Invalid token" };
+//             }
+//             const hubDetail = await HubModel.findById(order?.pickupAddress);
+//             if (!hubDetail) {
+//               return { orderId, valid: false, message: "Hub not found" };
+//             }
+
+//             const delhiveryManifestPayload = {
+//               pickup_location: hubDetail?.name,
+//               expected_package_count: 1,
+//               pickup_date: pickupDate.replaceAll(" ", "-"),
+//               pickup_time: "12:23:00",
+//             };
+
+//             apiResponse = axios.post(
+//               `${envConfig.DELHIVERY_API_BASEURL + APIs.DELHIVERY_MANIFEST_ORDER}`,
+//               delhiveryManifestPayload,
+//               { headers: { Authorization: delhiveryToken } }
+//             );
+//           }
+
+//           if (apiResponse) {
+//             apiResponse = await apiResponse; // Await the request completion
+//             if (apiResponse.data?.data?.errors) {
+//               return { orderId, valid: false, message: JSON.stringify(apiResponse.data?.data?.errors) };
+//             }
+//           }
+
+//           order.bucket = READY_TO_SHIP;
+//           order.orderStages.push({
+//             stage: SMARTSHIP_MANIFEST_ORDER_STATUS,
+//             action: MANIFEST_ORDER_DESCRIPTION,
+//             stageDateTime: new Date(),
+//           });
+//           await order.save();
+
+//           return { orderId, valid: true, message: "Order manifest request generated" };
+//         } catch (error) {
+//           return { orderId, valid: false, message: error.message };
+//         }
+//       })
+//     ).then((results) => console.log("Bulk Order Processing Complete", results));
+//   } catch (error) {
+//     console.error("Bulk Order Manifest Error:", error);
+//     return next(error);
+//   }
+// }
+
 export async function orderReattempt(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {
     const body = req.body;
