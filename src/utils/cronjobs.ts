@@ -112,7 +112,6 @@ export const CONNECT_SHIPROCKET = async (): Promise<void> => {
     const response = await axios.post("https://apiv2.shiprocket.in/v1/external/auth/login", requestBody);
     const responseBody = response.data;
 
-    // Update existing document or create a new one
     await EnvModel.findOneAndUpdate(
       { name: "SHIPROCKET" },
       { $set: { token: responseBody.token } },
@@ -696,7 +695,6 @@ export default async function runCron() {
     cron.schedule(expression4every30Minutes, track_delivery);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
-    cron.schedule(expression4every2Minutes, trackOrder_Smartr);
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     cron.schedule(expression4every2Minutes, scheduleShipmentCheck);
@@ -710,13 +708,17 @@ export default async function runCron() {
     cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET_B2B);
     cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
     cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
-    // cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);
     cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
 
     // Email Cron
     // cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);
     cron.schedule(expression4every12Hrs, syncInvoicePdfs);
     // cron.schedule(expression4every12Hrs, emailInvoiceWithPaymnetLink);
+
+
+    // SMARTR discontinued
+    // cron.schedule(expression4every2Minutes, trackOrder_Smartr);
+    // cron.schedule(expression4every9_59Hr, CONNECT_SMARTR);
 
     Logger.log("Cron jobs scheduled successfully");
   } else {
