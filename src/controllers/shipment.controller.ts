@@ -171,10 +171,12 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       // @ts-ignore
     ))
 
-    console.log(courierCharge, "courierCharge");
+    if (courierCharge?.length < 1) {
+      return res.status(200).send({ valid: false, message: "Courier is not servicable!" });
+    }
 
 
-    body.charge = courierCharge[0].charge
+    body.charge = courierCharge?.[0].charge
     codCharge = courierCharge[0].cod
 
     // // update in order
