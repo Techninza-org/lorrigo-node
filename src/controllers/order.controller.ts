@@ -1327,6 +1327,8 @@ export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next
 
     // Check the results
     if (b2cOrderByAwb) {
+      delete b2bOrderByAwb.shiprocket_order_id;
+      delete b2bOrderByAwb.shiprocket_shipment_id;
       return res.status(200).send({ valid: true, order: b2cOrderByAwb });
     }
 
@@ -1335,6 +1337,8 @@ export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next
     }
 
     if (b2cOrderById) {
+      delete b2cOrderById.shiprocket_order_id;
+      delete b2cOrderById.shiprocket_shipment_id;
       return res.status(200).send({ valid: true, order: b2cOrderById });
     }
 

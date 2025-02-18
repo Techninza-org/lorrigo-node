@@ -458,7 +458,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           order.channelFulfillmentId = fulfillmentOrderId;
           await order.save();
           await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-          return res.status(200).send({ valid: true, order });
+          const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
+          return res.status(200).send({ valid: true, order: orderWOShiprocket });
         } catch (error: any) {
           return res.status(400).send({ valid: false, message: "Courier can't make the journey here!" });
           console.log(error, "error in shiprocket");
@@ -615,7 +616,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           await order.save();
 
           await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-          return res.status(200).send({ valid: true, order });
+          const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
+          return res.status(200).send({ valid: true, order: orderWOShiprocket });
         }
         return res.status(401).send({ valid: false, message: "Please choose another courier partner!" });
 
@@ -758,7 +760,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         await order.save();
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-        return res.status(200).send({ valid: true, order });
+        const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
+        return res.status(200).send({ valid: true, order: orderWOShiprocket });
       } catch (error) {
         console.error("Error creating Delhivery shipment:", error);
         return next(error);
@@ -899,7 +902,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         await order.save();
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-        return res.status(200).send({ valid: true, order });
+        const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
+          return res.status(200).send({ valid: true, order: orderWOShiprocket });
       } catch (error) {
         console.error("Error creating Delhivery shipment:", error);
         return next(error);
@@ -1043,7 +1047,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         await order.save();
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`)
-        return res.status(200).send({ valid: true, order });
+        const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
+        return res.status(200).send({ valid: true, order: orderWOShiprocket });
       } catch (error) {
         console.error("Error creating Delhivery shipment:", error);
         return next(error);
