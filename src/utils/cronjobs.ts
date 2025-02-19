@@ -286,7 +286,7 @@ export const trackOrder_Smartship = async () => {
         if (
           bucketInfo.bucket !== -1 &&
           orderStages.length > 0 &&
-          orderStages[orderStages.length - 1].activity !== requiredResponse.action
+          orderStages[orderStages.length - 1].location !== requiredResponse.location // as smartship change 
         ) {
           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
           orderWithOrderReferenceId.orderStages.push({
