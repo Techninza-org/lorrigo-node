@@ -1303,17 +1303,17 @@ export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next
 
     // Define search queries based on the presence of awb or orderId
     const queries: Promise<any>[] = [];
-
+    console.log(awb, 'awb')
     if (awb) {
       queries.push(
-        B2COrderModel.findOne({ awb }).populate(["pickupAddress", "productId"]).lean(),
+        B2COrderModel.findOne({ awb }).populate(["pickupAddress", "productId"]).select("-shiprocket_order_id -shiprocket_shipment_id").lean(),
         B2BOrderModel.findOne({ awb }).populate(["pickupAddress", "customer"]).lean()
       );
     }
 
     if (orderId && isValidObjectId(orderId)) {
       queries.push(
-        B2COrderModel.findById(orderId).populate(["pickupAddress", "productId"]).lean(),
+        B2COrderModel.findById(orderId).populate(["pickupAddress", "productId"]).select("-shiprocket_order_id -shiprocket_shipment_id").lean(),
         B2BOrderModel.findById(orderId).populate(["pickupAddress", "customer"]).lean()
       );
     }
@@ -1327,8 +1327,6 @@ export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next
 
     // Check the results
     if (b2cOrderByAwb) {
-      delete b2bOrderByAwb.shiprocket_order_id;
-      delete b2bOrderByAwb.shiprocket_shipment_id;
       return res.status(200).send({ valid: true, order: b2cOrderByAwb });
     }
 
@@ -1337,8 +1335,6 @@ export const getSpecificOrder = async (req: ExtendedRequest, res: Response, next
     }
 
     if (b2cOrderById) {
-      delete b2cOrderById.shiprocket_order_id;
-      delete b2cOrderById.shiprocket_shipment_id;
       return res.status(200).send({ valid: true, order: b2cOrderById });
     }
 
