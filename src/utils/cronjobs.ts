@@ -692,27 +692,27 @@ export default async function runCron() {
   const expression4every12Hrs = "0 0,12 * * *";
 
   if (cron.validate(expression4every2Minutes)) {
-    cron.schedule(expression4every30Minutes, track_delivery);  // Track order status every 30 minutes
-    cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
-    cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
-    cron.schedule(expression4every2Minutes, trackOrder_Smartship);
-    cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
-    cron.schedule(expression4every2Minutes, scheduleShipmentCheck);
-    cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
+    // cron.schedule(expression4every30Minutes, track_delivery);  // Track order status every 30 minutes
+    // cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
+    // cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
+    // cron.schedule(expression4every2Minutes, trackOrder_Smartship);
+    // cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
+    // cron.schedule(expression4every2Minutes, scheduleShipmentCheck);
+    // cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
 
     // Need to fix
     // cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
 
-    cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
-    cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
-    cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET_B2B);
-    cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
-    cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
-    cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
+    // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
+    // cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
+    // cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET_B2B);
+    // cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
+    // cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
+    // cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
 
     // Email Cron
     // cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);
-    cron.schedule(expression4every12Hrs, syncInvoicePdfs);
+    // cron.schedule(expression4every12Hrs, syncInvoicePdfs);
     // cron.schedule(expression4every12Hrs, emailInvoiceWithPaymnetLink);
 
 
@@ -1152,9 +1152,9 @@ async function emailInvoiceWithPaymnetLink(): Promise<void> {
 
       await emailService.sendEmailWithCSV(
         seller.email,
-        "Invoice Payment Reminder",
+        `Invoice Payment Reminder: ${invoice.invoice_number}`,
         filledEmail,
-        await generateListInoviceAwbs(invoice?.invoicedAwbs || [], invoice.invoice_id),
+        await generateListInoviceAwbs(invoice?.invoicedAwbs || [], invoice.invoice_number),
         "Invoice AWBs",
         Buffer.from(invoice.pdf, 'base64'),
         "Invoice"

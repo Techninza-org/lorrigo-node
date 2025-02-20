@@ -845,7 +845,7 @@ export const invoiceAwbList = async (req: ExtendedRequest, res: Response, next: 
 
     const awbs = invoice.invoicedAwbs ?? [];
 
-    const result = await generateListInoviceAwbs(awbs, invoice.invoice_id)
+    const result = await generateListInoviceAwbs(awbs, invoice?.invoice_number || '')
 
     return res.status(200).send({ valid: true, awbTransacs: result });
   } catch (error) {

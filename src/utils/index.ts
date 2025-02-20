@@ -1748,6 +1748,7 @@ export const generateListInoviceAwbs = async (awbs: string[], invoiceNo: string)
     const awbObj = {
       awb,
       invoiceNo,
+      chargedWeight: bill?.chargedWeight,
       forwardCharges,
       rtoCharges,
       codCharges,
