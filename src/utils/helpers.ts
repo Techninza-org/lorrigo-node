@@ -42,9 +42,12 @@ import { B2COrderModel } from "../models/order.model";
 import PaymentTransactionModal from "../models/payment.transaction.modal";
 import InvoiceModel from "../models/invoice.model";
 import ClientBillingModal from "../models/client.billing.modal";
-import { updateSellerWalletBalance } from ".";
+import { formatCurrencyForIndia, generateListInoviceAwbs, updateSellerWalletBalance } from ".";
 import { format, formatISO, parse } from "date-fns";
 import NotInInvoiceAwbModel from "../models/not-billed-awbs-due-to-dispute.model";
+import emailService from "./email.service";
+import path from "path"
+
 const { PDFDocument, rgb } = require("pdf-lib");
 const fs = require("fs");
 
@@ -1944,7 +1947,27 @@ export async function createAdvanceAndInvoice(
     });
 
     seller.invoices.push(invoice._id);
+
     await seller.save();
+    
+    const emailTemplatePath = path.join(__dirname, '../email-template/invoice-template.html');
+    const emailTemplate = fs.readFileSync(emailTemplatePath, 'utf8');
+
+    const filledEmail = emailTemplate
+          .replaceAll('{{invoiceId}}', invoice.invoice_number || '')
+          .replaceAll('{{userName}}', seller.name || 'Seller')
+          .replaceAll('{{invoiceAmt}}', formatCurrencyForIndia(Number(invoice.dueAmount)) || '0')
+          .replaceAll('{{invoiceDate}}', invoice.date || 'N/A');
+
+    await emailService.sendEmailWithCSV(
+        seller.email,
+        `Invoice Payment Reminder: ${invoice.invoice_number}`,
+        filledEmail,
+        await generateListInoviceAwbs(invoice?.invoicedAwbs || [], invoice.invoice_number || ''),
+        "Invoice AWBs",
+        invoice.pdf ? Buffer.from(invoice.pdf, 'base64') : Buffer.alloc(0),
+        "Invoice"
+      );
 
     console.log("Completed for seller", seller.name);
   } catch (err) {

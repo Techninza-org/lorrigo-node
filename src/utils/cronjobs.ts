@@ -9,10 +9,10 @@ import EnvModel from "../models/env.model";
 import https from "node:https";
 import Logger from "./logger";
 import { RequiredTrackResponse, TrackResponse } from "../types/b2c";
-import { formatCurrencyForIndia, generateListInoviceAwbs, generateRemittanceId, getFridayDate, getNextToNextFriday, shipmentAmtCalcToWalletDeduction, updateSellerWalletBalance } from ".";
+import { cancelOrderShipment, formatCurrencyForIndia, generateListInoviceAwbs, generateRemittanceId, getFridayDate, getNextToNextFriday, shipmentAmtCalcToWalletDeduction, updateSellerWalletBalance } from ".";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
-import { CANCELED, CANCELLATION_REQUESTED_ORDER_STATUS, CANCELLED_ORDER_DESCRIPTION, DELIVERED, ORDER_TO_TRACK, RTO } from "./lorrigo-bucketing-info";
+import { CANCELED, CANCELLATION_REQUESTED_ORDER_STATUS, CANCELLED_ORDER_DESCRIPTION, DELIVERED, ORDER_TO_TRACK, RTO, SHIPROCKET_MANIFEST_ORDER_STATUS } from "./lorrigo-bucketing-info";
 import { addDays, format, formatISO, parse, isFriday, nextFriday, parseISO, differenceInCalendarDays } from "date-fns";
 import fs from "fs"
 import path from "path"
@@ -680,6 +680,35 @@ export const track_B2B_SHIPROCKET = async () => {
 //   }
 // }
 
+const autoCancelShipmetWhosePickupNotScheduled = async () => {
+  try {
+    const allOrders = await B2COrderModel.find({
+      // sellerId: '663379872fc3a04d7cc1e7a1',
+      bucket: 1,
+      "orderStages.stage": { $ne: SHIPROCKET_MANIFEST_ORDER_STATUS }
+    });
+
+    // Calculate current timestamp
+    const currentDate = new Date();
+    
+    // Filter orders that are older than 7 days
+    const ordersToCancel = allOrders.filter(order => {
+      const orderCreationDate = new Date(order.createdAt);
+      const daysSinceCreation = Math.floor((currentDate - orderCreationDate) / (1000 * 60 * 60 * 24));
+      return daysSinceCreation >= 7;
+    });
+
+    if (ordersToCancel.length > 0) {
+      console.log(`Found ${ordersToCancel.length} orders to auto-cancel out of ${allOrders.length} total orders`);
+      await cancelOrderShipment(ordersToCancel);
+      console.log(`Successfully processed ${ordersToCancel.length} orders for auto-cancellation`);
+    }
+
+  } catch (error) {
+    console.error("Error: [autoCancelShipmetWhosePickupNotScheduled]", error);
+  }
+}
+
 export default async function runCron() {
   console.log("Running cron scheduler");
 
@@ -699,6 +728,7 @@ export default async function runCron() {
     cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     cron.schedule(expression4every2Minutes, scheduleShipmentCheck);
     cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
+    cron.schedule(expression4every12Hrs, autoCancelShipmetWhosePickupNotScheduled);
 
     // Need to fix
     // cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
