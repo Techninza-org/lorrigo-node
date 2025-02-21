@@ -742,10 +742,10 @@ export const confirmInvoicePayment = async (req: ExtendedRequest, res: Response,
     if (seller && updateSellerInvoice && rechargeWalletViaPhoenpeData.success) {
       const emailTemplate = fs.readFileSync(path.join(__dirname, '../email-template/payment-confirm.html'), 'utf8');
       const filledEmail = emailTemplate
-        .replaceAll('{{invoiceId}}', updateSellerInvoice?.invoice_id)
+        .replaceAll('{{invoiceId}}', updateSellerInvoice?.invoice_number || "")
         .replaceAll('{{userName}}', seller.name)
         .replaceAll('{{invoiceAmt}}', (updateSellerInvoice.zohoAmt))
-        .replaceAll('{{invoiceDate}}', updateSellerInvoice.date)
+        // .replaceAll('{{invoiceDate}}', updateSellerInvoice.date)
         .replaceAll('{{currDate}}', updateSellerInvoice.date)
 
       await emailService.sendEmail(seller.email, "Invoice Payment Confirmation", filledEmail)

@@ -461,8 +461,8 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
           return res.status(200).send({ valid: true, order: orderWOShiprocket });
         } catch (error: any) {
-          return res.status(400).send({ valid: false, message: "Courier can't make the journey here!" });
           console.log(error, "error in shiprocket");
+          return res.status(400).send({ valid: false, message: "Courier can't make the journey here!" });
         }
       } catch (error: any) {
         console.log(error, "error in shiprocket 2");

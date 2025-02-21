@@ -1232,7 +1232,7 @@ async function emailSellerMonthlyWalletSummary(): Promise<void> {
 
     // Fill dynamic placeholders in the template
     const filledEmail = emailTemplate
-      .replaceAll('{{invoiceId}}', invoice.invoice_id || '')
+      .replaceAll('{{invoiceId}}', invoice.invoice_number || '')
       .replaceAll('{{userName}}', seller.name || 'Seller')
       .replaceAll('{{invoiceAmt}}', formatCurrencyForIndia(invoice.dueAmount) || '0')
       .replaceAll('{{invoiceDate}}', invoice.date || 'N/A');
