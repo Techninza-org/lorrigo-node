@@ -81,7 +81,7 @@ export const hubValidatePayload = (body: any) => {
    }
 };
 const productDetailsSchema = z.object({
-   name: z.string().min(1, "Product name is required"),
+   name: z.string().min(1, "Product name is required").max(150, "Product name should be less than 150 characters"),
    category: z.string().min(1, "Product category is required"),
    hsn_code: z.string().optional(),
    quantity: z.coerce.number().min(1, "Product quantity is required"),

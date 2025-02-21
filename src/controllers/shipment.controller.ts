@@ -396,7 +396,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           if (!awb) {
             return res
               .status(200)
-              .send({ valid: false, message: "Looks like we hit a bump. Please contact Lorrigo's support." });
+              .send({ valid: false, message: "Looks like we hit a bump. Please contact support." });
           }
 
           order.awb = awb;
