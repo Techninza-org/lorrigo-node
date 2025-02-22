@@ -416,7 +416,7 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
 
 export const updateSellerConfig = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const { isD2C, isB2B, isPrepaid } = req.body;
+    const { isD2C, isB2B, isPrepaid, isFW, isRTO, isCOD } = req.body;
     const { sellerId } = req.params;
 
     if (!sellerId) {
@@ -428,6 +428,9 @@ export const updateSellerConfig = async (req: ExtendedRequest, res: Response, ne
         'config.isD2C': isD2C,
         'config.isB2B': isB2B,
         'config.isPrepaid': isPrepaid,
+        'config.isFW': isFW,
+        'config.isRTO': isRTO,
+        'config.isCOD': isCOD,
       }
     };
 

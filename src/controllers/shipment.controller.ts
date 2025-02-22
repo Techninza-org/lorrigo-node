@@ -176,13 +176,13 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     }
 
 
-    body.charge = courierCharge?.[0].charge
-    codCharge = courierCharge[0].cod
+    body.charge = seller.config?.isFW ? courierCharge?.[0].charge : 0
+    codCharge = seller.config?.isCOD ? courierCharge[0].cod : 0
 
     // // update in order
-    order.codCharge = courierCharge[0].cod;
+    order.codCharge = codCharge;
 
-    if (seller.config.isPrepaid && (body.charge >= seller.walletBalance || seller.walletBalance <= 0)) {
+    if ((seller.config.isPrepaid && seller?.config?.isFW) && (body.charge >= seller.walletBalance || seller.walletBalance <= 0)) {
       return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
     }
 
@@ -903,7 +903,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         await order.save();
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
         const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
-          return res.status(200).send({ valid: true, order: orderWOShiprocket });
+        return res.status(200).send({ valid: true, order: orderWOShiprocket });
       } catch (error) {
         console.error("Error creating Delhivery shipment:", error);
         return next(error);

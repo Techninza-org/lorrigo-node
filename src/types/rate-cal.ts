@@ -35,4 +35,6 @@ export type Vendor = {
 export type IncrementPrice = {
     basePrice: number;
     incrementPrice: number;
+    isRTOSameAsFW: boolean
+    flatRTOCharge: number
 };

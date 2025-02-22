@@ -1108,6 +1108,9 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
       throw new Error("Invalid increment price");
     }
 
+    const seller = await SellerModel.findById(order.sellerId).select("config");
+    const config = seller?.config
+
     const minWeight = courier.weightSlab;
     //@ts-ignore
     let totalCharge = 0;
@@ -1121,14 +1124,16 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
     const codPrice = courier.codCharge?.hard;
     const codAfterPercent = (courier.codCharge?.percent / 100) * order.amount2Collect;
     let cod = 0;
-    if (order.paymentType === 1) {
+    if (order.paymentType === 1 && config?.isCOD) {
       cod = codPrice > codAfterPercent ? codPrice : codAfterPercent;
     }
 
     const weightIncrementRatio = Math.ceil((order.orderWeight - minWeight) / courier.incrementWeight);
     totalCharge += (increment_price.incrementPrice * weightIncrementRatio) + cod;
-    let rtoCharges = (totalCharge - cod)
-
+    let rtoCharges = 0
+    if (config?.isRTO) {
+      rtoCharges = increment_price.isRTOSameAsFW ? (totalCharge - cod) : increment_price.flatRTOCharge
+    }
 
     return { rtoCharges, cod };
 

@@ -23,6 +23,7 @@ import { paymentStatusInfo } from "./recharge-wallet-info";
 import InvoiceModel from "../models/invoice.model";
 import PaymentTransactionModal from "../models/payment.transaction.modal";
 import emailService from "./email.service";
+import CourierModel from "../models/courier.model";
 
 const BATCH_SIZE = 130;
 const API_DELAY = 120000; // 2 minutes in milliseconds
@@ -257,6 +258,7 @@ export const REFRESH_ZOHO_TOKEN = async (): Promise<void> => {
   }
 }
 
+// Update the courier id ~ as did in shiprocket tracking
 export const trackOrder_Smartship = async () => {
 
   const vendorNickname = await EnvModel.findOne({ name: "SMARTSHIP" }).select("nickName")
@@ -322,12 +324,13 @@ export const trackOrder_Shiprocket = async () => {
       console.error("Vendor nickname not found!");
       return;
     }
+    const shiprocketCouriers = (await CourierModel.find({ vendor_channel_id: vendorNickname._id })).map(courier => courier.id);
     const orders = (
       await B2COrderModel.find({
         bucket: { $in: ORDER_TO_TRACK },
         $or: [
           { carrierName: { $regex: vendorNickname.nickName } },
-          { carrierId: vendorNickname._id },
+          { carrierId: { $in: shiprocketCouriers } },
         ],
       })
     ).reverse();
@@ -366,6 +369,7 @@ export const trackOrder_Shiprocket = async () => {
   }
 };
 
+// Update the courier id ~ as did in shiprocket tracking
 export const trackOrder_Smartr = async () => {
   const vendorNickname = await EnvModel.findOne({ name: "SMARTR" }).select("nickName") // Replace SMARTSHIP, SHIPROCKET etc with SMARTR
   const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } }); // vendorNickname.nickName: SS, SR, SMR etc
@@ -690,7 +694,7 @@ const autoCancelShipmetWhosePickupNotScheduled = async () => {
 
     // Calculate current timestamp
     const currentDate = new Date();
-    
+
     // Filter orders that are older than 7 days
     const ordersToCancel = allOrders.filter(order => {
       const orderCreationDate = new Date(order.createdAt);
@@ -711,7 +715,6 @@ const autoCancelShipmetWhosePickupNotScheduled = async () => {
 
 export default async function runCron() {
   console.log("Running cron scheduler");
-
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
   const expression4every5Minutes = "*/5 * * * *";
@@ -726,7 +729,7 @@ export default async function runCron() {
     cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
     cron.schedule(expression4every2Minutes, trackOrder_Smartship);
     cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
-    cron.schedule(expression4every2Minutes, scheduleShipmentCheck);
+    cron.schedule(expression4every2Minutes, scheduleShipmentCheck); // B2B 
     cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
     cron.schedule(expression4every12Hrs, autoCancelShipmetWhosePickupNotScheduled);
 

@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 const pricingSchema = {
   basePrice: { type: Number, required: true, min: 0 },
   incrementPrice: { type: Number, required: true, min: 0 },
+  isRTOSameAsFW: { type: Boolean, required: true, defualt: true },
+  flatRTOCharge: { type: Number, required: true, min: 0 },
 };
 const codSchema = {
   hard: { type: Number, required: true, min: 0 },
