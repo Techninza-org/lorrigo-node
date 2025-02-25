@@ -33,6 +33,7 @@ import {
   RETURN_SHIPMENT_LOST,
   DISPOSED,
   RTO_DELIVERED,
+  NEW,
 } from "./lorrigo-bucketing-info";
 import ChannelModel from "../models/channel.model";
 import HubModel from "../models/hub.model";
@@ -1294,14 +1295,13 @@ export function getShiprocketBucketing(status: number) {
   const shiprocketStatusMapping = {
     // 13: { bucket: NEW, description: "Pickup Error" },
     // 15: { bucket: NEW, description: "Pickup Rescheduled" },
-    // 19: { bucket: NEW, description: "Out For Pickup" },
     // 20: { bucket: NEW, description: "Pickup Exception" },
     // 27: { bucket: NEW, description: "Pickup Booked" },
     // 52: { bucket: NEW, description: "Shipment Booked" },
     // 54: { bucket: NEW, description: "In Transit Overseas" },
     // 55: { bucket: NEW, description: "Connection Aligned" },
     // 56: { bucket: NEW, description: "FC MANIFEST GENERATED" },
-
+    
     6: { bucket: IN_TRANSIT, description: "Shipped" },
     7: { bucket: DELIVERED, description: "Delivered" },
     8: { bucket: CANCELED, description: "Canceled" },
@@ -1313,6 +1313,7 @@ export function getShiprocketBucketing(status: number) {
     16: { bucket: CANCELED, description: "Cancellation Requested" },
     17: { bucket: IN_TRANSIT, description: "Out For Delivery" },
     18: { bucket: IN_TRANSIT, description: "In Transit" },
+    19: { bucket: NEW, description: "Out For Pickup" },
     21: { bucket: NDR, description: "Undelivered" },
     22: { bucket: IN_TRANSIT, description: "Delayed" },
     23: { bucket: IN_TRANSIT, description: "Partial Delivered" },
@@ -1697,147 +1698,421 @@ export const generateAccessToken = async () => {
   }
 };
 
+// Old code
+// export const calculateSellerInvoiceAmount = async () => {
+//   try {
+//     const sellers = await SellerModel.find({ _id: "663c76ad8e9e095def325208",
+//       zoho_contact_id: { $exists: true }}).select("zoho_contact_id config _id name").lean();
+
+//     const batchSize = 3;
+//     const delay = 1;
+//     // const delay = 5000;
+
+//     const startOfMonth = new Date();
+//     startOfMonth.setDate(1);
+//     const today = new Date();
+//     const threeMonthAgo = new Date();
+//     threeMonthAgo.setMonth(today.getMonth() - 3);
+
+//     const processBatch = async (batch: any[]) => {
+//       for (const seller of batch) {
+//         const sellerId = seller._id;
+//         const zoho_contact_id = seller?.zoho_contact_id;
+
+//         // If seller invoice already generated then skip it, handle calculation for lastMonth dispute
+//         // case 1: zoho error, hit generate btn again then only generate invoice for them whose invoice is not generate for 3 month
+
+//         // if comment this will lead to duplicate invoice generation for same month on zoho 
+//         // const checkSellerInvoiceAlreadyGenerated = await InvoiceModel.findOne({
+//         //   sellerId,
+//         //   createdAt: { $gt: startOfMonth, $lte: today },
+//         // });
+//         // if (checkSellerInvoiceAlreadyGenerated) return;
+
+//         const billedOrders: any = await ClientBillingModal.find({
+//           sellerId,
+//           billingDate: { $gt: startOfMonth, $lt: today },
+//         })
+//           .select("awb isDisputeRaised disputeId isRTOApplicable disputeRaisedBySystem")
+//           .sort({ billingDate: -1 })
+//           .populate("disputeId");
+
+//         const allOrders = await B2COrderModel.find({
+//           sellerId,
+//           awb: { $in: billedOrders.map((item: any) => item.awb) },
+//           // "orderStages.stageDateTime": { $gt: lastInvoiceDate, $lt: today }, // applying date filter
+//         })
+//           .select(["productId", "awb"])
+//           .populate("productId");
+
+//         const awbNotBilledDueToDispute = billedOrders
+//           .filter(
+//             (item: any) =>
+//               (item.isDisputeRaised === true || item.disputeRaisedBySystem === true) && !item.disputeId?.accepted
+//           )
+//           .map((x: any) => x.awb);
+
+//         const lastThreeMonthRecords = await NotInInvoiceAwbModel.find({
+//           sellerId,
+//           createdAt: { $gt: threeMonthAgo, $lt: today },
+//         });
+//         const notBilledAwb: any[] = [];
+
+//         lastThreeMonthRecords.forEach((item) => {
+//           notBilledAwb.push(...(item.notBilledAwb || []));
+//         });
+
+//         if (awbNotBilledDueToDispute.length > 0) {
+//           // await NotInInvoiceAwbModel.updateOne(
+//           //   { sellerId },
+//           //   {
+//           //     monthOf: format(startOfMonth, "MMM"),
+//           //     notBilledAwb: awbNotBilledDueToDispute,
+//           //     sellerId,
+//           //   },
+//           //   { upsert: true }
+//           // );
+//         }
+
+//         const lastMonthDisputeAwbs = notBilledAwb || [];
+
+//         let lastMonthAwbs = [];
+//         if (lastMonthDisputeAwbs.length > 0) {
+//           // @ts-ignore
+//           lastMonthAwbs = (
+//             await ClientBillingModal.find({ awb: { $in: lastMonthDisputeAwbs } }).populate("disputeId")
+//             //@ts-ignore
+//           ).filter((item) => item.disputeId?.accepted === true);
+//         }
+
+//         const orders = allOrders.filter((order: any) => !awbNotBilledDueToDispute.includes(order?.awb));
+
+//         // Combine current and last month's AWBs
+//         const awbToBeInvoiced = [...orders.map((order: any) => order.awb), ...lastMonthDisputeAwbs];
+
+//         let totalAmount = 0;
+//         const bills = await ClientBillingModal.find({ awb: { $in: awbToBeInvoiced } });
+//         awbToBeInvoiced.forEach((awb) => {
+//           const bill = bills.find((bill) => bill.awb === awb);
+//           let forwardCharges = 0;
+//           let rtoCharges = 0;
+//           let codCharges = 0;
+//           // let excessCharges = 0;
+//           if (bill) {
+//             if (bill.isRTOApplicable === false) {
+//               codCharges = Number(bill.codValue);
+//               forwardCharges = Number(bill.fwCharge);
+//             } else {
+//               rtoCharges = Number(bill.fwCharge);
+//               forwardCharges = Number(bill.fwCharge);
+//             }
+//           }
+
+//           totalAmount += forwardCharges + rtoCharges + codCharges;
+//         });
+//         totalAmount = Number(totalAmount.toFixed(2));
+//         console.log(totalAmount, "totalAmount")
+
+//         const invoiceAmount = totalAmount / 1.18;
+//         console.log(invoiceAmount, "invoiceAmount")
+
+//         const isPrepaid = seller.config?.isPrepaid;
+
+//         if (invoiceAmount > 0) {
+//           // if (isPrepaid) {
+//           //   const spentAmount = Number((invoiceAmount * 1.18));
+//           //   await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
+//           // }
+//           console.log(zoho_contact_id, seller.name, totalAmount, awbToBeInvoiced.length, isPrepaid, '\n')
+
+//           // await createAdvanceAndInvoice(zoho_contact_id, totalAmount, awbToBeInvoiced, isPrepaid);
+//         }
+//       }
+//     };
+
+//     for (let i = 0; i < sellers.length; i += batchSize) {
+//       const batch = sellers.slice(i, i + batchSize);
+//       await processBatch(batch);
+
+//       if (i + batchSize < sellers.length) {
+//         console.log(`Waiting ${delay / 1000} seconds before processing the next batch...`);
+//         await new Promise((resolve) => setTimeout(resolve, delay));
+//       }
+//     }
+
+//     return { message: "All Invoice Generated Successfully", status: 200 };
+//   } catch (err) {
+//     console.log(err);
+//     return { message: "Error: While generating Invoice", status: 500 };
+//   }
+// };
+
+// New code with better performance reduce the number of queries
+
 export const calculateSellerInvoiceAmount = async () => {
   try {
-    const sellers = await SellerModel.find({ zoho_contact_id: { $exists: true }});
-
-    const batchSize = 3;
-    // const delay = 1;
-    const delay = 5000;
-
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     const today = new Date();
     const threeMonthAgo = new Date();
     threeMonthAgo.setMonth(today.getMonth() - 3);
+    
+    const sellers = await SellerModel.find(
+      { 
+        // _id: "663c76ad8e9e095def325208",
+        zoho_contact_id: { $exists: true } 
+      }
+    ).select("zoho_contact_id config _id name").lean();
 
-    const processBatch = async (batch: any[]) => {
-      for (const seller of batch) {
-        const sellerId = seller._id;
-        const zoho_contact_id = seller?.zoho_contact_id;
+    const processSeller = async (seller: any) => {
+      const sellerId = seller._id;
+      
+      // Check for already billed invoices
+      // const existingInvoice = await InvoiceModel.findOne({
+      //   sellerId,
+      //   createdAt: { $gt: startOfMonth, $lte: today }
+      // }).lean();
+      
+      // if (existingInvoice) {
+      //   console.log(`Invoice already exists for seller ${seller.name}`);
+      //   return {
+      //     sellerId,
+      //     status: 'skipped',
+      //     reason: 'Invoice already exists'
+      //   };
+      // }
+      
+      const billingData = await ClientBillingModal.aggregate([
+        {
+          $facet: {
+            currentBilling: [
+              {
+                $match: {
+                  sellerId: sellerId,
+                  billingDate: { $gt: startOfMonth, $lt: today }
+                }
+              },
+              {
+                $lookup: {
+                  from: 'disputes',
+                  localField: 'disputeId',
+                  foreignField: '_id',
+                  as: 'dispute'
+                }
+              },
+              {
+                $unwind: { path: '$dispute', preserveNullAndEmptyArrays: true }
+              },
+              {
+                $lookup: {
+                  from: 'invoices',
+                  let: { awb: '$awb' },
+                  pipeline: [
+                    {
+                      $match: {
+                        $expr: {
+                          $and: [
+                            { $in: ['$$awb', { $ifNull: ['$billedAwbs', []] }] },
+                            { $gt: ['$createdAt', threeMonthAgo] }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  as: 'existingInvoices'
+                }
+              },
+              {
+                $match: {
+                  existingInvoices: { $size: 0 }
+                }
+              }
+            ],
+            previousNotBilled: [{ $limit: 3 }]
+          }
+        },
+        {
+          $lookup: {
+            from: 'notininvoiceawbs',
+            pipeline: [
+              {
+                $match: {
+                  sellerId: sellerId,
+                  createdAt: { $gt: threeMonthAgo, $lt: today }
+                }
+              },
+              {
+                $project: {
+                  _id: 0,
+                  notBilledAwb: 1,
+                  createdAt: 1
+                }
+              }
+            ],
+            as: 'previousNotBilled'
+          }
+        }
+      ]);
+      
+      const currentBillingData = billingData[0]?.currentBilling || [];
+      const previousNotBilledData = billingData[0]?.previousNotBilled.flatMap((item: any)=>item.notBilledAwb) || [];
+      
+      const awbNotBilledDueToDispute = currentBillingData
+        .filter((item: any) => 
+          (item.isDisputeRaised || item.disputeRaisedBySystem) && 
+          !item.dispute?.accepted
+        )
+        .map((x: any) => x.awb);
 
-        // If seller invoice already generated then skip it, handle calculation for lastMonth dispute
-        // case 1: zoho error, hit generate btn again then only generate invoice for them who invoice is not generate for 3 month
+      const validOrderAwbs = currentBillingData.map((item: any) => item.awb).filter(Boolean);
+      
+      const orderDetails = validOrderAwbs.length > 0 ? await B2COrderModel.aggregate([
+        {
+          $match: {
+            sellerId: sellerId,
+            awb: { $in: validOrderAwbs }
+          }
+        },
+        {
+          $lookup: {
+            from: 'products',
+            localField: 'productId',
+            foreignField: '_id',
+            as: 'product'
+          }
+        }
+      ]) : [];
 
-        const checkSellerInvoiceAlreadyGenerated = await InvoiceModel.findOne({
-          sellerId,
-          createdAt: { $gt: startOfMonth, $lte: today },
-        });
-        if (checkSellerInvoiceAlreadyGenerated) return;
-
-        const billedOrders: any = await ClientBillingModal.find({
-          sellerId,
-          billingDate: { $gt: startOfMonth, $lt: today },
-        })
-          .sort({ billingDate: -1 })
-          .select("awb isDisputeRaised disputeId isRTOApplicable disputeRaisedBySystem")
-          .populate("disputeId");
-
-        const allOrders = await B2COrderModel.find({
-          sellerId,
-          awb: { $in: billedOrders.map((item: any) => item.awb) },
-          // "orderStages.stageDateTime": { $gt: lastInvoiceDate, $lt: today }, // applying date filter
-        })
-          .select(["productId", "awb"])
-          .populate("productId");
-
-        const awbNotBilledDueToDispute = billedOrders
-          .filter(
-            (item: any) =>
-              (item.isDisputeRaised === true || item.disputeRaisedBySystem === true) && !item.disputeId?.accepted
-          )
-          .map((x: any) => x.awb);
-
-        const lastThreeMonthRecords = await NotInInvoiceAwbModel.find({
-          sellerId,
-          createdAt: { $gt: threeMonthAgo, $lt: today },
-        });
-        const notBilledAwb: any[] = [];
-
-        lastThreeMonthRecords.forEach((item) => {
-          notBilledAwb.push(...(item.notBilledAwb || []));
-        });
-
-        if (awbNotBilledDueToDispute.length > 0) {
-          await NotInInvoiceAwbModel.updateOne(
-            { sellerId },
-            {
+      if (awbNotBilledDueToDispute.length > 0) {
+        await NotInInvoiceAwbModel.updateOne(
+          { sellerId },
+          {
+            $set: {
               monthOf: format(startOfMonth, "MMM"),
               notBilledAwb: awbNotBilledDueToDispute,
-              sellerId,
+              sellerId
+            }
+          },
+          { upsert: true }
+        );
+      }
+
+      const awbsToProcess = [
+        ...orderDetails.filter(order => !awbNotBilledDueToDispute.includes(order.awb)).map(order => order.awb),
+        ...previousNotBilledData
+      ].filter(Boolean);
+
+      const invoiceCalculation = awbsToProcess.length > 0 ? await ClientBillingModal.aggregate([
+        {
+          $match: {
+            awb: { $in: awbsToProcess }
+          }
+        },
+        {
+          $addFields: {
+            fwChargeNum: {
+              $toDouble: { $ifNull: ["$fwCharge", 0] }
             },
-            { upsert: true }
-          );
-        }
-
-        const lastMonthDisputeAwbs = notBilledAwb || [];
-
-        let lastMonthAwbs = [];
-        if (lastMonthDisputeAwbs.length > 0) {
-          // @ts-ignore
-          lastMonthAwbs = (
-            await ClientBillingModal.find({ awb: { $in: lastMonthDisputeAwbs } }).populate("disputeId")
-            //@ts-ignore
-          ).filter((item) => item.disputeId?.accepted === true);
-        }
-
-        const orders = allOrders.filter((order: any) => !awbNotBilledDueToDispute.includes(order?.awb));
-
-        // Combine current and last month's AWBs
-        const awbToBeInvoiced = [...orders.map((order: any) => order.awb), ...lastMonthDisputeAwbs];
-
-        let totalAmount = 0;
-        const bills = await ClientBillingModal.find({ awb: { $in: awbToBeInvoiced } });
-        awbToBeInvoiced.forEach((awb) => {
-          const bill = bills.find((bill) => bill.awb === awb);
-          let forwardCharges = 0;
-          let rtoCharges = 0;
-          let codCharges = 0;
-          // let excessCharges = 0;
-          if (bill) {
-            if (bill.isRTOApplicable === false) {
-              codCharges = Number(bill.codValue);
-              forwardCharges = Number(bill.fwCharge);
-            } else {
-              rtoCharges = Number(bill.fwCharge);
-              forwardCharges = Number(bill.fwCharge);
+            codValueNum: {
+              $toDouble: { $ifNull: ["$codValue", 0] }
             }
           }
-
-          totalAmount += forwardCharges + rtoCharges + codCharges;
-        });
-        totalAmount = Number(totalAmount.toFixed(2));
-
-        const invoiceAmount = totalAmount / 1.18;
-
-        const isPrepaid = seller.config?.isPrepaid;
-
-        if (invoiceAmount > 0) {
-          // if (isPrepaid) {
-          //   const spentAmount = Number((invoiceAmount * 1.18));
-          //   await updateSellerWalletBalance(sellerId.toString(), spentAmount, false, "Monthly Invoice Deduction");
-          // }
-          // console.log(zoho_contact_id, seller.name, totalAmount, awbToBeInvoiced.length, isPrepaid)
-
-          await createAdvanceAndInvoice(zoho_contact_id, totalAmount, awbToBeInvoiced, isPrepaid);
+        },
+        {
+          $addFields: {
+            forwardCharges: {
+              $cond: {
+                if: { $eq: ["$isRTOApplicable", false] },
+                then: "$fwChargeNum",
+                else: {
+                  $cond: {
+                    if: { $eq: ["$isRTOApplicable", true] },
+                    then: "$fwChargeNum",
+                    else: 0  // Fallback for any other value
+                  }
+                }
+              }
+            },
+            rtoCharges: {
+              $cond: [
+                { $eq: ["$isRTOApplicable", true] },
+                "$fwChargeNum",
+                0
+              ]
+            },
+            codCharges: {
+              $cond: [
+                { $eq: ["$isRTOApplicable", false] },
+                "$codValueNum",
+                0
+              ]
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalAmount: {
+              $sum: { 
+                $add: ["$forwardCharges", "$rtoCharges", "$codCharges"]
+              }
+            },
+            awbCount: { $sum: 1 },
+            awbs: { $push: "$awb" }
+          }
         }
+      ]) : [];
+
+      const { totalAmount = 0, awbCount = 0, awbs = [] } = invoiceCalculation[0] || {};
+      const roundedTotalAmount = Number(totalAmount.toFixed(2));
+      const invoiceAmount = roundedTotalAmount / 1.18;
+
+      if (invoiceAmount > 0) {
+        console.log(
+          seller.zoho_contact_id,
+          seller.name,
+          roundedTotalAmount,
+          awbCount,
+          awbs,
+          seller.config?.isPrepaid,
+          invoiceAmount,
+          '\n'
+        );
+       await createAdvanceAndInvoice(seller.zoho_contact_id, totalAmount, awbs, seller.config?.isPrepaid);
       }
+
+      return {
+        sellerId,
+        invoiceAmount,
+        awbCount,
+        totalAmount: roundedTotalAmount,
+        awbs
+      };
     };
+
+    const batchSize = 3;
+    const delay = 5000;
+    const results = [];
 
     for (let i = 0; i < sellers.length; i += batchSize) {
       const batch = sellers.slice(i, i + batchSize);
-      await processBatch(batch);
+      const batchResults = await Promise.all(batch.map(processSeller));
+      results.push(...batchResults);
 
       if (i + batchSize < sellers.length) {
-        console.log(`Waiting ${delay / 1000} seconds before processing the next batch...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        console.log(`Waiting ${delay/1000} seconds before processing next batch...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
 
-    return { message: "All Invoice Generated Successfully", status: 200 };
-  } catch (err) {
-    console.log(err);
-    return { message: "Error: While generating Invoice", status: 500 };
+    return {
+      message: "All Invoices Generated Successfully",
+      status: 200,
+      results
+    };
+  } catch (err: any) {
+    console.error('Error in calculateSellerInvoiceAmount:', err);
+    return { message: "Error: While generating Invoice", status: 500, error: err.message };
   }
 };
 

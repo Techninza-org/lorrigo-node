@@ -1969,6 +1969,7 @@ export const generateListInoviceAwbs = async (awbs: string[], invoiceNo: string)
   awbs.forEach((awb: any) => {
     const bill = bills.find((bill) => bill.awb === awb);
     const order = orders.find((order) => order.awb === awb);
+    const orderInvoiceNumber = order?.order_invoice_number;
     const orderCreatedAt = formatDate(`${order?.createdAt}`, 'dd MM yyyy | HH:mm a');
     const orderStage = order?.orderStages?.slice(-1)[0];
     const deliveryDate = formatDate(`${orderStage?.stageDateTime}`, 'dd MM yyyy | HH:mm a')
@@ -1990,6 +1991,7 @@ export const generateListInoviceAwbs = async (awbs: string[], invoiceNo: string)
     const awbObj = {
       awb,
       invoiceNo,
+      orderInvoiceNumber,
       chargedWeight: bill?.chargedWeight,
       forwardCharges,
       rtoCharges,

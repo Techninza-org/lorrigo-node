@@ -965,24 +965,55 @@ export const uploadDisputeCSV = async (req: ExtendedRequest, res: Response) => {
   }
 }
 
+export const REQUIRED_CSV_HEADERS = [
+  "Awb",
+  // "COD Value",
+  "Shipment Type",
+  "Charged Weight",
+  "Zone",
+  "Carrier ID",
+  "Forward Applicable",
+  "RTO Applicable"
+];
+
+
 export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   if (!req.file?.buffer) {
     return res.status(400).send({ valid: false, message: "No file uploaded" });
   }
 
   try {
-    const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
-    const bills = json.map(parseBillFromCSV).filter(bill => !!bill.awb);
-
-    if (bills.length < 1) {
-      return res.status(200).send({ valid: false, message: "empty payload" });
-    }
-
     const errorWorkbook = new exceljs.Workbook();
     const errorWorksheet = initializeErrorWorksheet(errorWorkbook);
     const errorRows: any = [];
 
-    // Validate bills and collect AWBs
+    const csvString = req.file.buffer.toString('utf8');
+    const firstLine = csvString.split('\n')[0];
+    const headers = firstLine.split(',').map(header => header.trim());
+
+    const missingHeaders = REQUIRED_CSV_HEADERS.filter(
+      requiredHeader => !headers.some(h => h === requiredHeader)
+    );
+
+    if (missingHeaders.length > 0) {
+      errorRows.push({
+        awb: 'HEADER_VALIDATION_ERROR',
+        errors: `Missing required headers: ${missingHeaders.join(', ')}`
+      });
+      return sendErrorReport(res, errorWorksheet, errorRows);
+    }
+
+    const json = await csvtojson().fromString(csvString);
+    const bills = json.map(parseBillFromCSV).filter(bill => !!bill.awb);
+
+    if (bills.length < 1) {
+      errorRows.push({
+        awb: 'EMPTY_PAYLOAD',
+        errors: 'No valid records found in the CSV'
+      });
+      return sendErrorReport(res, errorWorksheet, errorRows);
+    }
+
     const orderAwbs = bills.map(bill => bill.awb);
     const orders = await B2COrderModel.find({
       $or: [{ awb: { $in: orderAwbs } }],
@@ -1199,11 +1230,18 @@ const createBillingUpdateOperation = (bill: any, order: any, vendor: any, charge
 });
 
 const sendErrorReport = async (res: Response, worksheet: any, errorRows: any[]) => {
+  // Add rows to the worksheet
   worksheet.addRows(errorRows);
+  
+  // Set CSV response headers
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
-  await worksheet.csv.write(res);
-  return res.end();
+  
+  // Create a CSV buffer
+  const csvBuffer = await worksheet.workbook.csv.writeBuffer();
+  
+  // Send the buffer
+  res.send(csvBuffer);
 };
 // Helper functions End for uploadClientBillingCSV -------------------------
 
@@ -1328,7 +1366,7 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
     }));
 
     // @ts-ignore
-    await B2BClientBillingModal.bulkWrite(billsWithCharges);
+    // await B2BClientBillingModal.bulkWrite(billsWithCharges);
 
     // Schedule wallet balance deduction after 7 days
     setTimeout(async () => {

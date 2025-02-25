@@ -27,7 +27,25 @@ import CourierModel from "../models/courier.model";
 
 const BATCH_SIZE = 130;
 const API_DELAY = 120000; // 2 minutes in milliseconds
-const trackedOrders = new Set();
+
+const createTrackedOrdersCache = () => {
+  const MAX_CACHE_SIZE = 100000;
+  const cache = new Set();
+
+  return {
+    has: (awb) => cache.has(awb),
+    add: (awb) => {
+      cache.add(awb);
+      // Clear cache if it gets too large
+      if (cache.size > MAX_CACHE_SIZE) {
+        console.log(`Clearing tracked orders cache (size: ${cache.size})`);
+        cache.clear();
+      }
+    }
+  };
+};
+
+const trackedOrders = createTrackedOrdersCache();
 
 const CANCEL_REQUESTED_ORDER_SMARTSHIP = async (): Promise<void> => {
   // get all order with statusCode 2,
@@ -259,63 +277,290 @@ export const REFRESH_ZOHO_TOKEN = async (): Promise<void> => {
 }
 
 // Update the courier id ~ as did in shiprocket tracking
+// export const trackOrder_Smartship = async () => {
+
+//   const vendorNickname = await EnvModel.findOne({ name: "SMARTSHIP" }).select("nickName")
+//   const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } });
+
+//   const smartshipToken = await getSmartShipToken();
+//   if (!smartshipToken) {
+//     Logger.warn("FAILED TO RUN JOB, SMART SHIP TOKEN NOT FOUND");
+//     return;
+//   }
+//   const shipmentAPIConfig = { headers: { Authorization: smartshipToken } };
+
+//   for (const orderWithOrderReferenceId of orders) {
+//     try {
+//       // const apiUrl = `${config.SMART_SHIP_API_BASEURL}${APIs.TRACK_SHIPMENT}=${orderWithOrderReferenceId.order_reference_id}`;
+//       const apiUrl = `http://api.smartship.in/v1/Trackorder?tracking_numbers=${orderWithOrderReferenceId.awb}`;
+//       const response = await axios.get(apiUrl, shipmentAPIConfig);
+//       const responseJSON: TrackResponse = response.data;
+
+//       if (responseJSON.message === "success") {
+//         const keys: string[] = Object.keys(responseJSON.data.scans);
+//         const requiredResponse: RequiredTrackResponse = responseJSON.data.scans[keys[0]][0];
+
+//         const bucketInfo = getSmartshipBucketing(Number(requiredResponse?.status_code) ?? -1);
+//         const orderStages = orderWithOrderReferenceId.orderStages;
+
+//         if (
+//           bucketInfo.bucket !== -1 &&
+//           orderStages.length > 0 &&
+//           orderStages[orderStages.length - 1].location !== requiredResponse.location // as smartship change 
+//         ) {
+//           orderWithOrderReferenceId.bucket = bucketInfo.bucket;
+//           orderWithOrderReferenceId.orderStages.push({
+//             stage: bucketInfo.bucket,
+//             action: bucketInfo.bucket === RTO ? `RTO ${bucketInfo.description}` : bucketInfo.description,
+//             stageDateTime: handleDateFormat(requiredResponse.date_time ?? ""),
+//             activity: requiredResponse.action,
+//             location: requiredResponse.location,
+//           });
+//           try {
+//             await orderWithOrderReferenceId.save();
+//           } catch (error) {
+//             console.log("Error occurred while saving order status:", error);
+//           }
+//           if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.bucket !== RTO) {
+//             const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
+//             await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb}, RTO charges`)
+//             if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb}, RTO COD charges`)
+//           }
+//         }
+//       }
+//     } catch (err) {
+//       console.log("Error: [TrackOrder_Smartship]", err);
+//       Logger.err(err);
+//     }
+//   }
+// }
+
 export const trackOrder_Smartship = async () => {
+  try {
+    const vendorNickname = await EnvModel.findOne({ name: "SMARTSHIP" }).select("nickName");
+    if (!vendorNickname) {
+      console.error("SMARTSHIP vendor nickname not found!");
+      return;
+    }
 
-  const vendorNickname = await EnvModel.findOne({ name: "SMARTSHIP" }).select("nickName")
-  const orders = await B2COrderModel.find({ bucket: { $in: ORDER_TO_TRACK }, carrierName: { $regex: vendorNickname?.nickName } });
+    // Get total count of eligible orders
+    const totalOrdersCount = await B2COrderModel.countDocuments({
+      bucket: { $in: ORDER_TO_TRACK },
+      carrierName: { $regex: vendorNickname?.nickName }
+    });
 
-  const smartshipToken = await getSmartShipToken();
-  if (!smartshipToken) {
-    Logger.warn("FAILED TO RUN JOB, SMART SHIP TOKEN NOT FOUND");
-    return;
+    console.log(`Total SMARTSHIP orders to track: ${totalOrdersCount}`);
+
+    // Get SmartShip token once for all requests
+    const smartshipToken = await getSmartShipToken();
+    if (!smartshipToken) {
+      Logger.warn("FAILED TO RUN JOB, SMART SHIP TOKEN NOT FOUND");
+      return;
+    }
+    const shipmentAPIConfig = { headers: { Authorization: smartshipToken } };
+
+    const PAGE_SIZE = 1000;
+    const BATCH_SIZE = 50; // Process 50 orders per batch
+    const CONCURRENT_BATCHES = 5; // Process 5 batches concurrently
+
+    let processedCount = .0;
+    let updatedCount = 0;
+
+    // Process all orders using pagination
+    for (let skip = 0; skip < totalOrdersCount; skip += PAGE_SIZE) {
+      console.log(`Processing SMARTSHIP orders ${skip} to ${Math.min(skip + PAGE_SIZE, totalOrdersCount)}`);
+
+      // Fetch current page of orders
+      const orders = await B2COrderModel.find({
+        bucket: { $in: ORDER_TO_TRACK },
+        carrierName: { $regex: vendorNickname?.nickName }
+      })
+        .lean()
+        .skip(skip)
+        .limit(PAGE_SIZE)
+        .sort({ updatedAt: -1 }); // Process newer orders first
+
+      // Split current page into batches
+      const batches = [];
+      for (let i = 0; i < orders.length; i += BATCH_SIZE) {
+        batches.push(orders.slice(i, i + BATCH_SIZE));
+      }
+
+      // Process batches with controlled concurrency
+      for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
+        const currentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
+        const batchPromises = currentBatches.map(batch =>
+          processSmartshipBatch(batch, shipmentAPIConfig)
+        );
+
+        const results = await Promise.all(batchPromises);
+
+        // Update counters
+        const batchUpdated = results.reduce((sum, result) => sum + result.updatedCount, 0);
+        updatedCount += batchUpdated;
+        processedCount += currentBatches.reduce((sum, batch) => sum + batch.length, 0);
+
+        if (i + CONCURRENT_BATCHES < batches.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      // Add delay between pages
+      if (skip + PAGE_SIZE < totalOrdersCount) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+
+    console.log(`Completed SMARTSHIP tracking. Total: ${processedCount}/${totalOrdersCount}, Updated: ${updatedCount}`);
+  } catch (error) {
+    console.error("Error in SMARTSHIP tracking:", error);
+    Logger.err(error);
   }
-  const shipmentAPIConfig = { headers: { Authorization: smartshipToken } };
+};
 
-  for (const orderWithOrderReferenceId of orders) {
+const processSmartshipBatch = async (orders, shipmentAPIConfig) => {
+  const updatedOrders = [];
+  const rtoUpdatesNeeded = [];
+
+  const trackingPromises = orders.map(async (order) => {
     try {
-      // const apiUrl = `${config.SMART_SHIP_API_BASEURL}${APIs.TRACK_SHIPMENT}=${orderWithOrderReferenceId.order_reference_id}`;
-      const apiUrl = `http://api.smartship.in/v1/Trackorder?tracking_numbers=${orderWithOrderReferenceId.awb}`;
+      const apiUrl = `http://api.smartship.in/v1/Trackorder?tracking_numbers=${order.awb}`;
       const response = await axios.get(apiUrl, shipmentAPIConfig);
-      const responseJSON: TrackResponse = response.data;
+      const responseJSON = response.data;
 
       if (responseJSON.message === "success") {
-        const keys: string[] = Object.keys(responseJSON.data.scans);
-        const requiredResponse: RequiredTrackResponse = responseJSON.data.scans[keys[0]][0];
+        const keys = Object.keys(responseJSON.data.scans);
+        const scans = responseJSON.data.scans[keys[0]];
+        console.log(JSON.stringify(scans));
 
-        const bucketInfo = getSmartshipBucketing(Number(requiredResponse?.status_code) ?? -1);
-        const orderStages = orderWithOrderReferenceId.orderStages;
+        scans.sort((a, b) => new Date(b.date_time).getTime() - new Date(a.date_time).getTime());
 
-        if (
-          bucketInfo.bucket !== -1 &&
-          orderStages.length > 0 &&
-          orderStages[orderStages.length - 1].location !== requiredResponse.location // as smartship change 
-        ) {
-          orderWithOrderReferenceId.bucket = bucketInfo.bucket;
-          orderWithOrderReferenceId.orderStages.push({
-            stage: bucketInfo.bucket,
-            action: bucketInfo.bucket === RTO ? `RTO ${bucketInfo.description}` : bucketInfo.description,
-            stageDateTime: handleDateFormat(requiredResponse.date_time ?? ""),
-            activity: requiredResponse.action,
-            location: requiredResponse.location,
+        const existingTrackingKeys = new Map();
+
+        order.orderStages.forEach(stage => {
+          const trackingKey = createTrackingKey(stage.activity, stage.location, stage.action, stage.stageDateTime);
+          existingTrackingKeys.set(trackingKey, true);
+        });
+
+        let orderUpdated = false;
+
+        for (const scan of scans) {
+          const bucketInfo = getSmartshipBucketing(Number(scan.status_code) ?? -1);
+
+          if (bucketInfo.bucket !== -1) {
+            const stageDateTime = handleDateFormat(scan.date_time ?? "");
+            const activity = scan.action || scan.status_description || "";
+            const location = scan.location || "";
+            const action = bucketInfo.bucket === RTO ?
+              `RTO ${bucketInfo.description}` :
+              bucketInfo.description;
+
+            const trackingKey = createTrackingKey(activity, location, action, stageDateTime);
+
+            if (existingTrackingKeys.has(trackingKey)) {
+              continue;
+            }
+
+            // Add missing tracking event
+            const newStage = {
+              stage: bucketInfo.bucket,
+              action: action,
+              stageDateTime: stageDateTime,
+              activity: activity,
+              location: location,
+            };
+
+            order.orderStages.push(newStage);
+            existingTrackingKeys.set(trackingKey, true);
+            orderUpdated = true;
+
+            // Latest scan determines the current bucket
+            if (scan === scans[0]) {
+              order.bucket = bucketInfo.bucket;
+
+              // Track RTO cases for batch processing
+              if (bucketInfo.bucket === RTO && order.rtoCharges === 0) {
+                rtoUpdatesNeeded.push(order);
+              }
+            }
+          }
+        }
+
+        if (orderUpdated) {
+          // Sort order stages by date
+          order.orderStages.sort((a, b) => {
+            const dateA = new Date(a.stageDateTime).getTime() || 0;
+            const dateB = new Date(b.stageDateTime).getTime() || 0;
+            return dateA - dateB;
           });
-          try {
-            await orderWithOrderReferenceId.save();
-          } catch (error) {
-            console.log("Error occurred while saving order status:", error);
-          }
-          if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.bucket !== RTO) {
-            const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb)
-            await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.rtoCharges, false, `${orderWithOrderReferenceId.awb}, RTO charges`)
-            if (rtoCharges.cod) await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges.cod, true, `${orderWithOrderReferenceId.awb}, RTO COD charges`)
-          }
+          updatedOrders.push(order);
         }
       }
     } catch (err) {
-      console.log("Error: [TrackOrder_Smartship]", err);
+      console.log(`Error tracking SMARTSHIP order ${order.awb}:`, err.message);
       Logger.err(err);
     }
+  });
+
+  function createTrackingKey(activity, location, action, stageDateTime) {
+    const normalizedActivity = (activity || "").trim().toLowerCase();
+    const normalizedLocation = (location || "").trim().toLowerCase();
+    const normalizedAction = (action || "").trim().toLowerCase();
+
+    // This prevents duplicate entries that differ by only seconds
+    let dateTimePart = "";
+    if (stageDateTime) {
+      const date = new Date(stageDateTime);
+      if (!isNaN(date.getTime())) {
+        dateTimePart = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${date.getMinutes()}`;
+      }
+    }
+
+    // Create a composite key that captures the essence of the tracking event
+    return `${normalizedActivity}|${normalizedLocation}|${normalizedAction}|${dateTimePart}`;
   }
-}
+
+  await Promise.allSettled(trackingPromises);
+
+  if (rtoUpdatesNeeded.length > 0) {
+    await Promise.all(rtoUpdatesNeeded.map(async (order) => {
+      try {
+        const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb);
+        await updateSellerWalletBalance(order.sellerId, rtoCharges.rtoCharges, false, `${order.awb}, RTO charges`);
+        if (rtoCharges.cod) {
+          await updateSellerWalletBalance(order.sellerId, rtoCharges.cod, true, `${order.awb}, RTO COD charges`);
+        }
+        order.rtoCharges = rtoCharges.rtoCharges;
+      } catch (error) {
+        console.error(`Error processing RTO for ${order.awb}:`, error);
+      }
+    }));
+  }
+
+  // Batch save all orders - optimize bulkWrite for large datasets
+  if (updatedOrders.length > 0) {
+    try {
+      const bulkOps = updatedOrders.map(order => ({
+        updateOne: {
+          filter: { _id: order._id },
+          update: {
+            $set: {
+              bucket: order.bucket,
+              orderStages: order.orderStages,
+              rtoCharges: order.rtoCharges || 0
+            }
+          }
+        }
+      }));
+
+      await B2COrderModel.bulkWrite(bulkOps, { ordered: false });
+    } catch (error) {
+      console.error("Error bulk updating SMARTSHIP orders:", error);
+    }
+  }
+
+  return { updatedCount: updatedOrders.length };
+};
 
 export const trackOrder_Shiprocket = async () => {
   try {
@@ -520,81 +765,289 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
 };
 
 
+// export const track_delivery = async () => {
+//   try {
+//     const vendorNicknames = await EnvModel.find({ name: { $regex: "DEL" } }).select("nickName");
+
+//     for (const vendor of vendorNicknames) {
+
+//       const orders = (await B2COrderModel.find({
+//         bucket: { $in: ORDER_TO_TRACK },
+//         carrierName: { $regex: vendor?.nickName },
+//       })).reverse();
+
+//       for (const order of orders) {
+//         try {
+//           let delhiveryToken;
+
+//           switch (vendor.nickName) {
+//             case 'DEL.0.5':
+//               delhiveryToken = await getDelhiveryTokenPoint5();
+//               break;
+//             case 'DEL.10':
+//               delhiveryToken = await getDelhiveryToken10();
+//               break;
+//             default:
+//               delhiveryToken = await getDelhiveryToken();
+//               break;
+//           }
+
+//           const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}${order?.awb}`;
+//           const res = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
+
+//           const shipmentData = res?.data?.ShipmentData?.[0];
+//           if (!shipmentData || !shipmentData.Shipment?.Status) continue;
+
+//           const shipment_status = shipmentData.Shipment.Status;
+//           const bucketInfo = getDelhiveryBucketing(shipment_status);
+
+//           const orderStages = order?.orderStages || [];
+//           const lastStageActivity = orderStages[orderStages.length - 1]?.activity;
+
+//           if (
+//             bucketInfo.bucket !== -1 &&
+//             orderStages.length > 0 &&
+//             !lastStageActivity?.includes(shipment_status.Instructions)
+//           ) {
+//             order.bucket = bucketInfo.bucket;
+//             order.orderStages.push({
+//               stage: bucketInfo.bucket,
+//               action: bucketInfo.bucket == RTO ? `RTO ${shipment_status.Status}` : shipment_status.Status,
+//               stageDateTime: new Date(),
+//               activity: shipment_status.Instructions,
+//               location: shipment_status.StatusLocation,
+//             });
+
+//             try {
+//               await order.save();
+//             } catch (saveError) {
+//               console.log("Error occurred while saving order status:", saveError);
+//             }
+//           }
+
+//           if (bucketInfo.bucket === RTO && order?.rtoCharges === 0) {
+//             const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb)
+//             await updateSellerWalletBalance(order.sellerId, rtoCharges?.rtoCharges, false, `${order.awb}, RTO charges`);
+//             if (rtoCharges.cod) await updateSellerWalletBalance(order.sellerId, rtoCharges.cod, true, `${order.awb}, RTO COD charges`)
+//             order.rtoCharges = rtoCharges?.rtoCharges;
+//             await order.save();
+//           }
+//         } catch (orderError) {
+//           console.log("Error processing order:", orderError);
+//         }
+//       }
+//     }
+//   } catch (err) {
+//     console.log("Error fetching vendors or processing orders:", err);
+//   }
+// };
+
+
+// Delhivery tracking function with pagination and optimizations
+
 export const track_delivery = async () => {
   try {
     const vendorNicknames = await EnvModel.find({ name: { $regex: "DEL" } }).select("nickName");
 
+    let totalProcessed = 0;
+    let totalUpdated = 0;
+
     for (const vendor of vendorNicknames) {
 
-      const orders = (await B2COrderModel.find({
+      // Get total count for this vendor
+      const totalVendorOrders = await B2COrderModel.countDocuments({
         bucket: { $in: ORDER_TO_TRACK },
         carrierName: { $regex: vendor?.nickName },
-      })).reverse();
+      });
 
-      for (const order of orders) {
-        try {
-          let delhiveryToken;
+      // Get appropriate token based on vendor
+      let delhiveryToken;
+      switch (vendor.nickName) {
+        case 'DEL.0.5':
+          delhiveryToken = await getDelhiveryTokenPoint5();
+          break;
+        case 'DEL.10':
+          delhiveryToken = await getDelhiveryToken10();
+          break;
+        default:
+          delhiveryToken = await getDelhiveryToken();
+          break;
+      }
 
-          switch (vendor.nickName) {
-            case 'DEL.0.5':
-              delhiveryToken = await getDelhiveryTokenPoint5();
-              break;
-            case 'DEL.10':
-              delhiveryToken = await getDelhiveryToken10();
-              break;
-            default:
-              delhiveryToken = await getDelhiveryToken();
-              break;
+      if (!delhiveryToken) {
+        console.error(`Failed to get token for ${vendor.nickName}`);
+        continue;
+      }
+
+      const PAGE_SIZE = 1000;
+      const BATCH_SIZE = 50;
+      const CONCURRENT_BATCHES = 5;
+
+      let vendorProcessed = 0;
+      let vendorUpdated = 0;
+
+      // Process all orders using pagination
+      for (let skip = 0; skip < totalVendorOrders; skip += PAGE_SIZE) {
+
+        const orders = await B2COrderModel.find({
+          bucket: { $in: ORDER_TO_TRACK },
+          carrierName: { $regex: vendor?.nickName },
+        })
+          .lean()
+          .skip(skip)
+          .limit(PAGE_SIZE)
+          .sort({ updatedAt: -1 });
+
+        const batches = [];
+        for (let i = 0; i < orders.length; i += BATCH_SIZE) {
+          batches.push(orders.slice(i, i + BATCH_SIZE));
+        }
+
+        // Process batches with controlled concurrency
+        for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
+          const currentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
+          const batchPromises = currentBatches.map(batch =>
+            processDelhiveryBatch(batch, delhiveryToken)
+          );
+
+          const results = await Promise.all(batchPromises);
+
+          const batchUpdated = results.reduce((sum, result) => sum + (result?.updatedCount || 0), 0);
+          vendorUpdated += batchUpdated;
+          vendorProcessed += currentBatches.reduce((sum, batch) => sum + batch.length, 0);
+
+          if (i + CONCURRENT_BATCHES < batches.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
+        }
 
-          const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}${order?.awb}`;
-          const res = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
-
-          const shipmentData = res?.data?.ShipmentData?.[0];
-          if (!shipmentData || !shipmentData.Shipment?.Status) continue;
-
-          const shipment_status = shipmentData.Shipment.Status;
-          const bucketInfo = getDelhiveryBucketing(shipment_status);
-
-          const orderStages = order?.orderStages || [];
-          const lastStageActivity = orderStages[orderStages.length - 1]?.activity;
-
-          if (
-            bucketInfo.bucket !== -1 &&
-            orderStages.length > 0 &&
-            !lastStageActivity?.includes(shipment_status.Instructions)
-          ) {
-            order.bucket = bucketInfo.bucket;
-            order.orderStages.push({
-              stage: bucketInfo.bucket,
-              action: bucketInfo.bucket == RTO ? `RTO ${shipment_status.Status}` : shipment_status.Status,
-              stageDateTime: new Date(),
-              activity: shipment_status.Instructions,
-              location: shipment_status.StatusLocation,
-            });
-
-            try {
-              await order.save();
-            } catch (saveError) {
-              console.log("Error occurred while saving order status:", saveError);
-            }
-          }
-
-          if (bucketInfo.bucket === RTO && order?.rtoCharges === 0) {
-            const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb)
-            await updateSellerWalletBalance(order.sellerId, rtoCharges?.rtoCharges, false, `${order.awb}, RTO charges`);
-            if (rtoCharges.cod) await updateSellerWalletBalance(order.sellerId, rtoCharges.cod, true, `${order.awb}, RTO COD charges`)
-            order.rtoCharges = rtoCharges?.rtoCharges;
-            await order.save();
-          }
-        } catch (orderError) {
-          console.log("Error processing order:", orderError);
+        if (skip + PAGE_SIZE < totalVendorOrders) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
+
+      totalProcessed += vendorProcessed;
+      totalUpdated += vendorUpdated;
+
+      console.log(`Completed ${vendor.nickName} tracking. Processed: ${vendorProcessed}, Updated: ${vendorUpdated}`);
     }
+
+    console.log(`Completed all Delhivery tracking. Total processed: ${totalProcessed}, Total updated: ${totalUpdated}`);
   } catch (err) {
-    console.log("Error fetching vendors or processing orders:", err);
+    console.error("Error in Delhivery tracking:", err);
   }
+};
+
+// Process a batch of Delhivery orders
+const processDelhiveryBatch = async (orders, delhiveryToken) => {
+  const updatedOrders = [];
+
+  for (const order of orders) {
+    try {
+      const apiUrl = `${config.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_TRACK_ORDER}${order?.awb}`;
+      const res = await axios.get(apiUrl, { headers: { authorization: delhiveryToken } });
+
+      const shipmentData = res?.data?.ShipmentData?.[0];
+      if (!shipmentData || !shipmentData.Shipment?.Status) continue;
+
+      const allScans = shipmentData.Shipment.Scans || [];
+      const currentStatus = shipmentData.Shipment.Status;
+
+      // Maintain a set for unique keys
+      const existingStagesSet = new Set(
+        order.orderStages.map(stage =>
+          `${stage.activity}|${stage.location}|${new Date(stage.stageDateTime).toISOString()}|${stage.statusCode || ''}`
+        )
+      );
+
+      let orderUpdated = false;
+      const newStages = [];
+
+      // Function to process a stage and avoid duplicate logic
+      const processStage = (statusDetail, isRTO = false) => {
+        const key = `${statusDetail.Instructions}|${statusDetail.StatusLocation}|${new Date(statusDetail.StatusDateTime).toISOString()}|${statusDetail.StatusCode || ''}`;
+
+        if (!existingStagesSet.has(key)) {
+          const bucketInfo = getDelhiveryBucketing(statusDetail);
+          if (bucketInfo.bucket !== -1) {
+            const newStage = {
+              stage: bucketInfo.bucket,
+              action: isRTO ? `RTO ${statusDetail.Status}` : statusDetail.Status,
+              stageDateTime: new Date(statusDetail.StatusDateTime),
+              activity: statusDetail.Instructions,
+              location: statusDetail.StatusLocation,
+              statusCode: statusDetail.StatusCode
+            };
+            newStages.push(newStage);
+            existingStagesSet.add(key);
+            order.bucket = bucketInfo.bucket;
+            orderUpdated = true;
+          }
+        }
+      };
+
+      allScans.sort((a, b) => new Date(a.ScanDetail.ScanDateTime) - new Date(b.ScanDetail.ScanDateTime));
+      for (const scan of allScans) {
+        processStage(scan.ScanDetail);
+      }
+
+      processStage(currentStatus, order.bucket === RTO);
+
+      if (orderUpdated && order.bucket === RTO && order.rtoCharges === 0) {
+        const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb);
+        await updateSellerWalletBalance(order.sellerId, rtoCharges?.rtoCharges, false, `${order.awb}, RTO charges`);
+
+        if (rtoCharges.cod) {
+          await updateSellerWalletBalance(order.sellerId, rtoCharges.cod, true, `${order.awb}, RTO COD charges`);
+        }
+        order.rtoCharges = rtoCharges?.rtoCharges;
+      }
+
+      if (orderUpdated) {
+        order.orderStages = [...order.orderStages, ...newStages]
+          .sort((a, b) => new Date(a.stageDateTime) - new Date(b.stageDateTime));
+
+        const uniqueStages = Array.from(new Map(order.orderStages.map(stage => [
+          `${stage.activity}|${stage.location}|${new Date(stage.stageDateTime).toISOString()}|${stage.statusCode || ''}`,
+          stage
+        ])).values());
+
+        if (order.orderStages.length !== uniqueStages.length) {
+          console.log(`Removed ${order.orderStages.length - uniqueStages.length} duplicates for AWB ${order.awb}`);
+        }
+
+        order.orderStages = uniqueStages;
+        updatedOrders.push(order);
+      }
+    } catch (error) {
+      console.error(`Error processing Delhivery order ${order.awb}:`, error.message);
+    }
+  }
+
+  // Batch save updated orders
+  if (updatedOrders.length > 0) {
+    try {
+      const bulkOps = updatedOrders.map(order => ({
+        updateOne: {
+          filter: { _id: order._id },
+          update: {
+            $set: {
+              bucket: order.bucket,
+              orderStages: order.orderStages,
+              rtoCharges: order.rtoCharges
+            }
+          }
+        }
+      }));
+
+      const result = await B2COrderModel.bulkWrite(bulkOps);
+      console.log('Bulk write result:', result);
+    } catch (error) {
+      console.error("Error bulk updating Delhivery orders:", error);
+    }
+  }
+
+  return { updatedCount: updatedOrders.length };
 };
 
 export const track_B2B_SHIPROCKET = async () => {
@@ -714,6 +1167,7 @@ const autoCancelShipmetWhosePickupNotScheduled = async () => {
 }
 
 export default async function runCron() {
+
   console.log("Running cron scheduler");
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
@@ -724,10 +1178,11 @@ export default async function runCron() {
   const expression4every12Hrs = "0 0,12 * * *";
 
   if (cron.validate(expression4every2Minutes)) {
-    cron.schedule(expression4every30Minutes, track_delivery);  // Track order status every 30 minutes
-    cron.schedule(expression4every30Minutes, await trackOrder_Shiprocket);  // Track order status every 30 minutes
+    cron.schedule("20,50 * * * *", track_delivery); //20 minutes after the hour and half hour
+    cron.schedule("10,40 * * * *", trackOrder_Smartship); //10 minutes after the hour and half hour
+    cron.schedule(expression4every30Minutes, trackOrder_Shiprocket);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
-    cron.schedule(expression4every2Minutes, trackOrder_Smartship);
+
     cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     cron.schedule(expression4every2Minutes, scheduleShipmentCheck); // B2B 
     cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
@@ -883,60 +1338,126 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
 };
 
 const processShiprocketOrders = async (orders) => {
-  for (const orderWithOrderReferenceId of orders) {
-    if (trackedOrders.has(orderWithOrderReferenceId.awb)) {
+  const shiprocketToken = await getShiprocketToken();
+  if (!shiprocketToken) {
+    console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
+    return { processedCount: 0 };
+  }
+
+  const processedOrders = [];
+
+  for (const order of orders) {
+    if (trackedOrders.has(order.awb)) {
       continue;
     }
 
     try {
-      const shiprocketToken = await getShiprocketToken();
-      if (!shiprocketToken) {
-        console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
-        return;
-      }
-
-      const apiUrl = `${config.SHIPROCKET_API_BASEURL}${APIs.SHIPROCKET_ORDER_TRACKING}/${orderWithOrderReferenceId.awb}`;
+      const apiUrl = `${config.SHIPROCKET_API_BASEURL}${APIs.SHIPROCKET_ORDER_TRACKING}/${order.awb}`;
       const response = await axios.get(apiUrl, {
         headers: {
           Authorization: shiprocketToken
         }
       });
 
-      if (response.data.tracking_data.shipment_status) {
-        const bucketInfo = getShiprocketBucketing(Number(response.data.tracking_data.shipment_status));
-        if (
-          bucketInfo.bucket !== -1 &&
-          orderWithOrderReferenceId.orderStages.length > 0 &&
-          (bucketInfo.bucket === DELIVERED || !(orderWithOrderReferenceId.orderStages[orderWithOrderReferenceId.orderStages.length - 1].activity?.includes(response.data.tracking_data?.shipment_track_activities?.[0]?.activity)))
-        ) {
-          orderWithOrderReferenceId.bucket = bucketInfo.bucket;
-          orderWithOrderReferenceId.orderStages.push({
+      if (!response.data?.tracking_data?.shipment_status) {
+        continue;
+      }
+
+      const trackData = response.data.tracking_data;
+      const activities = trackData.shipment_track_activities || [];
+
+      // Find missing activities by comparing with existing orderStages
+      const existingActivities = new Set(order.orderStages.map(stage =>
+        `${stage.activity}-${stage.stageDateTime}`
+      ));
+
+      const missingActivities = activities.filter(activity => {
+        const activityKey = `${activity.activity}-${activity.date}`;
+        return !existingActivities.has(activityKey);
+      });
+
+      missingActivities.sort((a, b) =>
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+
+      let updatedOrder = false;
+
+      // Process all missing activities, not just the latest one
+      for (const activity of missingActivities) {
+        const bucketInfo = getShiprocketBucketing(Number(activity['sr-status']));
+
+        if (bucketInfo.bucket !== -1) {
+          const stageDateTime = formatISO(
+            parse(activity.date, 'yyyy-MM-dd HH:mm:ss', new Date())
+          ) || new Date();
+
+          const newStage = {
             stage: bucketInfo.bucket,
             action: bucketInfo.bucket == RTO ? `RTO ${bucketInfo.description}` : bucketInfo.description,
-            activity: response.data.tracking_data?.shipment_track_activities?.[0]?.activity,
-            location: response.data.tracking_data?.shipment_track_activities?.[0]?.location,
-            stageDateTime: formatISO(parse(response?.data?.tracking_data?.shipment_track_activities?.[0]?.date, 'yyyy-MM-dd HH:mm:ss', new Date())) ?? new Date(),
-          });
-          try {
-            await orderWithOrderReferenceId.save();
-          } catch (error) {
-            console.log("Error occurred while saving order status:", error);
+            activity: activity.activity,
+            location: activity.location,
+            stageDateTime: stageDateTime,
+          };
+
+          // Add the new stage to orderStages
+          order.orderStages.push(newStage);
+          updatedOrder = true;
+
+          if (activity === missingActivities[0]) {
+            order.bucket = bucketInfo.bucket;
+          }
+
+          if (bucketInfo.bucket === RTO && order.rtoCharges === 0) {
+            const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb);
+            await updateSellerWalletBalance(
+              order.sellerId,
+              rtoCharges?.rtoCharges,
+              false,
+              `${order.awb}, RTO charges`
+            );
+            order.rtoCharges = rtoCharges?.rtoCharges;
+            updatedOrder = true;
           }
         }
-
-        if (bucketInfo.bucket === RTO && orderWithOrderReferenceId.rtoCharges === 0) {
-          const rtoCharges = await shipmentAmtCalcToWalletDeduction(orderWithOrderReferenceId.awb);
-          await updateSellerWalletBalance(orderWithOrderReferenceId.sellerId, rtoCharges?.rtoCharges, false, `${orderWithOrderReferenceId.awb}, RTO charges`);
-          orderWithOrderReferenceId.rtoCharges = rtoCharges?.rtoCharges;
-          await orderWithOrderReferenceId.save();
-        }
-
-        trackedOrders.add(orderWithOrderReferenceId.awb);
       }
-    } catch (err: any) {
-      console.log(err, "SHIPROCKET ERROR TRACKING ORDER");
+
+      if (updatedOrder) {
+        order.orderStages.sort((a, b) =>
+          new Date(a.stageDateTime).getTime() - new Date(b.stageDateTime).getTime()
+        );
+
+        processedOrders.push(order);
+      }
+
+      trackedOrders.add(order.awb);
+    } catch (err) {
+      console.log(`Error tracking order ${order.awb}:`, err.message);
     }
   }
+
+  if (processedOrders.length > 0) {
+    try {
+      const bulkOps = processedOrders.map(order => ({
+        updateOne: {
+          filter: { _id: order._id },
+          update: {
+            $set: {
+              bucket: order.bucket,
+              orderStages: order.orderStages,
+              rtoCharges: order.rtoCharges
+            }
+          }
+        }
+      }));
+
+      await B2COrderModel.bulkWrite(bulkOps);
+      console.log(`Updated ${processedOrders.length} orders with new tracking information`);
+    } catch (error) {
+      console.error("Error bulk updating orders:", error);
+    }
+  }
+
+  return { processedCount: processedOrders.length };
 };
 
 export const scheduleShipmentCheck = async () => {
