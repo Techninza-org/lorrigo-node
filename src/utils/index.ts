@@ -315,7 +315,6 @@ export const validateBulkOrderField = (value: any, fieldName: any, order: any, a
       break;
     case "sellerDetails":
       if (!value.sellerName || value.sellerName.trim().length === 0) {
-        console.log(value, "seller");
         return "Invalid Seller details";
       }
       break;
@@ -832,9 +831,7 @@ export async function cancelOrderShipment(orders: any[]) {
       let vendorName: any = null;
       const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
 
-      console.log(order?.carrierId, order?.awb)
       if (order?.carrierId) {
-        console.log("andr aaya")
 
         // @ts-ignore
         vendorName = (await CourierModel.findById(order.carrierId).populate("vendor_channel_id"))?.vendor_channel_id;
@@ -962,7 +959,6 @@ export async function cancelOrderShipment(orders: any[]) {
             { headers: { Authorization: smartrToken } }
           );
           const response = cancelOrder?.data;
-          console.log(JSON.stringify(response, null, 2), "response [SMARTR]");
           const isCancelled = response.data[0].success;
           if (isCancelled) {
             await updateSellerWalletBalance(sellerId, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
@@ -1327,7 +1323,6 @@ export async function handleSmartShipShipment(
     try {
       const savedShipmentResponse = await shipmentResponseToSave.save();
       const awbNumber = externalAPIResponse?.data?.success_order_details?.orders[0]?.awb_number;
-      console.log("[SmartShip createShipment controller] awbNumber", externalAPIResponse?.data?.success_order_details?.orders[0]);
       if (!awbNumber) {
         throw new Error("Please choose another courier partner!")
       }

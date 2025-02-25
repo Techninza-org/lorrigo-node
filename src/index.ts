@@ -176,7 +176,6 @@ app.get("/api/getsellers", cache("5 minutes"), getSellers); //admin
 app.get("/api/order/:awb", getSpecificOrder);
 
 app.post("/api/shopify", (req, res) => {
-  console.log(req.body);
   return res.send("ok");
 });
 

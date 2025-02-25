@@ -83,7 +83,6 @@ export const registerB2BShiprocketOrder = async (orderDetails: any, sellerName: 
             body: JSON.stringify(payload)
         });
         const result = await response.json();
-        console.log(result, "ORDER REGISTERED B2B SHIPROCKET")
         return result;
     } catch (error) {
         console.log(error, 'error in registerB2BShiprocketOrder')

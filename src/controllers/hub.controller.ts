@@ -170,8 +170,6 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
         smartshipAPIconfig
       );
 
-      console.log(smartShipResponseExpress.data, "smartship express response")
-
     } catch (err) {
       console.log(err, 'error in smartship')
       return next(err);

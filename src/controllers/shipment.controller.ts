@@ -295,7 +295,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         try {
           const savedShipmentResponse = await shipmentResponseToSave.save();
           const awbNumber = externalAPIResponse?.data?.success_order_details?.orders[0]?.awb_number;
-          console.log("[SmartShip createShipment controller] awbNumber", externalAPIResponse?.data?.success_order_details?.orders[0]);
           if (!awbNumber) {
             return res.status(200).send({ valid: false, message: "Please choose another courier partner!" });
           }
@@ -548,8 +547,6 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         const axisoRes = await axios.request(config);
         const smartRShipmentResponse = axisoRes.data;
-
-        console.log("smartRShipmentResponse", smartRShipmentResponse);
 
 
         let orderAWB = smartRShipmentResponse.total_success[0]?.awbNumber;
@@ -1211,7 +1208,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
       if (order.bucket === IN_TRANSIT) {
         const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb) ?? { rtoCharges: 0, cod: 0 };
-        console.log(rtoCharges, "rtoCharges")
         await updateSellerWalletBalance(sellerId, rtoCharges?.rtoCharges || 0, false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
         if (!!rtoCharges.cod) await updateSellerWalletBalance(sellerId, rtoCharges.cod || 0, true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
       }
@@ -1348,7 +1344,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           }
           )
           const response = cancelOrder?.data
-          console.log(JSON.stringify(response, null, 2), "response [SMARTR]")
           const isCancelled = response.data[0].success;
           if (isCancelled) {
             await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
@@ -1378,8 +1373,6 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
           });
 
           const delhiveryShipmentResponse = response.data;
-
-          console.log(delhiveryShipmentResponse, "delhiveryShipmentResponse")
 
           if (delhiveryShipmentResponse.status) {
             if (type === "order") {
@@ -1695,8 +1688,6 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
         pickup_time: "12:23:00",
       };
 
-      console.log(delhiveryManifestPayload, "delhiveryManifestPayload")
-
       try {
         const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL + APIs.DELHIVERY_MANIFEST_ORDER}`, delhiveryManifestPayload, {
           headers: {
@@ -1705,7 +1696,6 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
         });
 
         const delhiveryManifestResponse = response.data;
-        console.log(delhiveryManifestResponse, "delhiveryManifestResponse")
 
         if (delhiveryManifestResponse.status) {
           order.bucket = READY_TO_SHIP;
@@ -2206,8 +2196,6 @@ export async function createB2BShipment(req: ExtendedRequest, res: Response, nex
       try {
         const axisoRes = await axios.request(config);
         const smartRShipmentResponse = axisoRes.data;
-
-        console.log(smartRShipmentResponse, "smartRShipmentResponse")
 
         let orderAWB = smartRShipmentResponse.total_success[0]?.awbNumber;
         if (orderAWB === undefined) {

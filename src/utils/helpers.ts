@@ -9,7 +9,7 @@ import { ExtendedRequest } from "./middleware";
 import APIs from "./constants/third_party_apis";
 import Logger from "./logger";
 import https from "node:https";
-import { isValidObjectId } from "mongoose";
+import mongoose, { isValidObjectId } from "mongoose";
 import CustomPricingModel from "../models/custom_pricing.model";
 import envConfig from "./config";
 import { Types } from "mongoose";
@@ -1522,7 +1522,7 @@ type DelhiveryBucket = {
   description: string;
 };
 
-export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: string }): DelhiveryBucket {
+export function getDelhiveryBucketing(scanDetail: { ScanType: string; Scan: string }): DelhiveryBucket {
   const forwardStatusMapping = {
     "In Transit": { bucket: IN_TRANSIT, description: "In Transit" },
     Pending: { bucket: IN_TRANSIT, description: "In Transit" },
@@ -1564,7 +1564,7 @@ export function getDelhiveryBucketing(scanDetail: { StatusType: string; Status: 
     Returned: { bucket: RETURN_CONFIRMED, description: "Returned" },
   };
 
-  const { StatusType, Status } = scanDetail;
+  const { ScanType: StatusType, Scan : Status } = scanDetail;
 
   // Determine the correct mapping based on StatusType (UD for forward, RT for return, DL for delivered)
   const statusMapping =
@@ -1859,7 +1859,6 @@ export const calculateSellerInvoiceAmount = async () => {
     
     const sellers = await SellerModel.find(
       { 
-        // _id: "663c76ad8e9e095def325208",
         zoho_contact_id: { $exists: true } 
       }
     ).select("zoho_contact_id config _id name").lean();

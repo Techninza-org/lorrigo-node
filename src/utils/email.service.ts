@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import envConfig from './config';
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
 import { json2csv } from 'json-2-csv';
 
 class EmailService {
@@ -26,17 +27,20 @@ class EmailService {
         html,
       });
     } catch (error: any) {
+      console.error("Email sending failed:", error);
       throw new Error('Email sending failed: ' + error.message);
     }
   }
 
   async generateCSV(data: object[], fileName: string): Promise<string> {
     try {
+      const tempDir = os.tmpdir();
+      const filePath = path.join(tempDir, `${fileName}.csv`);
       const csv = json2csv(data);
-      const filePath = path.join(__dirname, `${fileName}.csv`);
       await fs.writeFile(filePath, csv, 'utf8');
       return filePath;
     } catch (error: any) {
+      console.error("CSV Generation Error:", error);
       throw new Error('CSV generation failed: ' + error.message);
     }
   }
@@ -50,8 +54,10 @@ class EmailService {
     pdfBuffer: any,
     pdfFileName: string
   ): Promise<void> {
+    let csvFilePath: string | null = null;
     try {
-      const csvFilePath = await this.generateCSV(csvData, fileName);
+      csvFilePath = await this.generateCSV(csvData, fileName);
+
       await this.transporter.sendMail({
         from: `"Lorrigo Logistic" <${envConfig.SMTP_ID}>`,
         to,
@@ -69,9 +75,20 @@ class EmailService {
           },
         ],
       });
-      await fs.unlink(csvFilePath);
+
+      console.log("Email sent successfully to:", to);
     } catch (error: any) {
+      console.error("Email sending failed:", error);
       throw new Error('Email with CSV attachment failed: ' + error.message);
+    } finally {
+      if (csvFilePath) {
+        try {
+          await fs.unlink(csvFilePath);
+          console.log("CSV file deleted:", csvFilePath);
+        } catch (err) {
+          console.warn("Failed to delete CSV file:", csvFilePath, err);
+        }
+      }
     }
   }
 }

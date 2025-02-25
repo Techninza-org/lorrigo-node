@@ -397,7 +397,6 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
             Authorization: `Zoho-oauthtoken ${accessToken}`
           }
         })
-        console.log(updateRes, 'updateRes[zoho]');
       } catch (error) {
         console.log(error, 'error');
       }
@@ -794,7 +793,6 @@ export const updateB2BVendor4Seller = async (req: ExtendedRequest, res: Response
             ...body,
           };
 
-          console.log(toAdd, "toAdd")
           savedPricing = new CustomB2BPricingModel(toAdd);
           savedPricing = await savedPricing.save();
           return res.status(200).send({ valid: true, message: "Vendor priced updated for user", savedPricing });

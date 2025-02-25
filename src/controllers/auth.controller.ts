@@ -333,7 +333,6 @@ export const handleAdminLogin = async (req: Request, res: Response, next: NextFu
     }
 
     const existingUser = await SellerModel.findOne({ email: body.email, role: "admin" }).select(["name", "email", "password", "walletBalance", "isVerified", "rank", "issubadmin", "subadminpaths"]).lean();
-    console.log(existingUser);
     
     if (!existingUser) {
       return res.status(200).send({

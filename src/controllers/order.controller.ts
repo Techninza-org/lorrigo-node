@@ -274,7 +274,6 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
 
     for (let i = 0; i < orders.length; i++) {
       const order = orders[i];
-      console.log(order, " order")
       const customerDetails = order?.customerDetails;
       const productDetails = order?.productDetails;
 
@@ -594,7 +593,6 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
               Authorization: `${shiprocketToken}`,
             },
           });
-          console.log(updateOrderShiprocket.data, 'updateOrderShiprocket')
         } catch (error: any) {
           console.log(error.response.data)
         }
@@ -822,7 +820,6 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
     
     for (let i = orders.length - 1; i >= 0; i--) {
       const order = orders[i];
-      console.log(JSON.stringify(order, null, 2), "orders[orders.length - 1]")
       const orderDetails = await B2COrderModel.findOne({ sellerId, order_reference_id: order.name }).lean();
       if (!orderDetails) {
 
