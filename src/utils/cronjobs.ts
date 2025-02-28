@@ -1576,8 +1576,8 @@ async function emailInvoiceWithPaymnetLink(): Promise<void> {
 
     for (const invoice of invoices) {
       const seller: any = invoice.sellerId;
-      if (!seller || !seller.email) {
-        console.warn(`No email found for seller of invoice ID: ${invoice.invoice_id}`);
+      if (!seller || !seller.email || invoice.dueAmount <= 0) {
+        console.warn(`No email found for seller of invoice ID: ${invoice.invoice_number}`);
         continue;
       }
 

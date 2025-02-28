@@ -1,25 +1,13 @@
 import mongoose, { Types } from "mongoose";
+import { codSchema, pricingSchema } from "./courier.model";
 
 const currentTime = new Date().getHours() + ":" + new Date().getMinutes() + ":" + new Date().getSeconds();
 
-export const pricingSchema = {
-  basePrice: { type: Number, required: true, min: 0 },
-  incrementPrice: { type: Number, required: true, min: 0 },
-
-  flatRTOCharge: { type: Number, required: false, min: 0, default: 0 },
-  rtoBasePrice: { type: Number, required: false, min: 0, default: 0 },
-  rtoIncrementPrice: { type: Number, required: false, min: 0, default: 0 },
-};
-
-export const codSchema = {
-  hard: { type: Number, required: true, min: 0, default: 40 },
-  percent: { type: Number, required: true, min: 0, max: 100, default: 1.5 },
-};
-
-export const courierSchema = new mongoose.Schema(
+export const shipmenAwbCourierSchema = new mongoose.Schema(
   {
+    awb: { type: String, required: true, unique: true },
     name: { type: String, required: true },
-    vendor_channel_id: { type: Types.ObjectId, ref: "Env", required: true },
+
     weightSlab: { type: Number, required: true },
     weightUnit: { type: String, required: true },
 
@@ -39,9 +27,10 @@ export const courierSchema = new mongoose.Schema(
     carrierID: { type: Number, required: true },
     isActive: { type: Boolean, required: true, default: true },
     isReversedCourier: { type: Boolean, required: true, default: false },
+    vendor_channel_id: { type: Types.ObjectId, ref: "Env", required: true },
   },
   { timestamps: true }
 );
 
-const CourierModel = mongoose.model("Courier", courierSchema);
-export default CourierModel;
+const ShipmenAwbCourierModel = mongoose.model("ShipmentAwbCourier", shipmenAwbCourierSchema);
+export default ShipmenAwbCourierModel;

@@ -4,7 +4,10 @@ const pricingSchema = {
   basePrice: { type: Number, required: true, min: 0 },
   incrementPrice: { type: Number, required: true, min: 0 },
   isRTOSameAsFW: { type: Boolean, required: true, defualt: true },
-  flatRTOCharge: { type: Number, required: true, min: 0 },
+  flatRTOCharge: { type: Number, required: false, min: 0, default: 0 },
+  
+  rtoBasePrice: { type: Number, required: false, min: 0 },
+  rtoIncrementPrice: { type: Number, required: false, min: 0 },
 };
 const codSchema = {
   hard: { type: Number, required: true, min: 0 },
@@ -14,6 +17,11 @@ const CustomPricingSchema = new mongoose.Schema(
   {
     sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller" },
     vendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Courier" },
+    
+    isRtoDeduct: { type: Boolean, required: true, defualt: true },
+    isFwdDeduct: { type: Boolean, required: true, defualt: true },
+    isCodDeduct: { type: Boolean, required: true, defualt: true },
+
     codCharge: { type: codSchema, required: true },
     withinCity: { type: pricingSchema, required: true },
     withinZone: { type: pricingSchema, required: true },

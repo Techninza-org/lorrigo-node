@@ -2,7 +2,7 @@ import mongoose, { isValidObjectId, Types } from "mongoose";
 import { B2BOrderModel, B2COrderModel } from "../models/order.model";
 import nodemailer from "nodemailer";
 import { startOfWeek, addDays, getDay, format, startOfDay, formatDate } from "date-fns";
-import { getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getMarutiToken, getPincodeDetails, getSellerChannelConfig, getShiprocketToken, getSMARTRToken, getSmartShipToken, MetroCitys, NorthEastStates, validateEmail } from "./helpers";
+import { getDelhiveryToken, getDelhiveryToken10, getDelhiveryTokenPoint5, getMarutiToken, getPincodeDetails, getSellerChannelConfig, getShiprocketToken, getSMARTRToken, getSmartShipToken, MetroCitys, NorthEastStates, rateCalculation, validateEmail } from "./helpers";
 import { CANCELED, CANCELLED_ORDER_DESCRIPTION, COURRIER_ASSIGNED_ORDER_DESCRIPTION, DELIVERED, IN_TRANSIT, MANIFEST_ORDER_DESCRIPTION, NEW, NEW_ORDER_DESCRIPTION, PICKUP_SCHEDULED_DESCRIPTION, READY_TO_SHIP, RETURN_CONFIRMED, RTO, SHIPMENT_CANCELLED_ORDER_DESCRIPTION, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, SHIPROCKET_MANIFEST_ORDER_STATUS, SMARTSHIP_COURIER_ASSIGNED_ORDER_STATUS, SMARTSHIP_MANIFEST_ORDER_STATUS } from "./lorrigo-bucketing-info";
 import { DeliveryDetails, IncrementPrice, PickupDetails, Vendor, Body } from "../types/rate-cal";
 import SellerModel from "../models/seller.model";
@@ -1052,17 +1052,12 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
   try {
     const order: any = await B2COrderModel
       .findOne({ awb })
+      .select("carrierName carrierId pickupAddress customerDetails payment_mode shiprocket_order_id sellerId amount2Collect orderWeight orderWeightUnit orderBoxLength orderBoxWidth orderBoxHeight sizeUnit isReverseOrder")
       .populate('pickupAddress')
 
     if (!order) {
       throw new Error('Order not found');
     }
-
-    // const courier = await CourierModel.findOne({
-    //   name: {
-    //     $regex: new RegExp(order.carrierName.split(' ').slice(0, 2).join(' ') + '[ -](SS|\\d+\\.\\d+kg|SR|express|.*)?', 'i')
-    //   }
-    // });
 
     let regexPattern = order.carrierName.split(' ').slice(0, 3).join(' ') + '(\\s+(SS|SR|SMR|DEL(_\\d+(\\.\\d+)?|)|.*)?)?';
     let courier = await CourierModel.findOne({
@@ -1070,8 +1065,6 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
         $regex: new RegExp(regexPattern, 'i')
       }
     });
-    console.log("\n\n");
-    console.log(order.carrierName, order.carrierName.split(' ').slice(0, 3), "order.carrierName")
 
     if (!courier) {
       regexPattern = order.carrierName.split(' ').slice(0, 3).join(' ') + '(\\s+SR)?';
@@ -1082,56 +1075,32 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
       });
     }
 
-    // Bluedart surface 0.5kg SR [ 'Bluedart', 'surface', '0.5kg' ] order.carrierName
     if (!courier) {
       throw new Error('Courier not found');
     }
 
-    console.log("courier found RTO")
+    let courierCharge: any = (await rateCalculation(
+      order.shiprocket_order_id,
+      order.pickupAddress.pincode,
+      order.customerDetails.get("pincode"),
+      order.orderWeight,
+      order.orderWeightUnit,
+      order.orderBoxLength,
+      order.orderBoxWidth,
+      order.orderBoxHeight,
+      "cm",
+      order.payment_mode,
+      [order.carrierId || courier._id],
+      order.sellerId,
+      order.amount2Collect,
+      order.pickupAddress._id,
+      order.isReverseOrder,
+    ))?.[0]
 
-    const pickupDetails = {
-      StateName: order.pickupAddress.state,
-      District: order.pickupAddress.city
+    return {
+      rtoCharges: courierCharge?.rtoCharges,
+      cod: courierCharge?.cod
     }
-
-    const deliveryDetails = {
-      StateName: order.customerDetails.get("state"),
-      District: order.customerDetails.get("city")
-    }
-
-    const increment_price = getIncrementPrice(pickupDetails, deliveryDetails, MetroCitys, NorthEastStates, courier);
-    if (!increment_price) {
-      throw new Error("Invalid increment price");
-    }
-
-    const seller = await SellerModel.findById(order.sellerId).select("config");
-    const config = seller?.config
-
-    const minWeight = courier.weightSlab;
-    //@ts-ignore
-    let totalCharge = 0;
-    totalCharge += increment_price.basePrice;
-
-    let orderWeight = order.orderWeight;
-    if (orderWeight < minWeight) {
-      orderWeight = minWeight;
-    }
-
-    const codPrice = courier.codCharge?.hard;
-    const codAfterPercent = (courier.codCharge?.percent / 100) * order.amount2Collect;
-    let cod = 0;
-    if (order.paymentType === 1 && config?.isCOD) {
-      cod = codPrice > codAfterPercent ? codPrice : codAfterPercent;
-    }
-
-    const weightIncrementRatio = Math.ceil((order.orderWeight - minWeight) / courier.incrementWeight);
-    totalCharge += (increment_price.incrementPrice * weightIncrementRatio) + cod;
-    let rtoCharges = 0
-    if (config?.isRTO) {
-      rtoCharges = increment_price.isRTOSameAsFW ? (totalCharge - cod) : increment_price.flatRTOCharge
-    }
-
-    return { rtoCharges, cod };
 
   } catch (error) {
     console.log(error)

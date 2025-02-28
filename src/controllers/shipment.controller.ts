@@ -50,6 +50,7 @@ import ClientBillingModal from "../models/client.billing.modal";
 import envConfig from "../utils/config";
 import SellerModel from "../models/seller.model";
 import B2BCalcModel from "../models/b2b.calc.model";
+import ShipmenAwbCourierModel from "../models/shipment-awb-courier.model";
 
 // TODO: REMOVE THIS CODE: orderType = 0 ? "b2c" : "b2b"
 export async function createShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
@@ -165,6 +166,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       paymentType as any,
       [carrierId],
       sellerId,
+      true,
       collectableAmount,
       hubId,
       order.isReverseOrder,
@@ -175,14 +177,13 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       return res.status(200).send({ valid: false, message: "Courier is not servicable!" });
     }
 
-
-    body.charge = seller.config?.isFW ? courierCharge?.[0].charge : 0
-    codCharge = seller.config?.isCOD ? courierCharge[0].cod : 0
+    body.charge = courierCharge?.[0].charge
+    codCharge = courierCharge[0].cod
 
     // // update in order
     order.codCharge = codCharge;
 
-    if ((seller.config.isPrepaid && seller?.config?.isFW) && (body.charge >= seller.walletBalance || seller.walletBalance <= 0)) {
+    if (seller.config.isPrepaid && (body.charge >= seller.walletBalance || seller.walletBalance <= 0)) {
       return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
     }
 
@@ -291,9 +292,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           .status(200)
           .send({ valid: false, message: "Courier Not Serviceable!", smartship: externalAPIResponse });
       } else {
-        const shipmentResponseToSave = new ShipmentResponseModel({ order: order._id, response: externalAPIResponse });
+        // const shipmentResponseToSave = new ShipmentResponseModel({ order: order._id, response: externalAPIResponse });
         try {
-          const savedShipmentResponse = await shipmentResponseToSave.save();
+          // const savedShipmentResponse = await shipmentResponseToSave.save();
           const awbNumber = externalAPIResponse?.data?.success_order_details?.orders[0]?.awb_number;
           if (!awbNumber) {
             return res.status(200).send({ valid: false, message: "Please choose another courier partner!" });
@@ -357,9 +358,14 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               console.log("Error[shopify]", error);
             }
           }
-
           await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
 
+          const { _id, ...restCourier } = courierCharge[0].courier
+
+          const savedShipmentResponse = await ShipmenAwbCourierModel.create({
+            awb: awbNumber,
+            ...restCourier,
+          });
           return res.status(200).send({ valid: true, order: updatedOrder, shipment: savedShipmentResponse });
         } catch (err) {
           console.log(err, "error in saving shipment response");
@@ -456,6 +462,15 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           order.channelFulfillmentId = fulfillmentOrderId;
           await order.save();
+
+
+          const { _id, ...restCourier } = courierCharge[0].courier
+
+          const savedShipmentResponse = await ShipmenAwbCourierModel.create({
+            awb: awb,
+            ...restCourier,
+          });
+
           await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
           return res.status(200).send({ valid: true, order: orderWOShiprocket });
@@ -756,6 +771,14 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         }
 
         await order.save();
+
+        
+        const { _id, ...restCourier } = courierCharge[0].courier
+
+        const savedShipmentResponse = await ShipmenAwbCourierModel.create({
+          awb: delhiveryRes?.waybill,
+          ...restCourier,
+        });
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
         const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
         return res.status(200).send({ valid: true, order: orderWOShiprocket });
@@ -898,6 +921,12 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         }
 
         await order.save();
+        const { _id, ...restCourier } = courierCharge[0].courier
+
+        const savedShipmentResponse = await ShipmenAwbCourierModel.create({
+          awb: delhiveryRes?.waybill,
+          ...restCourier,
+        });
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
         const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
         return res.status(200).send({ valid: true, order: orderWOShiprocket });
@@ -1043,6 +1072,12 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
         }
 
         await order.save();
+        const { _id, ...restCourier } = courierCharge[0].courier
+
+        const savedShipmentResponse = await ShipmenAwbCourierModel.create({
+          awb: delhiveryRes?.waybill,
+          ...restCourier,
+        });
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`)
         const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
         return res.status(200).send({ valid: true, order: orderWOShiprocket });

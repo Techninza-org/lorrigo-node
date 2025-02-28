@@ -25,6 +25,7 @@ import { MonthlyBilledAWBModel } from "../models/billed-awbs-month";
 import { addDays } from 'date-fns';
 import SellerDisputeModel from "../models/dispute.model";
 import { paymentStatusInfo } from "../utils/recharge-wallet-info";
+import ShipmenAwbCourierModel from "../models/shipment-awb-courier.model";
 
 export const walletDeduction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -415,7 +416,7 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
 
 export const updateSellerConfig = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const { isD2C, isB2B, isPrepaid, isFW, isRTO, isCOD } = req.body;
+    const { isD2C, isB2B, isPrepaid } = req.body;
     const { sellerId } = req.params;
 
     if (!sellerId) {
@@ -427,9 +428,6 @@ export const updateSellerConfig = async (req: ExtendedRequest, res: Response, ne
         'config.isD2C': isD2C,
         'config.isB2B': isB2B,
         'config.isPrepaid': isPrepaid,
-        'config.isFW': isFW,
-        'config.isRTO': isRTO,
-        'config.isCOD': isCOD,
       }
     };
 
@@ -1002,7 +1000,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     }
 
     const json = await csvtojson().fromString(csvString);
-    const bills = json.map(parseBillFromCSV).filter(bill => !!bill.awb);
+    const bills = json.map(parseBillFromCSV).filter((bill: any) => !!bill.awb);
 
     if (bills.length < 1) {
       errorRows.push({
@@ -1037,7 +1035,12 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
         const order = orders.find(o => o.awb === bill.awb);
         if (!order || !order.pickupAddress) return null;
 
-        const vendor = await getVendorInfo(order.sellerId.toString(), order.carrierId ?? bill.carrierID);
+        // const vendor = await getVendorInfo(order.sellerId.toString(), order.carrierId ?? bill.carrierID);
+        if (!order.awb) {
+          throw new Error(`AWB is missing for order: ${order._id}`);
+        }
+
+        const vendor = await getVendorInfo(order.awb, order.sellerId.toString(), order.carrierId ?? bill.carrierID);
         if (!vendor) return null;
 
         // @ts-ignore
@@ -1148,19 +1151,24 @@ const initializeErrorWorksheet = (workbook: any) => {
   return worksheet;
 };
 
-const getVendorInfo = async (sellerId: string, carrierId: string) => {
-  let vendor = await CustomPricingModel.findOne({
-    sellerId,
-    vendorId: carrierId
-  }).populate({
-    path: 'vendorId',
-    populate: {
-      path: 'vendor_channel_id'
-    }
-  });
+const getVendorInfo = async (awb: string, sellerId: string, carrierId: string) => {
+  let vendor = null;
+  vendor = await ShipmenAwbCourierModel.findOne({ awb: awb }).populate("vendor_channel_id");
 
   if (!vendor) {
-    vendor = await CourierModel.findById(carrierId).populate("vendor_channel_id");
+    vendor = await CustomPricingModel.findOne({
+      sellerId,
+      vendorId: carrierId
+    }).populate({
+      path: 'vendorId',
+      populate: {
+        path: 'vendor_channel_id'
+      }
+    });
+
+    if (!vendor) {
+      vendor = await CourierModel.findById(carrierId).populate("vendor_channel_id");
+    }
   }
 
   return vendor;
@@ -1230,14 +1238,14 @@ const createBillingUpdateOperation = (bill: any, order: any, vendor: any, charge
 const sendErrorReport = async (res: Response, worksheet: any, errorRows: any[]) => {
   // Add rows to the worksheet
   worksheet.addRows(errorRows);
-  
+
   // Set CSV response headers
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
-  
+
   // Create a CSV buffer
   const csvBuffer = await worksheet.workbook.csv.writeBuffer();
-  
+
   // Send the buffer
   res.send(csvBuffer);
 };

@@ -189,6 +189,9 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
           const toAdd = {
             vendorId: vendorId,
             sellerId: sellerId,
+            isRtoDeduct: vendor.isRtoDeduct,
+            isFwdDeduct: vendor.isFwdDeduct,
+            isCodDeduct: vendor.isCodDeduct,
             withinCity: vendor.withinCity,
             withinZone: vendor.withinZone,
             withinMetro: vendor.withinMetro,
@@ -545,10 +548,12 @@ export const rateCalculation = async (
   paymentType: 0 | 1,
   users_vendors: string[],
   seller_id: any,
+  wantCourierData: boolean = false,
   collectableAmount?: any,
   hubId?: number,
   isReversedOrder?: boolean,
-  orderRefId?: string
+  orderRefId?: string,
+
 ): Promise<{
   name: string;
   cod: number;
@@ -625,13 +630,6 @@ export const rateCalculation = async (
       const response = await axios.get(url, config);
       const courierCompanies = response?.data?.data?.available_courier_companies;
 
-      console.log(
-        "[Shiprocket Heavy weight Couries]",
-        courierCompanies?.map((item: any) => {
-          return [item.courier_company_id, item.courier_name];
-        })
-      );
-
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
       vendors?.forEach((vendor: any) => {
         const courier = courierCompanies?.find((company: { courier_company_id: number }) => {
@@ -668,13 +666,6 @@ export const rateCalculation = async (
         paymentType,
         isReversedOrder ? 1 : 0,
         []
-      );
-
-      console.log(
-        smartShipCouriers.map((item: any) => {
-          return [item.carrier_id, item.carrier_name];
-        }),
-        "smartShipCouriers"
       );
 
       const smartShipNiceName = await EnvModel.findOne({ name: "SMARTSHIP" }).select("_id nickName");
@@ -841,6 +832,7 @@ export const rateCalculation = async (
       console.log("error", error);
     }
 
+    //marutiToken
     try {
       const marutiToken = await getMarutiToken();
 
@@ -932,9 +924,9 @@ export const rateCalculation = async (
       order_zone: string;
       nickName?: string;
       orderRefId?: string;
+      courier?: any;
     }[] = [];
 
-    console.log(commonCouriers, 'commonCouriers')
     const loopLength = commonCouriers.length;
 
     for (let i = 0; i < loopLength; i++) {
@@ -948,6 +940,12 @@ export const rateCalculation = async (
         sellerId: seller_id,
       });
       if (userSpecificUpdatedVendorDetails.length === 1) {
+        cv.isFwdDeduct = userSpecificUpdatedVendorDetails[0]?.isFwdDeduct ?? true;
+        cv.isRtoDeduct = userSpecificUpdatedVendorDetails[0]?.isRtoDeduct ?? true;
+        cv.isCodDeduct = userSpecificUpdatedVendorDetails[0]?.isCodDeduct ?? true;
+
+        cv.codCharge = userSpecificUpdatedVendorDetails[0]?.codCharge;
+
         cv.withinCity = userSpecificUpdatedVendorDetails[0].withinCity;
         cv.withinZone = userSpecificUpdatedVendorDetails[0].withinZone;
         cv.withinMetro = userSpecificUpdatedVendorDetails[0].withinMetro;
@@ -1005,22 +1003,25 @@ export const rateCalculation = async (
         orderWeight = minWeight;
       }
 
-      // minW = 5kg
-      // or: 6.49kg
-      // zone c (inP: 40, BaseP : 240)
-      // 7kg - 5kg = 2kg
-      // totalW = baseP + (inP * 2)
+      const isFwdDeduct = cv.isFwdDeduct === undefined ? true : Boolean(cv.isFwdDeduct);
+      const isRtoDeduct = cv.isRtoDeduct === undefined ? true : Boolean(cv.isRtoDeduct);
+      const isCodDeduct = cv.isCodDeduct === undefined ? true : Boolean(cv.isCodDeduct);
+      const isRTOSameAsFW = increment_price?.isRTOSameAsFW === undefined ? true : Boolean(increment_price?.isRTOSameAsFW);
 
       const codPrice = cv.codCharge?.hard;
       const codAfterPercent = (cv.codCharge?.percent / 100) * collectableAmount;
       let cod = 0;
       if (paymentType === 1) {
-        cod = codPrice > codAfterPercent ? codPrice : codAfterPercent;
+        cod = isCodDeduct ? (codPrice > codAfterPercent ? codPrice : codAfterPercent) : 0;
       }
 
       const weightIncrementRatio = Math.ceil((orderWeight - minWeight) / cv.incrementWeight);
       totalCharge += increment_price.incrementPrice * weightIncrementRatio + cod;
-      let rtoCharges = totalCharge - cod;
+      let rtoCharges =  0;
+      
+      if (isRtoDeduct) {
+        rtoCharges =  !isRTOSameAsFW ? (increment_price?.rtoBasePrice ?? 0) + ((increment_price?.rtoIncrementPrice ?? 0) * weightIncrementRatio ):  (totalCharge - cod)
+      }
 
       data2send.push({
         nickName: cv.nickName,
@@ -1029,12 +1030,13 @@ export const rateCalculation = async (
         cod,
         isReversedCourier: cv.isReversedCourier,
         rtoCharges,
-        charge: totalCharge,
+        charge: isFwdDeduct ? totalCharge : 0,
         type: cv.type,
         expectedPickup,
         carrierID: cv._id,
         order_zone,
         orderRefId: orderRefId,
+        ...(wantCourierData ? { courier: cv } : {})
       });
     }
 
@@ -2230,12 +2232,12 @@ export async function createAdvanceAndInvoice(
     const filledEmail = emailTemplate
           .replaceAll('{{invoiceId}}', invoice.invoice_number || '')
           .replaceAll('{{userName}}', seller.name || 'Seller')
-          .replaceAll('{{invoiceAmt}}', formatCurrencyForIndia(Number(invoice.dueAmount)) || '0')
+          .replaceAll('{{invoiceAmt}}', formatCurrencyForIndia(Number(invoice.zohoAmt)) || '0')
           .replaceAll('{{invoiceDate}}', invoice.date || 'N/A');
 
     await emailService.sendEmailWithCSV(
         seller.email,
-        `Invoice Payment Reminder: ${invoice.invoice_number}`,
+        `Invoice Generated: ${invoice.invoice_number}`,
         filledEmail,
         await generateListInoviceAwbs(invoice?.invoicedAwbs || [], invoice.invoice_number || ''),
         "Invoice AWBs",
