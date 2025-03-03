@@ -36,10 +36,10 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
     const customerDetails = body?.customerDetails;
     const productDetails = body?.productDetails;
 
-     const validationResult = validateOrderPayload(body);
-        if (!validationResult.valid) {
-          return res.status(400).send(validationResult);
-        }
+    const validationResult = validateOrderPayload(body);
+    if (!validationResult.valid) {
+      return res.status(400).send(validationResult);
+    }
 
     try {
       const orderWithOrderReferenceId = await B2COrderModel.findOne({
@@ -728,14 +728,115 @@ export const updateB2CBulkShopifyOrders = async (req: ExtendedRequest, res: Resp
   }
 }
 
+// export const getOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+//   try {
+//     const sellerId = req.seller._id;
+//     // let { limit, page, status }: { limit?: number; page?: number; status?: string } = req.query;
+//     let { from, to, status }: { from?: string, to?: string, status?: string } = req.query;
+
+
+//     const obj = {
+//       new: [NEW, RETURN_CONFIRMED],
+//       "ready-to-ship": [READY_TO_SHIP, RETURN_PICKED],
+//       "in-transit": [IN_TRANSIT, RETURN_IN_TRANSIT],
+//       delivered: [DELIVERED, RETURN_DELIVERED],
+//       ndr: [NDR, RETURN_CANCELLATION],
+//       rto: [RTO, RTO_DELIVERED],
+//     };
+
+//     // limit = Number(limit);
+//     // page = Number(page);
+//     // page = page < 1 ? 1 : page;
+//     // limit = limit < 1 ? 1 : limit;
+
+//     // const skip = (page - 1) * limit;
+
+//     let orders;
+//     try {
+//       let query: any = { sellerId };
+
+//       if (from || to) {
+//         query.createdAt = {};
+
+//         if (from) {
+//           const [month, day, year] = from.split("/");
+//           const fromDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+//           query.createdAt.$gte = fromDate;
+//         }
+
+//         if (to) {
+//           const [month, day, year] = to.split("/");
+//           const toDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
+//           query.createdAt.$lte = toDate;
+//         }
+
+//         if (!from) {
+//           delete query.createdAt.$gte;
+//         }
+//         if (!to) {
+//           delete query.createdAt.$lte;
+//         }
+//       }
+
+
+//       if (status && obj.hasOwnProperty(status)) {
+//         query.bucket = { $in: obj[status as keyof typeof obj] };
+//       }
+
+//       // Optimized query
+//       orders = await B2COrderModel
+//         .find(query)
+//         .sort({ createdAt: -1 })
+//         .populate("productId", "name category quantity taxable_value tax_rate") // Fetch only required fields from productId
+//         .populate("pickupAddress")    // Fetch only required fields from pickupAddress
+//         .lean();
+
+//     } catch (err) {
+//       return next(err);
+//     }
+//     return res.status(200).send({
+//       valid: true,
+//       response: { orders },
+//     });
+//   } catch (error) {
+//     return next(error);
+//   }
+// };
+
 export const getOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const sellerId = req.seller._id;
-    // let { limit, page, status }: { limit?: number; page?: number; status?: string } = req.query;
-    let { from, to, status }: { from?: string, to?: string, status?: string } = req.query;
+    let { 
+      from, 
+      to, 
+      status, 
+      page = 1, 
+      limit = 20, 
+      sort = "createdAt", 
+      order = "desc",
+      search,
+      awb,
+      reference
+    }: { 
+      from?: string, 
+      to?: string, 
+      status?: string,
+      page?: number,
+      limit?: number,
+      sort?: string,
+      order?: "asc" | "desc",
+      search?: string,
+      awb?: string,
+      reference?: string
+    } = req.query;
 
+    // Convert page and limit to numbers
+    const pageNum = Number(page) < 1 ? 1 : Number(page);
+    const limitNum = Number(limit) < 1 ? 20 : Number(limit) > 100 ? 100 : Number(limit);
+    const skip = (pageNum - 1) * limitNum;
 
-    const obj = {
+    // Status mapping
+    const bucketMap = {
       new: [NEW, RETURN_CONFIRMED],
       "ready-to-ship": [READY_TO_SHIP, RETURN_PICKED],
       "in-transit": [IN_TRANSIT, RETURN_IN_TRANSIT],
@@ -744,65 +845,119 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       rto: [RTO, RTO_DELIVERED],
     };
 
-    // limit = Number(limit);
-    // page = Number(page);
-    // page = page < 1 ? 1 : page;
-    // limit = limit < 1 ? 1 : limit;
+    // Build query
+    const query: any = { sellerId };
 
-    // const skip = (page - 1) * limit;
+    // Date range filter
+    if (from || to) {
+      query.createdAt = {};
 
-    let orders;
+      if (from) {
+        const [month, day, year] = from.split("/");
+        const fromDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+        query.createdAt.$gte = fromDate;
+      }
+
+      if (to) {
+        const [month, day, year] = to.split("/");
+        const toDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
+        query.createdAt.$lte = toDate;
+      }
+    }
+
+    // Status filter
+    if (status && bucketMap.hasOwnProperty(status)) {
+      query.bucket = { $in: bucketMap[status as keyof typeof bucketMap] };
+    }
+
+    // Search filter (for AWB or reference ID)
+    if (search) {
+      query.$or = [
+        { awb: { $regex: search, $options: 'i' } },
+        { order_reference_id: { $regex: search, $options: 'i' } },
+        { 'customerDetails.name': { $regex: search, $options: 'i' } },
+        { 'customerDetails.phone': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Specific AWB filter
+    if (awb) {
+      query.awb = { $regex: awb, $options: 'i' };
+    }
+
+    // Specific reference ID filter
+    if (reference) {
+      query.order_reference_id = { $regex: reference, $options: 'i' };
+    }
+
+    // Validate sort field to prevent injection
+    const allowedSortFields = ['createdAt', 'order_reference_id', 'awb', 'order_invoice_date', 'bucket'];
+    const sortField = allowedSortFields.includes(sort) ? sort : 'createdAt';
+    const sortOrder = order === 'asc' ? 1 : -1;
+    const sortOptions: any = {};
+    sortOptions[sortField] = sortOrder;
+
     try {
-      let query: any = { sellerId };
-
-      if (from || to) {
-        query.createdAt = {};
-
-        if (from) {
-          const [month, day, year] = from.split("/");
-          const fromDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
-          query.createdAt.$gte = fromDate;
-        }
-
-        if (to) {
-          const [month, day, year] = to.split("/");
-          const toDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
-          query.createdAt.$lte = toDate;
-        }
-
-        if (!from) {
-          delete query.createdAt.$gte;
-        }
-        if (!to) {
-          delete query.createdAt.$lte;
-        }
-      }
-
-
-      if (status && obj.hasOwnProperty(status)) {
-        query.bucket = { $in: obj[status as keyof typeof obj] };
-      }
-
-      // Optimized query
-      orders = await B2COrderModel
+      // Count total documents for pagination info
+      const totalCount = await B2COrderModel.countDocuments(query);
+      
+      // Execute optimized query with projection to select only needed fields
+      const orders = await B2COrderModel
         .find(query)
-        .sort({ createdAt: -1 })
-        .populate("productId", "name category quantity taxable_value tax_rate") // Fetch only required fields from productId
-        .populate("pickupAddress")    // Fetch only required fields from pickupAddress
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(limitNum)
+        .select({
+          _id: 1,
+          awb: 1,
+          order_reference_id: 1,
+          client_order_reference_id: 1,
+          payment_mode: 1,
+          orderWeight: 1,
+          orderWeightUnit: 1,
+          order_invoice_date: 1,
+          order_invoice_number: 1,
+          numberOfBoxes: 1,
+          orderSizeUnit: 1,
+          orderBoxHeight: 1,
+          orderBoxWidth: 1,
+          orderBoxLength: 1,
+          amount2Collect: 1,
+          customerDetails: 1,
+          bucket: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          channelName: 1,
+          orderStages: 1,
+          isReverseOrder: 1
+        })
+        .populate("productId", "name category quantity taxable_value tax_rate")
+        .populate("pickupAddress", "name address city state pincode")
         .lean();
 
+      return res.status(200).send({
+        valid: true,
+        response: { 
+          orders,
+          pagination: {
+            total: totalCount,
+            page: pageNum,
+            limit: limitNum,
+            pages: Math.ceil(totalCount / limitNum)
+          }
+        },
+      });
     } catch (err) {
       return next(err);
     }
-    return res.status(200).send({
-      valid: true,
-      response: { orders },
-    });
   } catch (error) {
     return next(error);
   }
 };
 
+
+// Old getChannelOrders: [01-03-2025] (Date on which function marked as old)
+/*
 export const getChannelOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const seller = req.seller;
@@ -886,6 +1041,230 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
     return next(error);
   }
 }
+*/
+
+export const getChannelOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const seller = req.seller;
+    const sellerId = req.seller._id;
+
+    const [shopifyConfig, primaryHub] = await Promise.all([
+      getSellerChannelConfig(sellerId),
+      HubModel.findOne({ sellerId, isPrimary: true }).lean()
+    ]);
+
+    if (!shopifyConfig?.storeUrl || !shopifyConfig?.sharedSecret) {
+      return res.status(400).json({ message: "Invalid Shopify configuration." });
+    }
+
+    const baseUrl = `${shopifyConfig.storeUrl}${APIs.SHOPIFY_ORDER}`;
+    const headers = {
+      "X-Shopify-Access-Token": shopifyConfig.sharedSecret,
+    };
+
+    let savedCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
+
+    // Date range for orders (using last 5 days as default)
+    const endDate = new Date().toISOString();
+    const startDate = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    console.log(startDate, "startDate", endDate, "endDate")
+
+    let nextPageUrl: string | null = `${baseUrl}?limit=250&created_at_min=${startDate}&created_at_max=${endDate}&status=any`;
+
+    while (nextPageUrl) {
+      try {
+        const response: any = await axios.get(nextPageUrl, {
+          headers,
+          timeout: 30000 // 30 second timeout
+        });
+
+        const orders = response.data.orders || [];
+
+        if (orders.length > 0) {
+          console.log(`Processing batch of ${orders.length} orders`);
+        } else {
+          console.log("No orders in current batch");
+          break;
+        }
+
+        // Get existing orders to avoid duplicate DB queries
+        const orderReferenceIds = orders.map((order: any) => order.name);
+        const existingOrders = await B2COrderModel.find({
+          sellerId,
+          order_reference_id: { $in: orderReferenceIds }
+        }).select('order_reference_id').lean();
+
+        const existingOrdersMap: { [key: string]: boolean } = existingOrders.reduce((map, order) => {
+          // @ts-ignore
+          map[order.order_reference_id as string] = true;
+          return map;
+        }, {});
+
+        // Prepare bulk operations
+        const productsToSave = [];
+        const ordersToSave: any[] = [];
+
+        // Process each order
+        for (const order of orders) {
+          if (existingOrdersMap[order.name]) {
+            skippedCount++;
+            continue;
+          }
+
+          try {
+            // Create product
+            const product = {
+              name: order.line_items?.map((item: any) => item.name).join(", ") || "Unknown Product",
+              category: order.line_items?.[0]?.product_type || "Uncategorized",
+              quantity: order.line_items?.reduce((acc: number, item: any) => acc + item.quantity, 0) || 1,
+              tax_rate: 0,
+              taxable_value: parseFloat(order?.total_price || 0),
+              sellerId // Add seller ID to product
+            };
+
+            productsToSave.push(product);
+
+            // Extract shipping address (prioritize shipping over default)
+            const shippingAddress = order.shipping_address || order.customer?.default_address || {};
+
+            // Prepare order with required fields
+            const newOrder = {
+              sellerId,
+              channelOrderId: order.id,
+              bucket: NEW,
+              channelName: "shopify",
+              orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
+              order_reference_id: order.name,
+              order_invoice_date: order.created_at,
+              order_invoice_number: order.name,
+              orderWeight: order.total_weight ? order.total_weight / 1000 : 0, // Convert to kg
+              orderWeightUnit: "kg",
+
+              // Standard dimensions if not available
+              orderBoxHeight: 10,
+              orderBoxWidth: 10,
+              orderBoxLength: 10,
+              orderSizeUnit: "cm",
+
+              client_order_reference_id: order.name,
+              payment_mode: order?.financial_status === "pending" ? 1 : 0,
+              amount2Collect: order?.financial_status === "pending" ? parseFloat(order?.total_price || 0) : 0,
+
+              customerDetails: {
+                name: `${shippingAddress.first_name || order.customer?.first_name || ''} ${shippingAddress.last_name || order.customer?.last_name || ''}`.trim(),
+                phone: shippingAddress.phone || order.customer?.phone || '',
+                email: order.customer?.email || '',
+                address: `${shippingAddress.address1 || ''} ${shippingAddress.address2 || ''}`.trim(),
+                pincode: shippingAddress.zip || '',
+                city: shippingAddress.city || '',
+                state: shippingAddress.province || '',
+                country: shippingAddress.country || ''
+              },
+
+              sellerDetails: {
+                sellerName: seller?.companyProfile?.companyName || seller?.name || '',
+                isSellerAddressAdded: !!primaryHub
+              },
+
+              orderItems: order.line_items?.map((item: any) => ({
+                name: item.name,
+                quantity: item.quantity,
+                price: parseFloat(item.price),
+                sku: item.sku || '',
+                variant_id: item.variant_id,
+                product_id: item.product_id,
+                total: parseFloat(item.price) * item.quantity
+              })) || [],
+
+              orderTotal: parseFloat(order.total_price || 0),
+              orderSubtotal: parseFloat(order.subtotal_price || 0),
+              orderTax: parseFloat(order.total_tax || 0),
+              orderCurrency: order.currency,
+              orderNotes: order.note || '',
+              orderTags: order.tags || '',
+              fulfillmentStatus: order.fulfillment_status || 'unfulfilled',
+              financialStatus: order.financial_status || 'pending',
+              createdAt: new Date(order.created_at),
+              updatedAt: new Date(order.updated_at || order.created_at)
+            };
+
+            ordersToSave.push(newOrder);
+          } catch (err) {
+            console.error(`Error processing order ${order.id}:`, err);
+            errorCount++;
+          }
+        }
+
+        // Bulk insert products and get their IDs
+        let savedProducts: any = [];
+        if (productsToSave.length > 0) {
+          savedProducts = await ProductModel.insertMany(productsToSave);
+        }
+
+        // Map product IDs to orders and set pickup address
+        for (let i = 0; i < ordersToSave.length; i++) {
+          ordersToSave[i].productId = savedProducts[i]._id.toString();
+          if (primaryHub) {
+            ordersToSave[i].pickupAddress = primaryHub._id.toString();
+          }
+        }
+
+        // Bulk insert orders
+        if (ordersToSave.length > 0) {
+          await B2COrderModel.insertMany(ordersToSave);
+          savedCount += ordersToSave.length;
+        }
+
+        // Extract next page URL from Link header
+        const linkHeader = response.headers.link || response.headers.Link;
+        if (linkHeader) {
+          const nextMatch = linkHeader.match(/<(.*?)>; rel="next"/);
+          nextPageUrl = nextMatch ? nextMatch[1] : null;
+        } else {
+          nextPageUrl = null;
+        }
+
+        // Brief pause to avoid rate limiting
+        if (nextPageUrl) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+      } catch (error: any) {
+        console.error("Error fetching or processing batch:", error.response?.data || error.message);
+        errorCount++;
+
+        // Handle rate limiting
+        if (error.response?.status === 429) {
+          const retryAfter = parseInt(error.response.headers['retry-after'] || '10');
+          console.log(`Rate limited. Waiting ${retryAfter} seconds...`);
+          await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+          continue; // Retry the same URL
+        }
+
+        break; // Break on other errors
+      }
+    }
+
+    console.log(`Orders processing complete. Saved: ${savedCount}, Skipped: ${skippedCount}, Errors: ${errorCount}`);
+
+    return res.status(200).json({
+      success: true,
+      saved: savedCount,
+      skipped: skippedCount,
+      errors: errorCount
+    });
+
+  } catch (error: any) {
+    console.error("Unexpected error in getChannelOrders:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to process Shopify orders",
+      error: error.message
+    });
+  }
+};
 
 export const createB2BOrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1183,24 +1562,23 @@ export const getCourier = async (req: ExtendedRequest, res: Response, next: Next
 
     const shiprocketOrderID = await registerOrderOnShiprocket(orderDetails, customClientRefOrderId);
 
-    data2send = await rateCalculation(
-      shiprocketOrderID,
-      pickupPincode,
-      deliveryPincode,
-      weight,
-      orderWeightUnit,
-      boxLength,
-      boxWeight,
-      boxHeight,
-      sizeUnit,
-      paymentType,
-      users_vendors,
-      sellerId,
-      collectableAmount,
-      hubId,
-
-      orderDetails.isReverseOrder,
-    );
+    data2send = await rateCalculation({
+      shiprocketOrderID: shiprocketOrderID,
+      pickupPincode: pickupPincode,
+      deliveryPincode: deliveryPincode,
+      weight: weight,
+      weightUnit: orderWeightUnit,
+      boxLength: boxLength,
+      boxWidth: boxWeight,
+      boxHeight: boxHeight,
+      sizeUnit: sizeUnit,
+      paymentType: paymentType,
+      users_vendors: users_vendors,
+      seller_id: sellerId,
+      wantCourierData: false,
+      collectableAmount: collectableAmount,
+      isReversedOrder: orderDetails.isReverseOrder,
+    });
 
     return res.status(200).send({
       valid: true,
@@ -1253,24 +1631,24 @@ export const getBulkOrdersCourier = async (req: ExtendedRequest, res: Response, 
       try {
         const shiprocketOrderID = await registerOrderOnShiprocket(order, customClientRefOrderId);
 
-        let courierPartners = await rateCalculation(
-          shiprocketOrderID,
-          pickupPincode,
-          deliveryPincode,
-          weight,
-          orderWeightUnit,
-          boxLength,
-          boxWeight,
-          boxHeight,
-          sizeUnit,
-          paymentType,
-          users_vendors,
-          sellerId,
-          collectableAmount,
-          hubId,
-          order.isReverseOrder,
-          order.order_reference_id
-        );
+        let courierPartners = await rateCalculation({
+          shiprocketOrderID: shiprocketOrderID,
+          pickupPincode: pickupPincode,
+          deliveryPincode: deliveryPincode,
+          weight: weight,
+          weightUnit: orderWeightUnit,
+          boxLength: boxLength,
+          boxWidth: boxWeight,
+          boxHeight: boxHeight,
+          sizeUnit: sizeUnit,
+          paymentType: paymentType,
+          users_vendors: users_vendors,
+          seller_id: sellerId,
+          wantCourierData: false,
+          collectableAmount: collectableAmount,
+          isReversedOrder: order.isReverseOrder,
+          orderRefId: order.order_reference_id
+        });
 
         uniqueCourierPartners.push(...courierPartners);
         // Filter to get unique courier partners based on carrierID

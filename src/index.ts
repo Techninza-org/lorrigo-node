@@ -28,6 +28,8 @@ import path from "path";
 import PaymentTransactionModal from "./models/payment.transaction.modal";
 import SellerModel from "./models/seller.model";
 import ClientBillingModal from "./models/client.billing.modal";
+import { B2COrderModel } from "./models/order.model";
+import { sendMail, shiprocketShipment } from "./utils";
 
 const app = express();
 app.use(cors({ origin: "*" }));
@@ -163,6 +165,7 @@ mongoose
   .connect(config.MONGODB_URI)
   .then(() => {
     console.log("db connected successfully");
+    // createShipmentStruttStore()
   })
   .catch((err) => {
     console.log(err.message);
@@ -211,4 +214,37 @@ app.use("*", (req: Request, res: Response) => {
 
 runCron();
 
-app.listen(config.PORT, () => Logger.plog("server running on port " + config.PORT));
+app.listen(config.PORT, () => console.log("server running on port " + config.PORT));
+
+async function createShipmentStruttStore() {
+
+  const getUnassignedOrders = await B2COrderModel.find({
+    sellerId: "663c76ad8e9e095def325208",
+    bucket: 0,
+    createdAt: { $gte: '2025-02-25T07:52:36.953+00:00' }
+  }).populate("productId pickupAddress")
+  console.log(getUnassignedOrders.length)
+
+  for (const order of getUnassignedOrders) {
+    const shipmentResponse = await shiprocketShipment({
+      sellerId: "663c76ad8e9e095def325208",
+      vendorName: { nickName: "BDS" },
+      charge: 0,
+      order: order,
+      carrierId: "67c1dce4ec84abf517a537fc",
+      // carrierId: "67c2d928ec84abf517a537fd",
+    });
+
+    if (!shipmentResponse?.valid && shipmentResponse?.awb === null) {
+      const shipmentResponse = await shiprocketShipment({
+        sellerId: "663c76ad8e9e095def325208",
+        vendorName: { nickName: "BDS" },
+        charge: 0,
+        order: order,
+        // carrierId: "67c1dce4ec84abf517a537fc",
+        carrierId: "67c2d928ec84abf517a537fd",
+      });
+    }
+  }
+  console.log("completed")
+}

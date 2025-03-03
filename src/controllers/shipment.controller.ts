@@ -51,6 +51,7 @@ import envConfig from "../utils/config";
 import SellerModel from "../models/seller.model";
 import B2BCalcModel from "../models/b2b.calc.model";
 import ShipmenAwbCourierModel from "../models/shipment-awb-courier.model";
+import { validateIndianMobileNumber } from "../utils/validation-helper";
 
 // TODO: REMOVE THIS CODE: orderType = 0 ? "b2c" : "b2b"
 export async function createShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
@@ -153,25 +154,24 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       shiprocketOrderID = await registerOrderOnShiprocket(order, customClientRefOrderId);
     }
 
-    let courierCharge: any = (await rateCalculation(
-      order.shiprocket_order_id || shiprocketOrderID,
-      pickupPincode,
-      deliveryPincode,
-      weight,
-      orderWeightUnit,
-      boxLength,
-      boxWeight,
-      boxHeight,
-      sizeUnit,
-      paymentType as any,
-      [carrierId],
-      sellerId,
-      true,
-      collectableAmount,
-      hubId,
-      order.isReverseOrder,
+    let courierCharge: any = (await rateCalculation({
+      shiprocketOrderID: order.shiprocket_order_id || shiprocketOrderID,
+      pickupPincode: pickupPincode,
+      deliveryPincode: deliveryPincode,
+      weight: weight,
+      weightUnit: orderWeightUnit,
+      boxLength: boxLength,
+      boxWidth: boxWeight,
+      boxHeight: boxHeight,
+      sizeUnit: sizeUnit,
+      paymentType: paymentType as any,
+      users_vendors: [carrierId],
+      seller_id: sellerId,
+      wantCourierData: true,
+      collectableAmount: collectableAmount,
+      isReversedOrder: order.isReverseOrder,
       // @ts-ignore
-    ))
+   } ))
 
     if (courierCharge?.length < 1) {
       return res.status(200).send({ valid: false, message: "Courier is not servicable!" });
@@ -506,7 +506,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           toState: order.customerDetails.get("state"),
           toPin: order.customerDetails.get("pincode"),
           // @ts-ignore
-          toMobile: order.customerDetails.get("phone").toString().toString().replaceAll(' ', '').slice(3, 13),
+          toMobile: validateIndianMobileNumber(
+            order.customerDetails.get("phone") as string | null | undefined
+          ),
           toEmail: order.customerDetails.get("email") || "noreply@lorrigo.com",
           toAddType: "Home", // Mendatory 
           toLat: order.customerDetails.get("lat") || "",
@@ -772,7 +774,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         await order.save();
 
-        
+
         const { _id, ...restCourier } = courierCharge[0].courier
 
         const savedShipmentResponse = await ShipmenAwbCourierModel.create({
@@ -1666,7 +1668,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
           }
         );
       } catch (error: any) {
-        if (error?.response?.data?.message !== "Already in Pickup Queue.") return next(error);
+        if (error?.response?.data?.message !== "Already in Pickup Queue.") return res.status(200).send({ valid: false, message: "Order Schedule Pickup Failed" });
       }
 
       try {
@@ -1682,7 +1684,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
         return res.status(200).send({ valid: true, message: "Order manifest request generated" });
       } catch (error) {
         console.log(error)
-        return next(error);
+        return res.status(200).send({ valid: false, message: "Order Schedule Pickup Failed" })
       }
     } else if (vendorName?.name === "SMARTR") {
       const smartrToken = await getSMARTRToken();
@@ -1861,7 +1863,7 @@ export async function orderBulkManifest(req: ExtendedRequest, res: Response, nex
 
           return { orderId, valid: true, message: "Order manifest request generated" };
         } catch (error: any) {
-          return { orderId, valid: false, message: error.message };
+          return { orderId, valid: false, message: "Order manifest request failed" };
         }
       })
     );
@@ -1869,7 +1871,7 @@ export async function orderBulkManifest(req: ExtendedRequest, res: Response, nex
     return res.status(200).send({ results });
   } catch (error) {
     console.error("Bulk Order Manifest Error:", error);
-    return next(error);
+    return res.status(500).send({ valid: false, message: "Order Manifest failed" });
   }
 }
 

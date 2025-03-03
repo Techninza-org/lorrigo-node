@@ -535,7 +535,24 @@ const convertToObjectId = (id: string) => {
   }
 };
 
-export const rateCalculation = async (
+export const rateCalculation = async ({
+  shiprocketOrderID,
+  pickupPincode,
+  deliveryPincode,
+  weight,
+  weightUnit,
+  boxLength,
+  boxWidth,
+  boxHeight,
+  sizeUnit,
+  paymentType,
+  users_vendors,
+  seller_id,
+  wantCourierData = false,
+  collectableAmount,
+  isReversedOrder,
+  orderRefId,
+}:{
   shiprocketOrderID: string,
   pickupPincode: any,
   deliveryPincode: any,
@@ -548,13 +565,12 @@ export const rateCalculation = async (
   paymentType: 0 | 1,
   users_vendors: string[],
   seller_id: any,
-  wantCourierData: boolean = false,
+  wantCourierData: boolean,
   collectableAmount?: any,
-  hubId?: number,
   isReversedOrder?: boolean,
   orderRefId?: string,
 
-): Promise<{
+}): Promise<{
   name: string;
   cod: number;
   minWeight: number;

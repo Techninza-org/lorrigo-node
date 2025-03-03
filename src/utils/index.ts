@@ -17,6 +17,7 @@ import { randomUUID } from "crypto";
 import Counter from "../models/counter.model";
 import ClientBillingModal from "../models/client.billing.modal";
 import EnvModel from "../models/env.model";
+import { formatPhoneNumber } from "./validation-helper";
 
 
 
@@ -1079,23 +1080,23 @@ export async function shipmentAmtCalcToWalletDeduction(awb: string) {
       throw new Error('Courier not found');
     }
 
-    let courierCharge: any = (await rateCalculation(
-      order.shiprocket_order_id,
-      order.pickupAddress.pincode,
-      order.customerDetails.get("pincode"),
-      order.orderWeight,
-      order.orderWeightUnit,
-      order.orderBoxLength,
-      order.orderBoxWidth,
-      order.orderBoxHeight,
-      "cm",
-      order.payment_mode,
-      [order.carrierId || courier._id],
-      order.sellerId,
-      order.amount2Collect,
-      order.pickupAddress._id,
-      order.isReverseOrder,
-    ))?.[0]
+    let courierCharge: any = (await rateCalculation({
+      shiprocketOrderID: order.shiprocket_order_id,
+      pickupPincode: order.pickupAddress.pincode,
+      deliveryPincode: order.customerDetails.get("pincode"),
+      weight: order.orderWeight,
+      weightUnit: order.orderWeightUnit,
+      boxLength: order.orderBoxLength,
+      boxWidth: order.orderBoxWidth,
+      boxHeight: order.orderBoxHeight,
+      sizeUnit: "cm",
+      paymentType: order.payment_mode,
+      users_vendors: [order.carrierId || courier._id],
+      seller_id: order.sellerId,
+      wantCourierData: order.amount2Collect,
+      collectableAmount: order.pickupAddress._id,
+      isReversedOrder: order.isReverseOrder,
+    }))?.[0]
 
     return {
       rtoCharges: courierCharge?.rtoCharges,
@@ -1382,7 +1383,7 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
       billing_state: orderDetails?.customerDetails.get("state") || customerPincodeDetails?.StateName,
       billing_country: "India",
       billing_email: orderDetails?.customerDetails.get("email") || "noreply@lorrigo.com",
-      billing_phone: orderDetails?.customerDetails.get("phone").toString().replaceAll(' ', '').slice(3, 13),
+      billing_phone: formatPhoneNumber(orderDetails?.customerDetails.get("phone")),
       order_items: [
         {
           name: orderDetails.productId.name,
@@ -1455,8 +1456,8 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
 
     const shiprocketOrderID = orderDetails?.shiprocket_order_id ?? 0;
     return shiprocketOrderID;
-  } catch (error) {
-    console.log(error)
+  } catch (error: any) {
+    console.log(JSON.stringify(error.response.data), "[registerOrderOnShiprocket]")
   }
 }
 
@@ -1466,16 +1467,16 @@ export async function shiprocketShipment({ sellerId, carrierId, order, charge, v
 
     const shiprocketToken = await getShiprocketToken();
 
-    const genAWBPayload = {
-      shipment_id: order.shiprocket_shipment_id,
-      courier_id: shiprocketCourier?.carrierID?.toString(),
-      is_return: order.isReverseOrder ? 1 : 0,
-    }
-
     if (!order.shiprocket_shipment_id) {
       const randomInt = Math.round(Math.random() * 20)
       const customClientRefOrderId = order?.client_order_reference_id + "-" + randomInt;
       const shiprocketOrderID = await registerOrderOnShiprocket(order, customClientRefOrderId);
+    }
+
+    const genAWBPayload = {
+      shipment_id: order.shiprocket_shipment_id,
+      courier_id: shiprocketCourier?.carrierID?.toString(),
+      is_return: order.isReverseOrder ? 1 : 0,
     }
 
     try {
@@ -1489,10 +1490,10 @@ export async function shiprocketShipment({ sellerId, carrierId, order, charge, v
         }
       );
 
-      let awb = awbResponse?.data?.response?.data?.awb_code || awbResponse?.data?.response?.data?.awb_assign_error?.split("-")[1].split(" ")[1];
+      let awb = awbResponse?.data?.response?.data?.awb_code || awbResponse?.data?.response?.data?.awb_assign_error?.split("-")[1]?.split(" ")[1];
 
       if (!awb) {
-        return { valid: false, message: "Internal Server Error, Please use another courier partner" };
+        return { valid: false, message: "Internal Server Error, Please use another courier partner", awb: null };
       }
 
       order.awb = awb;
@@ -1555,12 +1556,52 @@ export async function shiprocketShipment({ sellerId, carrierId, order, charge, v
       await updateSellerWalletBalance(sellerId, Number(charge), false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
       return order
     } catch (error: any) {
-      console.log(error, "error");
-      throw new Error(error);
+      console.log(error.response?.data, "error; [shiprocketShipment]");
+
+      // Extract AWB from the error message if it matches the expected pattern
+      const errorMessage = error.response?.data?.message || "";
+      const awbMatch = errorMessage.match(/Current AWB (\d+)/);
+
+      if (awbMatch && awbMatch[1]) {
+        const extractedAwb = awbMatch[1];
+
+        console.log(`Extracted AWB from error: ${extractedAwb}`);
+
+        // Update order with extracted AWB
+        order.awb = extractedAwb;
+        order.carrierName = `${shiprocketCourier?.name} ${vendorName?.nickName}`;
+        order.shipmentCharges = charge;
+        order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
+
+        order.orderStages.push({
+          stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
+          action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
+          stageDateTime: new Date(),
+        });
+
+        await order.save();
+
+        // order.channelFulfillmentId = fulfillmentOrderId;
+        await order.save();
+        await updateSellerWalletBalance(
+          sellerId,
+          Number(charge),
+          false,
+          `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`
+        );
+
+        return order;
+      }
+
+      return {
+        valid: false,
+        message: "Failed to assign AWB, please try again later.",
+        awb: null,
+      };
     }
   } catch (error: any) {
-    console.log(error, "error");
-    throw new Error(error);
+    console.log(error.response.data, "error: [shiprocketShipment]");
+    // throw new Error(error);
   }
 }
 
