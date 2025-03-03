@@ -172,7 +172,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
 
     } catch (err) {
       console.log(err, 'error in smartship')
-      return next(err);
+      return res.status(500).send({ valid: false, message: "Can't register hub!" });
     }
 
     try {
@@ -194,7 +194,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       if (isExistingHubButInactive) {
         return res.status(400).send({ valid: false, message: "The address name you entered is already in use. Please choose a unique name." });
       }
-      if (!isExistingHub) return next(err);
+      if (!isExistingHub) return res.status(500).send({ valid: false, message: "Can't register hub!" });;
       console.log(err.response.data, "error in shiprocket")
     }
 
@@ -213,7 +213,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       });
     } catch (error: any) {
       console.log(error.response?.data, "error in delhivery")
-      return res.status(500).send({ valid: false, error });
+      return res.status(500).send({ valid: false, message: "Can't register hub!" });
     }
 
     const smartShipData: SMARTSHIP_DATA = smartShipResponse.data;
@@ -252,7 +252,7 @@ export const createHub = async (req: ExtendedRequest, res: Response, next: NextF
       });
       savedHub = await toSaveHub.save();
     } catch (err) {
-      return next(err);
+      return res.status(500).send({ valid: false, message: "Can't register hub!" })
     }
 
     return res.status(200).send({

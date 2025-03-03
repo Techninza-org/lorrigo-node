@@ -1666,7 +1666,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
           }
         );
       } catch (error: any) {
-        if (error?.response?.data?.message !== "Already in Pickup Queue.") return next(error);
+        if (error?.response?.data?.message !== "Already in Pickup Queue.") return res.status(200).send({ valid: false, message: "Order Schedule Pickup Failed" });
       }
 
       try {
@@ -1682,7 +1682,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
         return res.status(200).send({ valid: true, message: "Order manifest request generated" });
       } catch (error) {
         console.log(error)
-        return next(error);
+        return res.status(200).send({ valid: false, message: "Order Schedule Pickup Failed" })
       }
     } else if (vendorName?.name === "SMARTR") {
       const smartrToken = await getSMARTRToken();
@@ -1861,7 +1861,7 @@ export async function orderBulkManifest(req: ExtendedRequest, res: Response, nex
 
           return { orderId, valid: true, message: "Order manifest request generated" };
         } catch (error: any) {
-          return { orderId, valid: false, message: error.message };
+          return { orderId, valid: false, message: "Order manifest request failed" };
         }
       })
     );
@@ -1869,7 +1869,7 @@ export async function orderBulkManifest(req: ExtendedRequest, res: Response, nex
     return res.status(200).send({ results });
   } catch (error) {
     console.error("Bulk Order Manifest Error:", error);
-    return next(error);
+    return res.status(500).send({ valid: false, message: "Order Manifest failed" });
   }
 }
 
