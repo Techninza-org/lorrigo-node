@@ -1343,7 +1343,10 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
       const Tzone = await regionToZoneMappingLowercase(toRegionName);
 
       if (!Fzone || !Tzone) {
-        throw new Error('Zone not found for the given region');
+        return res.status(400).send({
+          valid: false,
+          message: "Zone not found for the given region",
+        });
       }
 
       const result = await calculateRateAndPrice(courier, Fzone, Tzone, bill.orderWeight, courier?._id?.toString(), fromRegionName, toRegionName, order.amount, bill.otherCharges, bill.isODAApplicable);

@@ -620,32 +620,63 @@ export const updateBulkPickupOrder = async (req: ExtendedRequest, res: Response,
 
     if (!isValidObjectId(pickupAddress))
       return res.status(200).send({ valid: false, message: "Invalid pickupAddress" });
-    if (!Array.isArray(orderIds))
+    if (!Array.isArray(orderIds) && !req.query.bulk)
       return res.status(200).send({ valid: false, message: "Invalid orderIds" });
 
-    try {
-      const hubDetails = await HubModel.findById(pickupAddress);
-      if (!hubDetails) return res.status(200).send({ valid: false, message: "Pickup address doesn't exists" });
+    const hubDetails = await HubModel.findById(pickupAddress);
+    if (!hubDetails) return res.status(200).send({ valid: false, message: "Pickup address doesn't exist" });
 
-    } catch (err) {
-      return next(err);
+    let savedOrders: number = 0;
+    if (req.query.bulk) {
+      const { from, to } = req.query as { from: string, to: string };
+      const query: any = { sellerId: req.seller._id, awb: { $exists: false } };
+
+      if (from || to) {
+        query.createdAt = {};
+
+        if (from) {
+          const [month, day, year] = from.split("/");
+          const fromDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+          query.createdAt.$gte = fromDate;
+        }
+
+        if (to) {
+          const [month, day, year] = to.split("/");
+          const toDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
+          query.createdAt.$lte = toDate;
+        }
+      }
+
+      const orders = await B2COrderModel.find(query).select('_id').lean();
+      const orderIds = orders.map(order => order._id);
+
+      const bulkUpdateOps = orderIds.map(orderId => ({
+        updateOne: {
+          filter: { _id: orderId, pickupAddress: { $ne: pickupAddress } },
+          update: { pickupAddress }
+        }
+      }));
+
+      const bulkUpdateResult = await B2COrderModel.bulkWrite(bulkUpdateOps);
+      savedOrders = bulkUpdateResult.modifiedCount;
+      console.log(bulkUpdateResult, 'bulkUpdateResult')
+    } else {
+      const bulkUpdateOps = orderIds.map((orderId: any) => ({
+        updateOne: {
+          filter: { _id: orderId },
+          update: { pickupAddress }
+        }
+      }));
+
+      const bulkUpdateResult = await B2COrderModel.bulkWrite(bulkUpdateOps);
+      console.log(bulkUpdateResult, 'bulkUpdateResult')
+      savedOrders = bulkUpdateResult.modifiedCount;
     }
 
-    let savedOrders = [];
-    for (let i = 0; i < orderIds.length; i++) {
-      const orderId = orderIds[i];
-      try {
-        const order = await B2COrderModel.findByIdAndUpdate(orderId, { pickupAddress });
-        savedOrders.push(order);
-      }
-      catch (err) {
-        return next(err);
-      }
-    }
-    return res.status(200).send({ valid: true, orders: savedOrders });
+    return res.status(200).send({ valid: true, updatedCount: savedOrders });
 
   } catch (error) {
-    return next(error)
+    return next(error);
   }
 }
 
@@ -806,24 +837,26 @@ export const updateB2CBulkShopifyOrders = async (req: ExtendedRequest, res: Resp
 export const getOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const sellerId = req.seller._id;
-    let { 
-      from, 
-      to, 
-      status, 
-      page = 1, 
-      limit = 20, 
-      sort = "createdAt", 
+    let {
+      from,
+      to,
+      status,
+      page = 1,
+      limit = 20,
+      sort = "createdAt",
       order = "desc",
       search,
+      statusFilter,
       awb,
       reference
-    }: { 
-      from?: string, 
-      to?: string, 
+    }: {
+      from?: string,
+      to?: string,
       status?: string,
       page?: number,
       limit?: number,
       sort?: string,
+      statusFilter?: string,
       order?: "asc" | "desc",
       search?: string,
       awb?: string,
@@ -890,6 +923,12 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       query.order_reference_id = { $regex: reference, $options: 'i' };
     }
 
+    if (statusFilter && statusFilter === "unassigned") {
+      query.awb = { $exists: false }
+    } else if (statusFilter && statusFilter === "assigned") {
+      query.awb = { $exists: true }
+    }
+
     // Validate sort field to prevent injection
     const allowedSortFields = ['createdAt', 'order_reference_id', 'awb', 'order_invoice_date', 'bucket'];
     const sortField = allowedSortFields.includes(sort) ? sort : 'createdAt';
@@ -900,7 +939,7 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
     try {
       // Count total documents for pagination info
       const totalCount = await B2COrderModel.countDocuments(query);
-      
+
       // Execute optimized query with projection to select only needed fields
       const orders = await B2COrderModel
         .find(query)
@@ -929,15 +968,16 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
           updatedAt: 1,
           channelName: 1,
           orderStages: 1,
-          isReverseOrder: 1
+          isReverseOrder: 1,
+          carrierName: 1,
         })
         .populate("productId", "name category quantity taxable_value tax_rate")
-        .populate("pickupAddress", "name address city state pincode")
+        .populate("pickupAddress", "name address city state pincode address1 address2")
         .lean();
 
       return res.status(200).send({
         valid: true,
-        response: { 
+        response: {
           orders,
           pagination: {
             total: totalCount,
@@ -1596,8 +1636,36 @@ export const getBulkOrdersCourier = async (req: ExtendedRequest, res: Response, 
     const type = "b2c";
     const users_vendors = req.seller.vendors;
     const orderIds = req.body.orderIds;
+    const isBulk = req.query.bulk
 
     let orderDetails: any[] = [];
+
+    if (isBulk === "true") {
+      const couriers = await CourierModel.aggregate([
+        {
+          $lookup: {
+            from: "envs",
+            localField: "vendor_channel_id",
+            foreignField: "_id",
+            as: "vendor_channel"
+          }
+        },
+        { $unwind: "$vendor_channel" },
+        {
+          $project: {
+            nickName: "$vendor_channel.nickName",
+            name: 1,
+            minWeight: 1,
+            isReversedCourier: 1,
+            type: 1,
+            carrierID: 1
+          }
+        }
+      ]);
+
+      return res.json({ valid: true, courierPartner: couriers });
+    }
+
 
     if (type === "b2c") {
       try {
@@ -1610,7 +1678,7 @@ export const getBulkOrdersCourier = async (req: ExtendedRequest, res: Response, 
     const results = [];
     let uniqueCourierPartners: any[] = [];
 
-
+ 
     for (const order of orderDetails) {
       const randomInt = Math.round(Math.random() * 20);
       const customClientRefOrderId = order?.client_order_reference_id + "-" + randomInt;

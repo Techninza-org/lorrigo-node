@@ -9,7 +9,8 @@ import {
   orderManifest,
   orderReattempt,
   createBulkShipment,
-  orderBulkManifest
+  orderBulkManifest,
+  createBulkShipmentV2
 } from "../controllers/shipment.controller";
 
 const shipmentRouter = Router();
@@ -19,6 +20,9 @@ shipmentRouter.post("/", createShipment);
 
 //@ts-ignore
 shipmentRouter.post("/bulk", createBulkShipment);
+
+//@ts-ignore
+shipmentRouter.post("/v2/bulk", createBulkShipmentV2);
 
 //@ts-ignore
 shipmentRouter.post("/b2b", createB2BShipment);

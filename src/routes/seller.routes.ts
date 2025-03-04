@@ -29,6 +29,7 @@ import {
 
 import multer from 'multer';
 import apicache from 'apicache';
+import { generateInvoices, generateManifests } from "../controllers/template.controller";
 
 const storage = multer.memoryStorage();
 const fileUpload = multer({ storage: storage });
@@ -124,6 +125,6 @@ sellerRouter.get("/disputes", getDisputes)
 sellerRouter.post("/disputes/accept", acceptDisputeBySeller)
 
 //@ts-ignore
-sellerRouter.get("/invoice-awbs/:id", invoiceAwbList )
+sellerRouter.get("/generate-bulk-invoice", generateManifests)
 
 export default sellerRouter;

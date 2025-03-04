@@ -171,7 +171,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
       collectableAmount: collectableAmount,
       isReversedOrder: order.isReverseOrder,
       // @ts-ignore
-   } ))
+    }))
 
     if (courierCharge?.length < 1) {
       return res.status(200).send({ valid: false, message: "Courier is not servicable!" });
@@ -1209,6 +1209,161 @@ export async function createBulkShipment(req: ExtendedRequest, res: Response, ne
   }
 }
 
+export async function createBulkShipmentV2(req: ExtendedRequest, res: Response, next: NextFunction) {
+  try {
+    const body = req.body;
+    const seller = req.seller;
+    const sellerId = req.seller._id;
+
+    if (!isValidPayload(body, ["partner"])) {
+      return res.status(200).send({ valid: false, message: "Invalid payload" });
+    }
+    const partner = body.partner;
+    const vendorName = await EnvModel.findOne({ nickName: partner.nickName });
+    if (!vendorName) return res.status(200).send({ valid: false, message: "Invalid carrierNickName" });
+
+    const courier = await CourierModel.findById(partner._id);
+    if (!courier) return res.status(200).send({ valid: false, message: "Courier not found" });
+
+    const { from, to } = req.query as { from: string, to: string };
+    const query: any = { sellerId, awb: { $exists: false } };
+
+    if (from || to) {
+      query.createdAt = {};
+
+      if (from) {
+        const [month, day, year] = from.split("/");
+        const fromDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+        query.createdAt.$gte = fromDate;
+      }
+
+      if (to) {
+        const [month, day, year] = to.split("/");
+        const toDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
+        query.createdAt.$lte = toDate;
+      }
+    }
+
+    const orders = await B2COrderModel.find(query).populate("pickupAddress").lean();
+    console.log(orders.length);
+
+    res.status(202).send({ message: "Processing orders in background" });
+
+    const processOrders = async () => {
+      const results = [];
+      for (const order of orders) {
+        try {
+          const hubDetails = await HubModel.findById(order.pickupAddress);
+          if (!hubDetails) {
+            results.push({ orderRefId: order.order_reference_id, valid: false, message: "Hub details not found" });
+            continue;
+          }
+
+          const randomInt = Math.round(Math.random() * 20);
+          const customClientRefOrderId = order?.client_order_reference_id + "-" + randomInt;
+          const shiprocketOrderID = await registerOrderOnShiprocket(order, customClientRefOrderId);
+
+          const courierCharges: any = await rateCalculation({
+            shiprocketOrderID: shiprocketOrderID,
+            pickupPincode: hubDetails.pincode,
+            deliveryPincode: order.customerDetails.pincode,
+            weight: order.orderWeight,
+            weightUnit: "kg",
+            boxLength: order.orderBoxLength,
+            boxWidth: order.orderBoxWidth,
+            boxHeight: order.orderBoxHeight,
+            sizeUnit: "cm",
+            paymentType: order.payment_mode as any,
+            users_vendors: [partner._id],
+            seller_id: sellerId,
+            wantCourierData: false,
+            collectableAmount: order.amount2Collect,
+            isReversedOrder: order.isReverseOrder,
+          });
+          const charges = courierCharges?.[0]?.charge;
+          console.log(charges, "chargescharges");
+
+
+          let shipmentResponse;
+          // if (vendorName.name === "SMARTSHIP") {
+          //   shipmentResponse = await handleSmartShipShipment({
+          //     sellerId,
+          //     sellerGST: req.seller.gstno,
+          //     vendorName,
+          //     // charge: orderWCourier.charge,
+          //     charge: 0,
+          //     order,
+          //     carrierId: partner.carrierID,
+          //     hubDetails,
+          //     productDetails,
+          //   });
+          // } else if (vendorName.name === "SHIPROCKET") {
+          //   shipmentResponse = await shiprocketShipment({
+          //     sellerId,
+          //     vendorName,
+          //     // charge: orderWCourier.charge,
+          //     charge: 0,
+          //     order,
+          //     carrierId: partner.carrierID,
+          //   });
+          // } else if (vendorName.name === "SMARTR") {
+          //   shipmentResponse = await smartRShipment({
+          //     sellerId,
+          //     sellerGST: req.seller.gstno,
+          //     vendorName,
+          //     courier,
+          //     // charge: orderWCourier.charge,
+          //     charge: 0,
+          //     order,
+          //     carrierId: partner.carrierID,
+          //     hubDetails,
+          //     productDetails,
+          //   });
+          // } else if (["DELHIVERY", "DELHIVERY_0.5", "DELHIVERY_10"].includes(vendorName.name)) {
+          //   shipmentResponse = await createDelhiveryShipment({
+          //     sellerId,
+          //     vendorName,
+          //     courier,
+          //     // charge: orderWCourier.charge,
+          //     charge: 0,
+          //     order,
+          //     hubDetails,
+          //     productDetails,
+          //     sellerGST: req.seller.gstno,
+          //   });
+          // } else if (vendorName?.name === "MARUTI") {
+          //   shipmentResponse = await handleMarutiShipment({
+          //     sellerId: req.seller._id,
+          //     courier,
+          //     order,
+          //     hubDetails,
+          //     productDetails,
+          //     sellerGST: req.seller.gstno,
+          //     // charge: orderWCourier.charge,
+          //     charge: 0,
+          //   });
+          // } else {
+          //   // results.push({ orderId, valid: false, message: "Unsupported vendor" });
+          //   continue;
+          // }
+
+          results.push({ order, valid: true, shipmentResponse });
+        } catch (error) {
+          console.log(error, "error");
+          results.push({ order, valid: false, message: "Error creating shipment", error });
+        }
+      }
+      console.log("Bulk Order Processing Complete", results);
+    };
+
+    processOrders();
+
+  } catch (error) {
+    console.log(error);
+    return next(error);
+  }
+}
+
 export async function cancelShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {
     const { orderIds, type } = req.body;
@@ -1668,6 +1823,7 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
           }
         );
       } catch (error: any) {
+        console.log(error?.response?.data, 'error?.response?.data')
         if (error?.response?.data?.message !== "Already in Pickup Queue.") return res.status(200).send({ valid: false, message: "Order Schedule Pickup Failed" });
       }
 
@@ -1773,7 +1929,7 @@ export async function orderBulkManifest(req: ExtendedRequest, res: Response, nex
           return { orderId, valid: false, message: "Invalid Order ID" };
         }
 
-        let order = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id, awb: { $exists: true } }).populate([
+        let order: any = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id, awb: { $exists: true } }).populate([
           "productId", "pickupAddress",
         ]);
 
@@ -1787,7 +1943,7 @@ export async function orderBulkManifest(req: ExtendedRequest, res: Response, nex
           return { orderId, valid: false, message: "Order not found" };
         }
 
-        if (order.orderStages.find(x => x.stage === 67)) {
+        if (order.orderStages.find((x: any) => x.stage === 67)) {
           return { orderId, valid: false, message: "Pickup is already scheduled for order ID." };
         }
 

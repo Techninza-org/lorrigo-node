@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Lorrigo Manifest</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+       
+        .manifest-container {
+            width: 100%;
+            padding: 16px;
+            min-height: 100vh;
+            border: 2px double #000;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+        .logo {
+            height: 100px;
+            width: 140px;
+        }
+        .title-container {
+            text-align: center;
+            width: 100%;
+            margin-left: -70px; /* Adjust logo offset */
+        }
+        .title {
+            font-size: 20px;
+        }
+        .subtitle {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .info-section {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            margin-top: 10px;
+            padding: 0 10px;
+        }
+        .info-left, .info-right {
+            max-width: 300px;
+        }
+        .info-right {
+            text-align: right;
+            margin-right: 20px; /* Move manifest ID slightly to the left */
+        }
+        .bold-text {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        @media (min-width: 640px) {
+            .bold-text {
+                font-size: 18px;
+            }
+        }
+        .table-header {
+            border-top: 2px solid #9ca3af;
+            border-bottom: 2px solid #9ca3af;
+            padding: 8px 0; /* Reduced horizontal padding */
+            margin: 12px 0;
+            display: grid;
+            grid-template-columns: 40px 120px 40px 100px 1fr 120px; /* Adjusted column widths */
+            font-size: 12px;
+            gap: 10px; /* Add small gap between columns */
+        }
+        @media (min-width: 768px) {
+            .table-header {
+                /*grid-template-columns: repeat(6, 1fr);*/
+                font-size: 14px;
+            }
+        }
+        .table-row {
+            display: grid;
+            grid-template-columns: 40px 120px 40px 100px 1fr 120px; /* Match header columns */
+            padding: 4px 0; /* Reduced horizontal padding */
+            border-bottom: 2px solid #d1d5db;
+            font-size: 12px;
+            gap: 10px; /* Match header gap */
+        }
+        @media (min-width: 768px) {
+            .table-row {
+                /*grid-template-columns: repeat(6, 1fr);*/
+                font-size: 14px;
+            }
+        }
+        .hidden-mobile {
+            display: none;
+        }
+        @media (min-width: 768px) {
+            .hidden-mobile {
+                display: block;
+            }
+        }
+        .courier-section {
+            border-top: 2px dashed #6b7280;
+            border-bottom: 2px dashed #6b7280;
+            font-weight: bold;
+            font-size: 20px;
+            padding: 4px 0 12px 0;
+            text-align: center;
+            margin: 36px 0;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            justify-items: center;
+        }
+        @media (min-width: 640px) {
+            .form-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        .form-field {
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+        }
+        .form-line {
+            width: 160px;
+            height: 1.5px;
+            background-color: black;
+        }
+        .footer {
+            margin-top: 12px;
+            text-align: center;
+        }
+        .barcode {
+            height: 36px;
+        }
+        .checkbox {
+            width: 16px;
+            height: 16px;
+            border: 1px solid black;
+            margin: 0 auto; /* Center the checkbox */
+        }
+    </style>
+</head>
+<body>
+    <div class="manifest-container">
+        <div class="header">
+            <img src="{{lorrigoLogoUrl}}" alt="Lorrigo Logo" class="logo">
+            <div class="title-container">
+                <div class="title">Lorrigo Manifest</div>
+                <div class="subtitle">Generated on: {{generatedDate}}</div>
+            </div>
+        </div>
+        
+        <div class="info-section">
+            <div class="info-left">
+                <div>Seller: <span class="bold-text">{{sellerName}}</span></div>
+                <div>Courier: <span class="bold-text">{{courierName}}</span></div>
+            </div>
+            <div class="info-right">
+                <div>Manifest ID: {{manifestId}}</div>
+                <div>Total shipments to dispatch: {{totalOrders}}</div>
+            </div>
+        </div>
+        
+        <div class="table-header">
+            <div>S.no.</div>
+            <div>Order no</div>
+            <div></div>
+            <div>AWB no</div>
+            <div>Contents</div>
+            <div>Barcode</div>
+        </div>
+        
+        {{#each orders}}
+        <div class="table-row">
+            <div>{{index}}</div>
+            <div>{{order_reference_id}}</div>
+            <div>
+                <div class="checkbox"></div>
+            </div>
+            <div>{{awb}}</div>
+            <div>{{productName}}</div>
+            <div>
+                <img src="{{barcodeUrl}}" class="barcode" alt="Barcode for {{awb}}">
+            </div>
+        </div>
+        {{/each}}
+        
+        <div class="courier-section">
+            To Be Filled By {{courierName}} Executive
+        </div>
+        
+        <div class="form-grid">
+            <div class="form-field">
+                Pickup Time: <div class="form-line"></div>
+            </div>
+            <div class="form-field">
+                Total items picked: <div class="form-line"></div>
+            </div>
+            <div class="form-field">
+                FE Name: <div class="form-line"></div>
+            </div>
+            <div class="form-field">
+                Seller Name: <div class="form-line"></div>
+            </div>
+            <div class="form-field">
+                FE Signature: <div class="form-line"></div>
+            </div>
+            <div class="form-field">
+                Seller Signature: <div class="form-line"></div>
+            </div>
+            <div class="form-field">
+                FE Phone: <div class="form-line"></div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            This is a system generated document
+        </div>
+    </div>
+</body>
+</html>

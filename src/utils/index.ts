@@ -1457,7 +1457,7 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
     const shiprocketOrderID = orderDetails?.shiprocket_order_id ?? 0;
     return shiprocketOrderID;
   } catch (error: any) {
-    console.log(JSON.stringify(error.response.data), "[registerOrderOnShiprocket]")
+    console.log(JSON.stringify(error), "[registerOrderOnShiprocket]")
   }
 }
 

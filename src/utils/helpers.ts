@@ -625,6 +625,7 @@ export const rateCalculation = async ({
     }
 
     const vendors = await CourierModel.find(query);
+    console.log(vendors.length, "vendors")
 
     let commonCouriers: any[] = [];
 
@@ -645,6 +646,7 @@ export const rateCalculation = async ({
 
       const response = await axios.get(url, config);
       const courierCompanies = response?.data?.data?.available_courier_companies;
+      console.log("shiprocket-----courierCompanies")
 
       const shiprocketNiceName = await EnvModel.findOne({ name: "SHIPROCKET" }).select("_id nickName");
       vendors?.forEach((vendor: any) => {
@@ -683,6 +685,8 @@ export const rateCalculation = async ({
         isReversedOrder ? 1 : 0,
         []
       );
+
+      console.log("smartShipCouriers-----courierCompanies")
 
       const smartShipNiceName = await EnvModel.findOne({ name: "SMARTSHIP" }).select("_id nickName");
 
@@ -759,6 +763,9 @@ export const rateCalculation = async ({
         }
       );
 
+      console.log("delhiveryToken-----courierCompanies")
+
+
       if (!!isDelhiveryServicable.data.delivery_codes[0]) {
         const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY" }).select("_id nickName");
         if (delhiveryNiceName) {
@@ -779,6 +786,7 @@ export const rateCalculation = async ({
     } catch (error) {
       console.log("error", error);
     }
+
     try {
       const delhiveryToken = await getDelhiveryTokenPoint5();
       if (!delhiveryToken) {
@@ -793,6 +801,9 @@ export const rateCalculation = async ({
           },
         }
       );
+
+      console.log("delhiveryToken1-----courierCompanies")
+
       if (!!isDelhiveryServicable.data.delivery_codes[0]) {
         const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY_0.5" }).select("_id nickName");
         if (delhiveryNiceName) {
@@ -828,6 +839,9 @@ export const rateCalculation = async ({
         }
       );
 
+      console.log("delhiveryToken2-----courierCompanies")
+
+
       if (!!isDelhiveryServicable.data.delivery_codes[0]) {
         const delhiveryNiceName = await EnvModel.findOne({ name: "DELHIVERY_10" }).select("_id nickName");
         if (delhiveryNiceName) {
@@ -849,83 +863,83 @@ export const rateCalculation = async ({
     }
 
     //marutiToken
-    try {
-      const marutiToken = await getMarutiToken();
+    // try {
+    //   const marutiToken = await getMarutiToken();
 
-      if (!marutiToken) {
-        throw new Error("Failed to retrieve Maruti token");
-      }
+    //   if (!marutiToken) {
+    //     throw new Error("Failed to retrieve Maruti token");
+    //   }
 
-      // TODO: check order is for AIR or SURFACE
+    //   // TODO: check order is for AIR or SURFACE
 
-      const marutiRequestBodySurface = {
-        fromPincode: pickupPincode,
-        toPincode: deliveryPincode,
-        isCodOrder: paymentType === 1,
-        deliveryMode: "SURFACE",
-      };
+    //   const marutiRequestBodySurface = {
+    //     fromPincode: pickupPincode,
+    //     toPincode: deliveryPincode,
+    //     isCodOrder: paymentType === 1,
+    //     deliveryMode: "SURFACE",
+    //   };
 
-      console.log(marutiRequestBodySurface, "marutiRequestBodySurface");
+    //   console.log(marutiRequestBodySurface, "marutiRequestBodySurface");
 
-      const isMarutiServicableSurface = await axios.post(
-        `${envConfig.MARUTI_BASEURL}${APIs.MARUTI_SERVICEABILITY}`,
-        marutiRequestBodySurface
-      );
-      const isMSSurface = isMarutiServicableSurface.data.data.serviceability;
+    //   const isMarutiServicableSurface = await axios.post(
+    //     `${envConfig.MARUTI_BASEURL}${APIs.MARUTI_SERVICEABILITY}`,
+    //     marutiRequestBodySurface
+    //   );
+    //   const isMSSurface = isMarutiServicableSurface.data.data.serviceability;
 
-      console.log("isMSSurface", isMarutiServicableSurface.data);
+    //   console.log("isMSSurface", isMarutiServicableSurface.data);
 
-      if (isMSSurface) {
-        const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
-        if (marutiNiceName) {
-          const marutiVendors = vendors.filter((vendor) => {
-            return (
-              vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString() && vendor?.type === "surface"
-            );
-          });
-          if (marutiVendors.length > 0) {
-            marutiVendors.forEach((vendor) => {
-              commonCouriers.push({
-                ...vendor.toObject(),
-                nickName: marutiNiceName.nickName,
-              });
-            });
-          }
-        }
-      }
+    //   if (isMSSurface) {
+    //     const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
+    //     if (marutiNiceName) {
+    //       const marutiVendors = vendors.filter((vendor) => {
+    //         return (
+    //           vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString() && vendor?.type === "surface"
+    //         );
+    //       });
+    //       if (marutiVendors.length > 0) {
+    //         marutiVendors.forEach((vendor) => {
+    //           commonCouriers.push({
+    //             ...vendor.toObject(),
+    //             nickName: marutiNiceName.nickName,
+    //           });
+    //         });
+    //       }
+    //     }
+    //   }
 
-      const marutiRequestBodyAir = {
-        fromPincode: pickupPincode,
-        toPincode: deliveryPincode,
-        isCodOrder: paymentType === 1,
-        deliveryMode: "AIR",
-      };
+    //   const marutiRequestBodyAir = {
+    //     fromPincode: pickupPincode,
+    //     toPincode: deliveryPincode,
+    //     isCodOrder: paymentType === 1,
+    //     deliveryMode: "AIR",
+    //   };
 
-      const isMarutiServicableAir = await axios.post(
-        `${envConfig.MARUTI_BASEURL}${APIs.MARUTI_SERVICEABILITY}`,
-        marutiRequestBodyAir
-      );
-      const isMSAir = isMarutiServicableAir.data.data.serviceability;
+    //   const isMarutiServicableAir = await axios.post(
+    //     `${envConfig.MARUTI_BASEURL}${APIs.MARUTI_SERVICEABILITY}`,
+    //     marutiRequestBodyAir
+    //   );
+    //   const isMSAir = isMarutiServicableAir.data.data.serviceability;
 
-      if (isMSAir) {
-        const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
-        if (marutiNiceName) {
-          const marutiVendors = vendors.filter((vendor) => {
-            return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString() && vendor?.type === "air";
-          });
-          if (marutiVendors.length > 0) {
-            marutiVendors.forEach((vendor) => {
-              commonCouriers.push({
-                ...vendor.toObject(),
-                nickName: marutiNiceName.nickName,
-              });
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.log("error", error);
-    }
+    //   if (isMSAir) {
+    //     const marutiNiceName = await EnvModel.findOne({ name: "MARUTI" }).select("_id nickName");
+    //     if (marutiNiceName) {
+    //       const marutiVendors = vendors.filter((vendor) => {
+    //         return vendor?.vendor_channel_id?.toString() === marutiNiceName._id.toString() && vendor?.type === "air";
+    //       });
+    //       if (marutiVendors.length > 0) {
+    //         marutiVendors.forEach((vendor) => {
+    //           commonCouriers.push({
+    //             ...vendor.toObject(),
+    //             nickName: marutiNiceName.nickName,
+    //           });
+    //         });
+    //       }
+    //     }
+    //   }
+    // } catch (error) {
+    //   console.log("error", error);
+    // }
 
     const data2send: {
       name: string;
@@ -942,6 +956,8 @@ export const rateCalculation = async ({
       orderRefId?: string;
       courier?: any;
     }[] = [];
+
+    console.log(commonCouriers, "loopLength")
 
     const loopLength = commonCouriers.length;
 
@@ -1331,7 +1347,7 @@ export function getShiprocketBucketing(status: number) {
     16: { bucket: CANCELED, description: "Cancellation Requested" },
     17: { bucket: IN_TRANSIT, description: "Out For Delivery" },
     18: { bucket: IN_TRANSIT, description: "In Transit" },
-    19: { bucket: NEW, description: "Out For Pickup" },
+    19: { bucket: NEW, stage: 52, description: "Out For Pickup" },
     21: { bucket: NDR, description: "Undelivered" },
     22: { bucket: IN_TRANSIT, description: "Delayed" },
     23: { bucket: IN_TRANSIT, description: "Partial Delivered" },
