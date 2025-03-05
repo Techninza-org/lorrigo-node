@@ -923,7 +923,7 @@ const processShiprocketOrders = async (orders) => {
     }
 
     try {
-      const apiUrl = `${config.SHIPROCKET_API_BASEURL}${APIs.SHIPROCKET_ORDER_TRACKING}/${order.awb}`;
+      const apiUrl = `https://apiv2.shiprocket.in/v1/external/courier/track/awb/${order.awb}`;
       const response = await axios.get(apiUrl, {
         headers: {
           Authorization: shiprocketToken
@@ -979,7 +979,7 @@ const processShiprocketOrders = async (orders) => {
           // Only add if this specific activity isn't already recorded
           if (!existingActivities.has(activityKey)) {
             const newStage = {
-              stage: bucketInfo.bucket,
+              stage: bucketInfo?.stage || bucketInfo.bucket,
               action: action,
               activity: activityDescription,
               location: location,
@@ -1192,12 +1192,14 @@ export default async function runCron() {
 
     cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     cron.schedule(expression4every2Minutes, scheduleShipmentCheck); // B2B 
-    cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
+    // cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
     cron.schedule(expression4every12Hrs, autoCancelShipmetWhosePickupNotScheduled);
 
     // Need to fix
     // cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
-    // cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
+    // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
+
+    cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
 
     cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
     cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);

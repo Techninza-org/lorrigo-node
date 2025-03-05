@@ -1336,6 +1336,7 @@ export function getShiprocketBucketing(status: number) {
     // 55: { bucket: NEW, description: "Connection Aligned" },
     // 56: { bucket: NEW, description: "FC MANIFEST GENERATED" },
     
+    'NA': { bucket: READY_TO_SHIP, stage: 67, description: "Pickup Scheduled" },
     6: { bucket: IN_TRANSIT, description: "Shipped" },
     7: { bucket: DELIVERED, description: "Delivered" },
     8: { bucket: CANCELED, description: "Canceled" },

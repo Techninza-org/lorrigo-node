@@ -7,19 +7,21 @@ export const generateInvoices = async (req: ExtendedRequest, res: Response) => {
   let browser = null;
 
   try {
-    let orders;
+    let orders: any[] = [];
     const options = req.body.options || {};
     const isBulk = req.query.bulk === "true"
     const sellerId = req.seller._id
-    console.log(isBulk, "isBulk")
 
+    const today = new Date();
+    const last7Day = new Date(today.getDate() - 7)
     if (!isBulk && req.body.orderIds && Array.isArray(req.body.orderIds)) {
       orders = await B2COrderModel.find({ _id: { $in: req.body.orderIds } }).populate("pickupAddress productId");
-    } else {
+    } else if (isBulk) {
       orders = await B2COrderModel.find({
         sellerId: sellerId,
         bucket: 1,
-        awb: { $exists: true }
+        awb: { $exists: true },
+        createdAt: { $gte: last7Day }
       }).populate("pickupAddress productId");
     }
 
@@ -32,35 +34,35 @@ export const generateInvoices = async (req: ExtendedRequest, res: Response) => {
     const template = await loadTemplate();
 
     if (orders.length === 1 || options.forceSinglePage) {
-      if (orders.length === 1) {
-        const pdf = await generateSingleInvoice(orders[0], template);
+      // if (orders.length === 1) {
+      //   const pdf = await generateSingleInvoice(orders[0], template);
 
-        // Validate PDF before sending
-        if (!pdf || pdf.byteLength === 0) {
-          return res.status(500).json({
-            success: false,
-            error: 'Failed to generate PDF'
-          });
-        }
+      //   // Validate PDF before sending
+      //   if (!pdf || pdf.byteLength === 0) {
+      //     return res.status(500).json({
+      //       success: false,
+      //       error: 'Failed to generate PDF'
+      //     });
+      //   }
 
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="Invoice_${orders[0].order_reference_id || 'order'}_${Date.now()}.pdf"`);
-        return res.send(pdf);
-      } else {
-        const result = await generateBulkInvoicesSinglePage(orders, template);
+      //   res.setHeader('Content-Type', 'application/pdf');
+      //   res.setHeader('Content-Disposition', `attachment; filename="Invoice_${orders[0].order_reference_id || 'order'}_${Date.now()}.pdf"`);
+      //   return res.send(pdf);
+      // } else {
+      const result = await generateBulkInvoicesSinglePage(orders, template);
 
-        // Validate PDF before sending
-        if (!result.pdfBuffer || result.pdfBuffer.byteLength === 0) {
-          return res.status(500).json({
-            success: false,
-            error: 'Failed to generate bulk PDF'
-          });
-        }
-
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
-        return res.send(result.pdfBuffer);
+      // Validate PDF before sending
+      if (!result.pdfBuffer || result.pdfBuffer.byteLength === 0) {
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to generate bulk PDF'
+        });
       }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+      return res.send(result.pdfBuffer);
+      // }
     } else {
       const labelsPerPage = options.labelsPerPage || 4;
       const pdfResults = await generateBulkInvoicesMultiplePerPage(orders, template, labelsPerPage);
