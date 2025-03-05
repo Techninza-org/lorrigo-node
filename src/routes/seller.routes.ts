@@ -125,6 +125,15 @@ sellerRouter.get("/disputes", getDisputes)
 sellerRouter.post("/disputes/accept", acceptDisputeBySeller)
 
 //@ts-ignore
-sellerRouter.get("/generate-bulk-invoice", generateManifests)
+sellerRouter.get("/generate-bulk-invoice", generateInvoices)
+
+//@ts-ignore
+sellerRouter.post("/generate-bulk-invoice", generateInvoices)
+
+//@ts-ignore
+sellerRouter.get("/generate-bulk-manifest", generateManifests)
+
+//@ts-ignore
+sellerRouter.post("/generate-bulk-manifest", generateManifests)
 
 export default sellerRouter;

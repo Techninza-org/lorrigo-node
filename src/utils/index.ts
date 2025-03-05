@@ -1371,13 +1371,21 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
     if (!shiprocketToken) return "Invalid token"
 
     const customerPincodeDetails = await getPincodeDetails(orderDetails?.customerDetails.get("pincode"))
+    let billingAddress = orderDetails?.customerDetails.get("address");
+    let billingAddress2 = "";
+
+    if (billingAddress.length > 170) {
+      billingAddress2 = billingAddress.slice(170);
+      billingAddress = billingAddress.slice(0, 170);
+    }
     const orderPayload = {
       order_id: customClientRefOrderId,
       order_date: format(orderDetails?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
       pickup_location: orderDetails?.pickupAddress?.name,
       billing_customer_name: orderDetails?.customerDetails.get("name"),
       billing_last_name: "",
-      billing_address: orderDetails?.customerDetails.get("address"),
+      billing_address: billingAddress,
+      billing_address_2: billingAddress2,
       billing_city: orderDetails?.customerDetails.get("city"),
       billing_pincode: orderDetails?.customerDetails.get("pincode"),
       billing_state: orderDetails?.customerDetails.get("state") || customerPincodeDetails?.StateName,
@@ -1397,9 +1405,6 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
       length: Math.max(orderDetails.orderBoxLength, 0.5),
       breadth: Math.max(orderDetails.orderBoxWidth, 0.5),
       height: Math.max(orderDetails.orderBoxHeight, 0.5),
-      // weight: 0.5,
-      // if Weight is less than 5, then set it to 0.5, else set it to orderWeight
-      // weight: orderDetails.orderWeight >= 5 ? orderDetails.orderWeight : 0.5,
       weight: orderDetails.orderWeight,
     };
 
@@ -1451,7 +1456,7 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
         await orderDetails.save();
       }
     } catch (error: any) {
-      console.log("error", error.response.data.errors);
+      console.log("error", error.response);
     }
 
     const shiprocketOrderID = orderDetails?.shiprocket_order_id ?? 0;
@@ -1470,6 +1475,7 @@ export async function shiprocketShipment({ sellerId, carrierId, order, charge, v
     if (!order.shiprocket_shipment_id) {
       const randomInt = Math.round(Math.random() * 20)
       const customClientRefOrderId = order?.client_order_reference_id + "-" + randomInt;
+      // const customClientRefOrderId = order?.client_order_reference_id;
       const shiprocketOrderID = await registerOrderOnShiprocket(order, customClientRefOrderId);
     }
 
@@ -1565,6 +1571,7 @@ export async function shiprocketShipment({ sellerId, carrierId, order, charge, v
       if (awbMatch && awbMatch[1]) {
         const extractedAwb = awbMatch[1];
 
+        console.log(extractedAwb, "old shipment for order id: ", order._id)
         console.log(`Extracted AWB from error: ${extractedAwb}`);
 
         // Update order with extracted AWB
@@ -1573,13 +1580,13 @@ export async function shiprocketShipment({ sellerId, carrierId, order, charge, v
         order.shipmentCharges = charge;
         order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
 
-        order.orderStages.push({
-          stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
-          action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
-          stageDateTime: new Date(),
-        });
+        // order.orderStages.push({
+        //   stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
+        //   action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
+        //   stageDateTime: new Date(),
+        // });
 
-        await order.save();
+        // await order.save();
 
         // order.channelFulfillmentId = fulfillmentOrderId;
         await order.save();

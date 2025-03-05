@@ -926,7 +926,7 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
     if (statusFilter && statusFilter === "unassigned") {
       query.awb = { $exists: false }
     } else if (statusFilter && statusFilter === "assigned") {
-      query.awb = { $exists: true }
+      query.awb = { $exists: true, $ne: null }
     }
 
     // Validate sort field to prevent injection

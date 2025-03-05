@@ -11,9 +11,9 @@ export const shipmenAwbCourierSchema = new mongoose.Schema(
     weightSlab: { type: Number, required: true },
     weightUnit: { type: String, required: true },
 
-    isRtoDeduct: { type: Boolean, required: true, defualt: true },
-    isFwdDeduct: { type: Boolean, required: true, defualt: true },
-    isCodDeduct: { type: Boolean, required: true, defualt: true },
+    isRtoDeduct: { type: Boolean, required: false, defualt: true },
+    isFwdDeduct: { type: Boolean, required: false, defualt: true },
+    isCodDeduct: { type: Boolean, required: false, defualt: true },
 
     codCharge: { type: codSchema, required: true, default: { hard: 40, percent: 1.5 } },
     incrementWeight: { type: Number, required: true },

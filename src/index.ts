@@ -59,60 +59,66 @@ if (!config.MONGODB_URI) {
 // $regex: /(~RTO COD charges|COD Charge Reversed|COD Refund)$/i
 // $regex: `(AWB: ${awbNumber}|${awbNumber}).*(~RTO COD charges|COD Charge Reversed|COD Refund)`,
 
+
+// RTO Excess Charge + 
+// FW Excess Charge + 
+// RTO-charges + 
+
+// COD-Refund - sign 
 // async function revertRevisedMoneyNTxnToday() {
 //   try {
 //     const rtoChargeAppliedTxns = await PaymentTransactionModal.find({
+//       // sellerId: "667e4e1fd0f6ee549f0592ee",
 //       desc: {
-//         $regex: /(~FW Excess Charge|FW Excess Charge|FW Excess Charge)$/i
+//         $regex: /(~COD-Refund|COD-Refund|COD-Refund)$/i
 //       },
-//     }).sort({ createdAt: -1 });
+//       createdAt: { $gt: "2025-03-02T00:00:38.030+00:00" }
+//     }).sort({ createdAt: -1 })
 
+//     const processedAwbs = new Set();
+
+//     console.log(rtoChargeAppliedTxns.length)
 //     for (const txn of rtoChargeAppliedTxns) {
-//       const awbMatch = txn.desc.match(/(?:AWB: )?(\d+)/);
+//       // const awbMatch = txn.desc.match(/(?:AWB: )?(\d+)/);
+//       const awbMatch = txn.desc.match(/(?:AWB: )?(\w+)/);
+
 //       if (!awbMatch) continue;
 
 //       const awbNumber = awbMatch[1];
+//       if (awbNumber.length < 8 || processedAwbs.has(awbNumber)) continue;
 
 //       const duplicateRtoTxns = await PaymentTransactionModal.find({
 //         desc: {
-//           $regex: `(AWB: ${awbNumber}|${awbNumber}).*(~FW Excess Charge|FW Excess Charge|FW Excess Charge)`,
+//           $regex: `(AWB: ${awbNumber}|${awbNumber}).*(~COD-Refund|COD-Refund|COD-Refund)`,
 //           $options: 'i'
 //         },
 //         sellerId: txn.sellerId
 //       });
 
 //       if (duplicateRtoTxns.length > 0) {
-//         // console.log(`Duplicate RTO Transactions Found for AWB: ${awbNumber}`, duplicateRtoTxns);
-
-//         // Sort transactions by createdAt (latest first)
 //         // @ts-ignore
 //         duplicateRtoTxns.sort((a, b) => b.createdAt - a.createdAt);
 
-//         // Keep one transaction (oldest), delete others
-//         const transactionToKeep = duplicateRtoTxns[0];
-//         const transactionsToDelete = duplicateRtoTxns.slice(1);
+//         const transactionsToDeleteAll = duplicateRtoTxns;
+//         const totalRefundAmount = transactionsToDeleteAll.reduce((sum, dTxn) => sum + Number(dTxn.amount), 0);
+//         if (totalRefundAmount <= 0) continue;
 
-//         // Calculate total refund amount (excluding the one we keep)
-//         const totalRefundAmount = transactionsToDelete.reduce((sum, dTxn) => sum + Number(dTxn.amount), 0);
-//         if (totalRefundAmount <= 0) return;
+//         console.log(` ${txn.desc} Total Refund Amount for AWB ${awbNumber}: ₹${totalRefundAmount}`);
 
-//         // console.log(`Total Refund Amount for AWB ${awbNumber}: ₹${totalRefundAmount}`);
+//         const seller = await SellerModel.findById(txn.sellerId).select("walletBalance name");
+//         if (seller) {
+//           seller.walletBalance -= totalRefundAmount;
+//           await seller.save();
 
-//         // Fetch seller details
-//         const seller = await SellerModel.findById(txn.sellerId);
-//         // if (seller) {
-//         //   // Refund the total amount once
-//         //   seller.walletBalance += totalRefundAmount;  // - to duduct and + to add *********Be very carefull with + or - sign********* once the operation done txn will lose
-//         //   await seller.save();
+//           await PaymentTransactionModal.deleteMany({
+//             _id: { $in: transactionsToDeleteAll.map(dTxn => dTxn._id) }
+//           });
 
-//         //   // Remove all duplicate transactions except one
-//         //   await PaymentTransactionModal.deleteMany({
-//         //     _id: { $in: transactionsToDelete.map(dTxn => dTxn._id) }
-//         //   });
-
-//         //   console.log(`Reverted ₹${totalRefundAmount} to seller ${seller._id} ${seller.name} and removed ${transactionsToDelete.length} duplicate transactions.`);
-//         // }
+//           console.log(`Reverted ₹${totalRefundAmount} to seller ${seller._id} ${seller.name} and removed ${transactionsToDeleteAll.length} duplicate transactions.`);
+//         }
 //       }
+
+//       processedAwbs.add(awbNumber);
 //     }
 
 //     console.log("Reversion Process Completed.");
@@ -120,6 +126,7 @@ if (!config.MONGODB_URI) {
 //     console.error("Error in revertRevisedMoneyNTxnToday:", error);
 //   }
 // }
+
 
 // Excess
 // async function excessChargeRefundForMansiOnly() {
@@ -165,7 +172,6 @@ mongoose
   .connect(config.MONGODB_URI)
   .then(() => {
     console.log("db connected successfully");
-    // createShipmentStruttStore()
   })
   .catch((err) => {
     console.log(err.message);
@@ -218,13 +224,18 @@ app.listen(config.PORT, () => console.log("server running on port " + config.POR
 
 async function createShipmentStruttStore() {
 
-  const getUnassignedOrders = await B2COrderModel.find({
+  const orders = await B2COrderModel.find({
     sellerId: "663c76ad8e9e095def325208",
     bucket: 0,
+    $or: [
+      { awb: { $exists: false } },
+      { awb: "" }
+    ],
     createdAt: { $gte: '2025-02-25T07:52:36.953+00:00' }
   }).populate("productId pickupAddress")
-  console.log(getUnassignedOrders.length)
-
+// @ts-ignore
+const getUnassignedOrders = orders.filter(x=>x.customerDetails.get("address").length < 170)
+console.log("processing..", getUnassignedOrders.length)
   for (const order of getUnassignedOrders) {
     const shipmentResponse = await shiprocketShipment({
       sellerId: "663c76ad8e9e095def325208",
@@ -232,19 +243,7 @@ async function createShipmentStruttStore() {
       charge: 0,
       order: order,
       carrierId: "67c1dce4ec84abf517a537fc",
-      // carrierId: "67c2d928ec84abf517a537fd",
     });
-
-    if (!shipmentResponse?.valid && shipmentResponse?.awb === null) {
-      const shipmentResponse = await shiprocketShipment({
-        sellerId: "663c76ad8e9e095def325208",
-        vendorName: { nickName: "BDS" },
-        charge: 0,
-        order: order,
-        // carrierId: "67c1dce4ec84abf517a537fc",
-        carrierId: "67c2d928ec84abf517a537fd",
-      });
-    }
   }
-  console.log("completed")
+  console.log("completed", getUnassignedOrders.length)
 }

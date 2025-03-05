@@ -17,20 +17,32 @@ export const validatePhone = (phone: string): boolean => {
 
 export const formatPhoneNumber = (phone: string | number): string => {
    if (typeof phone !== "string") {
-      phone = String(phone); // Convert to string if it's a number
+      phone = String(phone);
    }
 
-   phone = phone.replace(/\D/g, ""); // Remove non-numeric characters
+   phone = phone.replace(/\D/g, "");
 
-   if (phone.startsWith("91") && phone.length === 12) {
-      return phone.slice(2); // Remove country code
+   switch (true) {
+      case phone.startsWith("91") && phone.length === 12:
+         return phone.slice(2);
+      
+      // Remove US/Canada country code (+1)
+      case phone.startsWith("1") && phone.length === 11:
+         return phone.slice(1);
+      
+      // Remove US/Canada country code (1) with space or formatting
+      case phone.startsWith("+1") && phone.length === 12:
+         return phone.slice(2);
+      
+      case phone.length === 10:
+         return phone;
+      
+      case phone.length > 10:
+         return phone.slice(-10);
+      
+      default:
+         return "";
    }
-
-   if (phone.length === 10) {
-      return phone; // Already valid 10-digit number
-   }
-
-   return ""; // Return empty string if invalid
 };
 
 
@@ -73,7 +85,6 @@ export const hubValidatePayload = (body: any) => {
       hubSchema.parse(body);
       return { valid: true };
    } catch (error) {
-      console.log(error, 'v')
       if (error instanceof z.ZodError) {
          return { valid: false, message: error.errors.map(err => err.message).join(", ") };
       }
