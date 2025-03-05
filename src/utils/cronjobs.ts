@@ -1175,6 +1175,7 @@ const autoCancelShipmetWhosePickupNotScheduled = async () => {
 }
 
 export default async function runCron() {
+  trackOrder_Shiprocket()
   console.log("Running cron scheduler");
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";

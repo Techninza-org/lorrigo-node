@@ -25,21 +25,21 @@ export const formatPhoneNumber = (phone: string | number): string => {
    switch (true) {
       case phone.startsWith("91") && phone.length === 12:
          return phone.slice(2);
-      
+
       // Remove US/Canada country code (+1)
       case phone.startsWith("1") && phone.length === 11:
          return phone.slice(1);
-      
+
       // Remove US/Canada country code (1) with space or formatting
       case phone.startsWith("+1") && phone.length === 12:
          return phone.slice(2);
-      
+
       case phone.length === 10:
          return phone;
-      
+
       case phone.length > 10:
          return phone.slice(-10);
-      
+
       default:
          return "";
    }
@@ -117,7 +117,7 @@ const sellerDetailsSchema = z.object({
 const customerDetailsSchema = z.object({
    name: z.string()
       .min(1, "Customer name is required")
-      .regex(/^[A-Za-z\s]+$/, "Customer name must contain only English letters"),
+      .regex(/[A-Za-z]/, "Customer name must contain at least one English letter"),
    phone: z.string().refine(validatePhone, { message: "Invalid phone number" }),
    address: z.string().min(1, "Address is required"),
    pincode: z.coerce.string().min(6, "Pincode must be at least 6 characters"),
@@ -185,79 +185,78 @@ export function validateIndianMobileNumber(phoneNumber: string | null | undefine
    normalizedNumber: string;
    formattedNumber: string;
    errorMessage?: string;
- } {
+} {
    // Handle undefined or null
    if (phoneNumber === null || phoneNumber === undefined) {
-     return {
-       isValid: false,
-       normalizedNumber: '',
-       formattedNumber: '',
-       errorMessage: 'Phone number is required'
-     };
+      return {
+         isValid: false,
+         normalizedNumber: '',
+         formattedNumber: '',
+         errorMessage: 'Phone number is required'
+      };
    }
- 
+
    // Convert to string and clean up the input
    let cleaned = phoneNumber.toString().trim();
-   
+
    // Remove all non-numeric characters except plus sign at beginning
    cleaned = cleaned.replace(/(?!^\+)[^0-9]/g, '');
-   
+
    // Check if the number is now empty after cleaning
    if (!cleaned) {
-     return {
-       isValid: false,
-       normalizedNumber: '',
-       formattedNumber: '',
-       errorMessage: 'Phone number contains no digits'
-     };
+      return {
+         isValid: false,
+         normalizedNumber: '',
+         formattedNumber: '',
+         errorMessage: 'Phone number contains no digits'
+      };
    }
- 
+
    // Extract 10-digit number from different formats
    let extractedNumber: string;
-   
+
    // Case: Starts with +91 (international format)
    if (cleaned.startsWith('+91')) {
-     extractedNumber = cleaned.substring(3);
+      extractedNumber = cleaned.substring(3);
    }
    // Case: Starts with 91 (without plus)
    else if (cleaned.startsWith('91') && cleaned.length > 10) {
-     extractedNumber = cleaned.substring(2);
+      extractedNumber = cleaned.substring(2);
    }
    // Case: Starts with 0 (national format)
    else if (cleaned.startsWith('0')) {
-     extractedNumber = cleaned.substring(1);
+      extractedNumber = cleaned.substring(1);
    }
    // Case: Just the number
    else {
-     extractedNumber = cleaned;
+      extractedNumber = cleaned;
    }
- 
+
    // Validate 10-digit Indian mobile number
    // Indian mobile numbers are 10 digits and start with 6, 7, 8, or 9
    const isValidIndianMobile = /^[6-9]\d{9}$/.test(extractedNumber);
-   
+
    if (!isValidIndianMobile) {
-     let errorMessage = 'Invalid Indian mobile number';
-     
-     if (extractedNumber.length !== 10) {
-       errorMessage = `Expected 10 digits but got ${extractedNumber.length}`;
-     } else if (!/^[6-9]/.test(extractedNumber)) {
-       errorMessage = 'Indian mobile numbers must start with 6, 7, 8, or 9';
-     }
-     
-     return {
-       isValid: false,
-       normalizedNumber: extractedNumber,
-       formattedNumber: '',
-       errorMessage
-     };
+      let errorMessage = 'Invalid Indian mobile number';
+
+      if (extractedNumber.length !== 10) {
+         errorMessage = `Expected 10 digits but got ${extractedNumber.length}`;
+      } else if (!/^[6-9]/.test(extractedNumber)) {
+         errorMessage = 'Indian mobile numbers must start with 6, 7, 8, or 9';
+      }
+
+      return {
+         isValid: false,
+         normalizedNumber: extractedNumber,
+         formattedNumber: '',
+         errorMessage
+      };
    }
- 
+
    // Return the validated and normalized number
    return {
-     isValid: true,
-     normalizedNumber: extractedNumber,
-     formattedNumber: `+91 ${extractedNumber.substring(0, 5)} ${extractedNumber.substring(5)}`
+      isValid: true,
+      normalizedNumber: extractedNumber,
+      formattedNumber: `+91 ${extractedNumber.substring(0, 5)} ${extractedNumber.substring(5)}`
    };
- }
- 
+}

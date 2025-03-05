@@ -2224,11 +2224,13 @@ export async function orderReattempt(req: ExtendedRequest, res: Response, next: 
       interface OrderReattemptPayload {
         action: "fake-attempt" | "re-attempt" | "return";
         comment?: string;
+        deferred_date: string;
       }
 
       const orderReattemptPayload: OrderReattemptPayload = {
         action: type,
         comment: comment,
+        deferred_date: format(rescheduleDate, "dd MMM")
       };
       try {
         const schduleRes = await axios.post(
@@ -2241,6 +2243,9 @@ export async function orderReattempt(req: ExtendedRequest, res: Response, next: 
           }
         );
 
+        if (!schduleRes?.data?.success) {
+          return res.status(200).send({ valid: false, message: schduleRes?.data?.message });
+        }
         await updateOrderStatus(order._id, NDR, SMARTSHIP_ORDER_REATTEMPT_DESCRIPTION);
         return res.status(200).send({ valid: true, message: "Order reattempt request generated" });
       } catch (error) {

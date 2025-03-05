@@ -107,7 +107,10 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
       orderWeightUnit: body?.orderWeightUnit,
       productCount: body?.productCount,
       amount2Collect: body?.amount2Collect,
-      customerDetails: body?.customerDetails,
+      customerDetails: {
+        ...body?.customerDetails,
+        name: body.customerDetails.name.replace(/[^A-Za-z\s]/g, "")
+      },
       sellerDetails: {
         sellerName: body?.sellerDetails.sellerName,
         sellerGSTIN: body?.sellerDetails.sellerGSTIN,
@@ -759,81 +762,6 @@ export const updateB2CBulkShopifyOrders = async (req: ExtendedRequest, res: Resp
   }
 }
 
-// export const getOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-//   try {
-//     const sellerId = req.seller._id;
-//     // let { limit, page, status }: { limit?: number; page?: number; status?: string } = req.query;
-//     let { from, to, status }: { from?: string, to?: string, status?: string } = req.query;
-
-
-//     const obj = {
-//       new: [NEW, RETURN_CONFIRMED],
-//       "ready-to-ship": [READY_TO_SHIP, RETURN_PICKED],
-//       "in-transit": [IN_TRANSIT, RETURN_IN_TRANSIT],
-//       delivered: [DELIVERED, RETURN_DELIVERED],
-//       ndr: [NDR, RETURN_CANCELLATION],
-//       rto: [RTO, RTO_DELIVERED],
-//     };
-
-//     // limit = Number(limit);
-//     // page = Number(page);
-//     // page = page < 1 ? 1 : page;
-//     // limit = limit < 1 ? 1 : limit;
-
-//     // const skip = (page - 1) * limit;
-
-//     let orders;
-//     try {
-//       let query: any = { sellerId };
-
-//       if (from || to) {
-//         query.createdAt = {};
-
-//         if (from) {
-//           const [month, day, year] = from.split("/");
-//           const fromDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
-//           query.createdAt.$gte = fromDate;
-//         }
-
-//         if (to) {
-//           const [month, day, year] = to.split("/");
-//           const toDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
-//           query.createdAt.$lte = toDate;
-//         }
-
-//         if (!from) {
-//           delete query.createdAt.$gte;
-//         }
-//         if (!to) {
-//           delete query.createdAt.$lte;
-//         }
-//       }
-
-
-//       if (status && obj.hasOwnProperty(status)) {
-//         query.bucket = { $in: obj[status as keyof typeof obj] };
-//       }
-
-//       // Optimized query
-//       orders = await B2COrderModel
-//         .find(query)
-//         .sort({ createdAt: -1 })
-//         .populate("productId", "name category quantity taxable_value tax_rate") // Fetch only required fields from productId
-//         .populate("pickupAddress")    // Fetch only required fields from pickupAddress
-//         .lean();
-
-//     } catch (err) {
-//       return next(err);
-//     }
-//     return res.status(200).send({
-//       valid: true,
-//       response: { orders },
-//     });
-//   } catch (error) {
-//     return next(error);
-//   }
-// };
-
 export const getOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const sellerId = req.seller._id;
@@ -994,94 +922,6 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
     return next(error);
   }
 };
-
-
-// Old getChannelOrders: [01-03-2025] (Date on which function marked as old)
-/*
-export const getChannelOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  try {
-    const seller = req.seller;
-    const sellerId = req.seller._id;
-    const shopfiyConfig = await getSellerChannelConfig(sellerId);
-    const primaryHub = await HubModel.findOne({ sellerId, isPrimary: true });
-
-    const shopifyOrders = await axios.get(`${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_ORDER}`, {
-      headers: {
-        "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-      },
-    });
-    const orders = shopifyOrders.data.orders;
-
-    
-    for (let i = orders.length - 1; i >= 0; i--) {
-      const order = orders[i];
-      const orderDetails = await B2COrderModel.findOne({ sellerId, order_reference_id: order.name }).lean();
-      if (!orderDetails) {
-
-        const product2save = new ProductModel({
-          name: order.line_items?.map((item: any) => item.name).join(", "),
-          category: order.line_items?.map((item: any) => item.name).join(", "),
-          quantity: order.line_items?.reduce((acc: number, item: any) => acc + item.quantity, 0),
-          tax_rate: 0,
-          taxable_value: order?.total_price,
-        });
-
-        await product2save.save()
-
-        const newOrder = new B2COrderModel({
-          sellerId,
-          channelOrderId: order.id,
-          bucket: NEW,
-          channelName: "shopify",
-          orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
-          order_reference_id: order?.name || 'SHOPIFY-' + Math.round(Math.random() * 10000),
-          order_invoice_date: order.created_at,
-          order_invoice_number: order.name,
-          orderWeight: order?.line_items?.reduce((acc: number, item: any) => acc + item.grams / 1000, 0),
-          orderWeightUnit: "kg",
-
-          // hard coded values
-          orderBoxHeight: 10,
-          orderBoxWidth: 10,
-          orderBoxLength: 10,
-          orderSizeUnit: "cm",
-
-          client_order_reference_id: order.name || 'SHOPIFY-' + Math.round(Math.random() * 10000),
-          payment_mode: order?.financial_status === "pending" ? 1 : 0,  // 0 -> prepaid, 1 -> COD, Right now only prepaid, bcoz data not available
-          amount2Collect: order?.financial_status === "pending" ? order?.total_price : 0,
-          customerDetails: {
-            name: order.customer.first_name + " " + order.customer.last_name,
-            phone: order?.customer?.default_address?.phone,
-            email: order?.customer?.email,
-            address: (order?.customer?.default_address?.address1 + order?.customer?.default_address?.address2),
-            pincode: order?.customer?.default_address?.zip,
-            city: order?.customer?.default_address?.city,
-            state: order?.customer?.default_address?.province,
-          },
-          sellerDetails: {
-            sellerName: seller?.companyProfile?.companyName || seller?.name,
-            isSellerAddressAdded: false,
-            // sellerAddress: order?.billing_address?.address1 || primaryHub?.address1,
-            // sellerCity: order?.billing_address?.city,
-            // sellerState: order?.billing_address?.province,
-            // sellerPincode: 0,
-            // sellerPhone: order?.billing_address?.phone,
-          },
-          productId: product2save._id.toString(),
-          pickupAddress: primaryHub?._id.toString(),
-        });
-
-        await newOrder.save();
-      }
-    }
-
-    return res.status(200).send({ valid: true });
-  } catch (error) {
-    console.log("error", error)
-    return next(error);
-  }
-}
-*/
 
 export const getChannelOrders = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1678,7 +1518,7 @@ export const getBulkOrdersCourier = async (req: ExtendedRequest, res: Response, 
     const results = [];
     let uniqueCourierPartners: any[] = [];
 
- 
+
     for (const order of orderDetails) {
       const randomInt = Math.round(Math.random() * 20);
       const customClientRefOrderId = order?.client_order_reference_id + "-" + randomInt;
