@@ -2202,12 +2202,12 @@ export async function orderReattempt(req: ExtendedRequest, res: Response, next: 
         );
 
         if (externalAPIResponse.data.status === "403") {
-          return res.status(500).send({ valid: false, message: "Smartships ENVs expired" });
+          return res.status(500).send({ valid: false, message: "ENVs expired" });
         }
 
         const order_reattempt_details = externalAPIResponse?.data?.data;
         if (order_reattempt_details?.failure) {
-          return res.status(200).send({ valid: false, message: "Incomplete route", order_reattempt_details });
+          return res.status(200).send({ valid: false, message: "Order Reattempt request failed" });
         } else {
           return res
             .status(200)

@@ -26,9 +26,8 @@ import emailService from "./email.service";
 import CourierModel from "../models/courier.model";
 import { createTrackingKey, removeDuplicateStages, stageExists, buildExistingStagesMap } from './cron-shipment';
 
-
-const BATCH_SIZE = 130;
-const API_DELAY = 120000; // 2 minutes in milliseconds
+const BATCH_SIZE = 80;
+const API_DELAY = 300000; // 5 minutes in milliseconds
 
 const createTrackedOrdersCache = () => {
   const MAX_CACHE_SIZE = 100000;

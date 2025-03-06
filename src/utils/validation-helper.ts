@@ -117,7 +117,7 @@ const sellerDetailsSchema = z.object({
 const customerDetailsSchema = z.object({
    name: z.string()
       .min(1, "Customer name is required")
-      .regex(/[A-Za-z]/, "Customer name must contain at least one English letter"),
+      .regex(/^[A-Za-z\s\-~!@#$%^&*()_+={}[\]|':;?\/><.,*+-]+$/, "Name must contain only English letters and special characters (no numbers)"),
    phone: z.string().refine(validatePhone, { message: "Invalid phone number" }),
    address: z.string().min(1, "Address is required"),
    pincode: z.coerce.string().min(6, "Pincode must be at least 6 characters"),

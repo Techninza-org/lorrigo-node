@@ -109,7 +109,7 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
       amount2Collect: body?.amount2Collect,
       customerDetails: {
         ...body?.customerDetails,
-        name: body.customerDetails.name.replace(/[^A-Za-z\s]/g, "")
+        name: body.customerDetails.name.replace(/[^A-Za-z]/g, "")
       },
       sellerDetails: {
         sellerName: body?.sellerDetails.sellerName,

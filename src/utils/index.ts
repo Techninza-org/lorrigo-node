@@ -1571,7 +1571,6 @@ export async function shiprocketShipment({ sellerId, carrierId, order, charge, v
       if (awbMatch && awbMatch[1]) {
         const extractedAwb = awbMatch[1];
 
-        console.log(extractedAwb, "old shipment for order id: ", order._id)
         console.log(`Extracted AWB from error: ${extractedAwb}`);
 
         // Update order with extracted AWB
