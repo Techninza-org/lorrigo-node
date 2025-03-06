@@ -51,7 +51,7 @@ import envConfig from "../utils/config";
 import SellerModel from "../models/seller.model";
 import B2BCalcModel from "../models/b2b.calc.model";
 import ShipmenAwbCourierModel from "../models/shipment-awb-courier.model";
-import { validateIndianMobileNumber } from "../utils/validation-helper";
+import { formatPhoneNumber, validateIndianMobileNumber } from "../utils/validation-helper";
 
 // TODO: REMOVE THIS CODE: orderType = 0 ? "b2c" : "b2b"
 export async function createShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
@@ -174,6 +174,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     }))
 
     if (courierCharge?.length < 1) {
+      console.log(`Order id: ${order._id}: Courier is not servicable`)
       return res.status(200).send({ valid: false, message: "Courier is not servicable!" });
     }
 
@@ -654,7 +655,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               city: order.customerDetails.get("city"),
               state: order.customerDetails.get("state"),
               country: "India",
-              phone: order.customerDetails.get("phone"),
+              phone: formatPhoneNumber(order.customerDetails.get("phone") as string),
               order: order.client_order_reference_id,
               payment_mode: order?.isReverseOrder ? "Pickup" : order.payment_mode ? "COD" : "Prepaid",
               return_pin: hubDetails.rtoPincode,
@@ -804,7 +805,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               city: order.customerDetails.get("city"),
               state: order.customerDetails.get("state"),
               country: "India",
-              phone: order.customerDetails.get("phone"),
+              phone: formatPhoneNumber(order.customerDetails.get("phone") as string),
               order: order.client_order_reference_id,
               payment_mode: order?.isReverseOrder ? "Pickup" : order.payment_mode ? "COD" : "Prepaid",
               return_pin: hubDetails.rtoPincode,
@@ -954,7 +955,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
               city: order.customerDetails.get("city"),
               state: order.customerDetails.get("state"),
               country: "India",
-              phone: order.customerDetails.get("phone"),
+              phone: formatPhoneNumber(order.customerDetails.get("phone") as string),
               order: order.client_order_reference_id,
               payment_mode: order?.isReverseOrder ? "Pickup" : order.payment_mode ? "COD" : "Prepaid",
               return_pin: hubDetails.rtoPincode,

@@ -148,7 +148,6 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
       const vendor = await CourierModel.findById(vendorId);
       if (!vendor) {
         const previouslySavedPricing = await CustomPricingModel.findById(vendorId).lean();
-        console.log(previouslySavedPricing, "previouslySavedPricing");
         if (previouslySavedPricing) {
           delete body.vendorId;
           // const savedPricing = await CustomPricingModel.findByIdAndUpdate(previouslySavedPricing._id, { ...body }, { new: true });
@@ -200,7 +199,6 @@ export const updateVendor4Seller = async (req: Request, res: Response, next: Nex
             ...body,
           };
 
-          console.log(toAdd, "toAdd");
           savedPricing = new CustomPricingModel(toAdd);
           savedPricing = await savedPricing.save();
           return res.status(200).send({ valid: true, message: "Vendor priced updated for user", savedPricing });
@@ -956,8 +954,6 @@ export const rateCalculation = async ({
       orderRefId?: string;
       courier?: any;
     }[] = [];
-
-    console.log(commonCouriers, "loopLength")
 
     const loopLength = commonCouriers.length;
 
@@ -2102,16 +2098,6 @@ export const calculateSellerInvoiceAmount = async () => {
       const invoiceAmount = roundedTotalAmount / 1.18;
 
       if (invoiceAmount > 0) {
-        console.log(
-          seller.zoho_contact_id,
-          seller.name,
-          roundedTotalAmount,
-          awbCount,
-          awbs,
-          seller.config?.isPrepaid,
-          invoiceAmount,
-          '\n'
-        );
        await createAdvanceAndInvoice(seller.zoho_contact_id, totalAmount, awbs, seller.config?.isPrepaid);
       }
 
@@ -2575,7 +2561,6 @@ export async function refundExtraInvoiceAmount() {
       }
       const billTotal = forwardCharges + rtoCharges + codCharges;
       const refundAmount = billTotal - totalAmount;
-      console.log({ isRefund: billTotal < totalAmount, amt: refundAmount }, "refundAmount", awb);
       return { isRefund: billTotal < totalAmount, amt: refundAmount };
     });
   } catch (err) {
