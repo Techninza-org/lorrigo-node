@@ -365,6 +365,7 @@ export const trackOrder_Shiprocket = async () => {
     const shiprocketCouriers = (await CourierModel.find({ vendor_channel_id: vendorNickname._id })).map(courier => courier.id);
     const orders = (
       await B2COrderModel.find({
+        awb: "77771587924",
         bucket: { $in: ORDER_TO_TRACK },
         $or: [
           { carrierName: { $regex: vendorNickname.nickName } },
@@ -929,6 +930,7 @@ const processShiprocketOrders = async (orders) => {
         }
       });
 
+      console.log(JSON.stringify(response.data?.tracking_data))
       if (!response.data?.tracking_data?.shipment_status) {
         continue;
       }
@@ -1187,7 +1189,7 @@ export default async function runCron() {
   if (cron.validate(expression4every2Minutes)) {
     cron.schedule("20,50 * * * *", track_delivery); //20 minutes after the hour and half hour
     cron.schedule("10,40 * * * *", trackOrder_Smartship); //10 minutes after the hour and half hour
-    cron.schedule(expression4every30Minutes, trackOrder_Shiprocket);  // Track order status every 30 minutes
+    cron.schedule(expression4every59Minutes, trackOrder_Shiprocket);  // Track order status every 30 minutes
     cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
 
     cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
