@@ -398,8 +398,8 @@ export const updateSellerAdmin = async (req: ExtendedRequest, res: Response, nex
             Authorization: `Zoho-oauthtoken ${accessToken}`
           }
         })
-      } catch (error) {
-        console.log(error, 'error');
+      } catch (error: any) {
+        console.log(error?.message, 'error: [updateSellerAdmin]');
       }
     }
 
@@ -597,8 +597,8 @@ export const getSellerCouriers = async (req: ExtendedRequest, res: Response, nex
       valid: true,
       couriers: couriersWithNickname,
     });
-  } catch (err) {
-    console.log(err, 'err')
+  } catch (err: any) {
+    console.log(err?.message, 'err : {getSellerCouriers}')
     return next(err);
   }
 }
@@ -636,8 +636,8 @@ export const manageSellerCourier = async (req: ExtendedRequest, res: Response, n
       valid: true,
       message: "Couriers managed successfully",
     });
-  } catch (err) {
-    console.log(err, 'err');
+  } catch (err: any) {
+    console.log(err?.message, 'err : [manageSellerCourier]');
 
     return next(err);
   }
@@ -694,8 +694,8 @@ export const getSellerB2BCouriers = async (req: ExtendedRequest, res: Response, 
       valid: true,
       couriers: couriersWithNickname,
     });
-  } catch (err) {
-    console.log(err, 'err')
+  } catch (err: any) {
+    console.log(err?.message, 'err :{getSellerB2BCouriers}')
     return next(err);
   }
 }
@@ -733,8 +733,8 @@ export const manageB2BSellerCourier = async (req: ExtendedRequest, res: Response
       valid: true,
       message: "Couriers managed successfully",
     });
-  } catch (err) {
-    console.log(err, 'err');
+  } catch (err: any) {
+    console.log(err?.message, 'err [manageB2BSellerCourier]');
 
     return next(err);
   }

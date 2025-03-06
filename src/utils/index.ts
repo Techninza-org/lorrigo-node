@@ -1398,7 +1398,8 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
           sku: orderDetails.productId.category.slice(0, 40),
           units: 1,
           selling_price: Number(orderDetails.productId.taxable_value),
-        }
+        },
+        ...orderDetails.orderItems
       ],
       payment_method: orderDetails?.payment_mode === 0 ? "Prepaid" : "COD",
       sub_total: Number(orderDetails.productId?.taxable_value),

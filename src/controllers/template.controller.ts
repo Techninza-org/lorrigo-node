@@ -123,7 +123,6 @@ export const generateManifests = async (req: ExtendedRequest, res: Response) => 
     const isBulk = req.query.bulk === "true"
     const sellerId = req.seller._id
 
-    console.log(isBulk, "isBulk")
 
     if (!isBulk && req.body.orderIds && Array.isArray(req.body.orderIds)) {
       orders = await B2COrderModel.find({ _id: { $in: req.body.orderIds } }).populate("pickupAddress productId");

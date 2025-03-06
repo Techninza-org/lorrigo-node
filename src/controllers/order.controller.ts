@@ -109,8 +109,9 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
       amount2Collect: body?.amount2Collect,
       customerDetails: {
         ...body?.customerDetails,
-        name: body.customerDetails.name.replace(/[^A-Za-z]/g, "")
+        name: body.customerDetails.name.replace(/[^A-Za-z\s]/g, "")
       },
+      ...(body?.orderItems && { orderItems: body?.orderItems }),
       sellerDetails: {
         sellerName: body?.sellerDetails.sellerName,
         sellerGSTIN: body?.sellerDetails.sellerGSTIN,
@@ -878,9 +879,11 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
           _id: 1,
           awb: 1,
           order_reference_id: 1,
+          orderItems: 1,
           client_order_reference_id: 1,
           payment_mode: 1,
           orderWeight: 1,
+          sellerDetails: 1,
           orderWeightUnit: 1,
           order_invoice_date: 1,
           order_invoice_number: 1,
@@ -898,6 +901,7 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
           orderStages: 1,
           isReverseOrder: 1,
           carrierName: 1,
+          pickupAddress: 1,
         })
         .populate("productId", "name category quantity taxable_value tax_rate")
         .populate("pickupAddress", "name address city state pincode address1 address2")
@@ -1047,15 +1051,12 @@ export const getChannelOrders = async (req: ExtendedRequest, res: Response, next
                 sellerName: seller?.companyProfile?.companyName || seller?.name || '',
                 isSellerAddressAdded: !!primaryHub
               },
-
               orderItems: order.line_items?.map((item: any) => ({
                 name: item.name,
-                quantity: item.quantity,
-                price: parseFloat(item.price),
                 sku: item.sku || '',
-                variant_id: item.variant_id,
-                product_id: item.product_id,
-                total: parseFloat(item.price) * item.quantity
+                units: item.quantity,
+                selling_price: parseFloat(item.price),
+                // total: parseFloat(item.price) * item.quantity
               })) || [],
 
               orderTotal: parseFloat(order.total_price || 0),

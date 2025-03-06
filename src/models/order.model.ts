@@ -25,13 +25,13 @@ const B2COrderSchema = new mongoose.Schema({
   ],
   orderItems: [
     {
-      name: { type: Number, required: true },
-      sku: { type: String, required: true },
+      name: { type: String, required: false },
+      sku: { type: String, required: false },
       units: { type: String, required: false },
       selling_price: { type: String, required: false },
-      discount: { type: Date, required: true },
-      tax: { type: Date, required: true },
-      hsn: { type: Date, required: true },
+      discount: { type: String, required: false },
+      tax: { type: String, required: false },
+      hsn: { type: String, required: false },
     },
   ],
   carrierId: { type: mongoose.Schema.Types.ObjectId, ref: "Courier" },
