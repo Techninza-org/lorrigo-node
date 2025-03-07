@@ -15,14 +15,14 @@ export const generateInvoices = async (req: ExtendedRequest, res: Response) => {
     const today = new Date();
     const last7Day = new Date(today.getDate() - 7)
     if (!isBulk && req.body.orderIds && Array.isArray(req.body.orderIds)) {
-      orders = await B2COrderModel.find({ _id: { $in: req.body.orderIds } }).populate("pickupAddress productId");
+      orders = await B2COrderModel.find({ _id: { $in: req.body.orderIds } }).populate("pickupAddress productId").populate("sellerId", "companyProfile");
     } else if (isBulk) {
       orders = await B2COrderModel.find({
         sellerId: sellerId,
         bucket: 1,
         awb: { $exists: true },
         createdAt: { $gte: last7Day }
-      }).populate("pickupAddress productId");
+      }).populate("pickupAddress productId").populate("sellerId", "companyProfile");
     }
 
     console.log(`Total orders found: ${orders.length}`);

@@ -74,18 +74,18 @@ const createInvoiceHtml = (order, template) => {
       })(),
       
       // Seller information
-      sellerName: order.sellerDetails?.sellerName || '',
-      sellerAddress: order.sellerDetails?.sellerAddress || order.pickupAddress?.address1 || '',
+      sellerName: order.sellerDetails?.get("sellerName") || '',
+      sellerAddress: order.sellerDetails?.get("sellerAddress") || order.pickupAddress?.address1 || '',
       rtoAddress: order.pickupAddress?.rtoAddress || order.pickupAddress?.address1 || '',
       rtoCity: order.pickupAddress?.rtoCity || order.pickupAddress?.city || '',
       rtoState: order.pickupAddress?.rtoState || order.pickupAddress?.state || '',
-      companyLogoUrl: order.sellerDetails?.companyLogo 
-        ? `data:image/jpeg;base64,${order.sellerDetails.companyLogo}` 
+      companyLogoUrl: order.sellerId.companyProfile.companyLogo 
+        ? `data:image/jpeg;base64,${order.sellerId.companyProfile.companyLogo}` 
         : 'https://lorrigo.in/_next/static/media/lorrigologo.e54a51f3.svg',
       lorrigoLogoUrl: 'https://lorrigo.in/_next/static/media/lorrigologo.e54a51f3.svg',
       productName: order.productId?.name || '',
       invoiceNumber: order.order_invoice_number || '',
-      sellerGSTIN: order.sellerDetails?.sellerGSTIN || '',
+      sellerGSTIN: order.sellerDetails?.get("sellerGSTIN") || '',
       
       // Add unique identifier to prevent duplication
       uniqueId: `order-${order._id || Math.random().toString(36).substring(2, 15)}`
