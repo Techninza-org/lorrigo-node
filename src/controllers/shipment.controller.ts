@@ -33,8 +33,14 @@ import {
   calculateRevenue,
   calculateShipmentDetails,
   calculateTodayYesterdayAnalysis,
+  cancelOrderShipment,
   createDelhiveryShipment,
+  handleDelhiveryCancellation,
+  handleMarutiCancellation,
   handleMarutiShipment,
+  handleShiprocketCancellation,
+  handleSmartrCancellation,
+  handleSmartshipCancellation,
   handleSmartShipShipment,
   registerOrderOnShiprocket,
   sendMailToScheduleShipment,
@@ -1282,7 +1288,6 @@ export async function createBulkShipmentV2(req: ExtendedRequest, res: Response, 
             isReversedOrder: order.isReverseOrder,
           });
           const charges = courierCharges?.[0]?.charge;
-          console.log(charges, "chargescharges");
 
 
           let shipmentResponse;
@@ -1365,7 +1370,7 @@ export async function createBulkShipmentV2(req: ExtendedRequest, res: Response, 
   }
 }
 
-export async function cancelShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
+export async function cancelShipment(req: ExtendedRequest, res: Response, next: NextFunction): Promise<Response> {
   try {
     const { orderIds, type } = req.body;
     const sellerId = req.seller._id;
@@ -1379,349 +1384,75 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
       B2BOrderModel.find({ _id: { $in: orderIds }, sellerId })
     ]);
 
-    // Merge the results
-    const orders: any = [...b2cOrders, ...b2bOrders];
+    const orders: any[] = [...b2cOrders, ...b2bOrders];
 
     if (!orders.length) {
       return res.status(200).send({ valid: false, message: "No active orders found" });
     }
 
-    for (let i = 0; i < orders.length; i++) {
-      const order = orders[i];
+    const results: any[] = [];
+    let globalError: Error | null = null;
 
-      if (!order.awb && type === "order") {
-        // @ts-ignore
-        await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-        await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
-        continue;
-      }
-
-      const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
-      const vendorName = await EnvModel.findOne({ nickName: assignedVendorNickname });
-
-      if (order.bucket === IN_TRANSIT) {
-        const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb) ?? { rtoCharges: 0, cod: 0 };
-        await updateSellerWalletBalance(sellerId, rtoCharges?.rtoCharges || 0, false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-        if (!!rtoCharges.cod) await updateSellerWalletBalance(sellerId, rtoCharges.cod || 0, true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-      }
-
-      if (vendorName?.name === "SMARTSHIP") {
-        const smartshipToken = await getSmartShipToken();
-        if (!smartshipToken) {
-          return res.status(500).send({ valid: false, message: "Smartship environment variables not found" });
-        }
-
-        const shipmentAPIConfig = { headers: { Authorization: smartshipToken } };
-
-        let requestBody = {
-          request_info: {},
-          orders: {
-            client_order_reference_ids: [order.client_order_reference_id],
-          },
-        };
-
-        try {
-          const externalAPIResponse = await axios.post(
-            config.SMART_SHIP_API_BASEURL + APIs.CANCEL_SHIPMENT,
-            requestBody,
-            shipmentAPIConfig
-          );
-
-          if (externalAPIResponse.data.status === "403") {
-            return res.status(500).send({ valid: false, message: "Smartship environment variables expired" });
-          }
-
-          const orderCancellationDetails = externalAPIResponse.data?.data?.order_cancellation_details;
-
-          if (orderCancellationDetails?.failure) {
-            const failureMessage =
-              externalAPIResponse?.data?.data?.order_cancellation_details?.failure[order?.order_reference_id]?.message;
-            if (failureMessage?.includes("Already Cancelled.")) {
-              // Order already cancelled
-              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
-
-              return res.status(200).send({ valid: false, message: "Order already cancelled" });
-            } else if (failureMessage?.includes("Cancellation already requested.")) {
-              // Cancellation already requested
-              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
-
-              return res.status(200).send({ valid: false, message: "Cancellation already requested" });
-            } else {
-              return res
-                .status(500)
-                .send({ valid: false, message: "Incomplete route section", orderCancellationDetails });
-            }
-          } else {
-            if (type === "order") {
-              // @ts-ignore
-              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
-            } else {
-              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-              order.awb = null;
-              order.carrierName = null;
-              order.shipmentCharges = null;
-              order.save();
-
-              await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
-              await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
-              // @ts-ignore
-            }
-
-            return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
-          }
-        } catch (error) {
-          return next(error);
-        }
-      } else if (vendorName?.name === "SHIPROCKET") {
-        try {
-          const cancelShipmentPayload = {
-            awbs: [order.awb],
-          };
-          const shiprocketToken = await getShiprocketToken();
-          const cancelShipmentResponse = await axios.post(
-            config.SHIPROCKET_API_BASEURL + APIs.CANCEL_SHIPMENT_SHIPROCKET,
-            cancelShipmentPayload,
-            {
-              headers: {
-                Authorization: shiprocketToken,
-              },
-            }
-          );
-          await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-          if (type === "order") {
-            // API CALL: 
-            const cancelOrderPayload = {
-              ids: [order.shiprocket_order_id]
-            }
-            const cancelOrderResponse = await axios.post(
-              config.SHIPROCKET_API_BASEURL + APIs.CANCEL_ORDER_SHIPROCKET,
-              cancelOrderPayload,
-              {
-                headers: {
-                  Authorization: shiprocketToken,
-                },
-              }
-            );
-            await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
-          } else {
-            order.awb = null;
-            order.carrierName = null;
-            order.shipmentCharges = null;
-            order.save();
-
-            await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
-            await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
-          }
-          // @ts-ignore
-          return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
-        } catch (error) {
-          return next(error);
-        }
-      } else if (vendorName?.name === "SMARTR") {
-        const smartrToken = await getSMARTRToken();
-        if (!smartrToken) return res.status(200).send({ valid: false, message: "Invalid token" });
-
-        if (type === "order") {
-          // @ts-ignore
-          await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+    for (const order of orders) {
+      try {
+        if (!order.awb && type === "order") {
+          await updateSellerWalletBalance(sellerId, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
           await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
+          results.push({ orderId: order._id, status: 'success', message: "Order cancelled successfully" });
+          continue;
+        }
+
+        const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
+        let vendorName: any = null;
+        
+        if (order.carrierId) {
+          const courier = await CourierModel.findById(order.carrierId).populate("vendor_channel_id");
+          vendorName = courier?.vendor_channel_id || null;
+        } else if (assignedVendorNickname) {
+          vendorName = await EnvModel.findOne({ nickName: assignedVendorNickname });
+        }
+
+        if (order.bucket === IN_TRANSIT) {
+          const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb) ?? { rtoCharges: 0, cod: 0 };
+          await updateSellerWalletBalance(sellerId, rtoCharges?.rtoCharges || 0, false, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+          if (!!rtoCharges.cod) {
+            await updateSellerWalletBalance(sellerId, rtoCharges.cod || 0, true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+          }
+        }
+
+        if (vendorName?.name === "SMARTSHIP") {
+          await handleSmartshipCancellation(order, sellerId, type, results);
+        } else if (vendorName?.name === "SHIPROCKET") {
+          await handleShiprocketCancellation(order, sellerId, type, results);
+        } else if (vendorName?.name === "SMARTR") {
+          await handleSmartrCancellation(order, sellerId, type, results);
+        } else if (["DELHIVERY", "DELHIVERY_0.5", "DELHIVERY_10"].includes(vendorName?.name || "")) {
+          await handleDelhiveryCancellation(order, sellerId, type, vendorName?.name || "", results);
+        } else if (vendorName?.name === "MARUTI") {
+          await handleMarutiCancellation(order, sellerId, type, results);
         } else {
-
-          const cancelOrder = await axios.post(config.SMARTR_API_BASEURL + APIs.CANCEL_ORDER_SMARTR, {
-            awbs: [order.awb],
-          }, {
-            headers: {
-              Authorization: smartrToken,
-            },
-          }
-          )
-          const response = cancelOrder?.data
-          const isCancelled = response.data[0].success;
-          if (isCancelled) {
-            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-            order.awb = null;
-            order.carrierName = null
-            order.shipmentCharges = null;
-            await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
-            await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
-            order.save();
-          }
+          results.push({ orderId: order._id, status: 'error', message: "Unknown vendor" });
         }
-      }
-      else if (vendorName?.name === "DELHIVERY") {
-        const delhiveryToken = await getDelhiveryToken();
-        if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
-
-        const cancelShipmentPayload = {
-          waybill: order.awb,
-          cancellation: true
-        };
-
-        try {
-          const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_CANCEL_ORDER}`, cancelShipmentPayload, {
-            headers: {
-              Authorization: delhiveryToken,
-            },
-          });
-
-          const delhiveryShipmentResponse = response.data;
-
-          if (delhiveryShipmentResponse.status) {
-            if (type === "order") {
-              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
-              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-            } else {
-              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-              order.awb = null;
-              order.carrierName = null
-              order.shipmentCharges = null;
-              order.save();
-
-              await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
-              await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
-
-            }
-            // @ts-ignore
-          }
-          return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
-
-        } catch (error) {
-          console.error("Error creating Delhivery shipment:", error);
-          return next(error);
-        }
-      }
-      else if (vendorName?.name === "DELHIVERY_0.5") {
-        const delhiveryToken = await getDelhiveryTokenPoint5();
-        if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
-
-        const cancelShipmentPayload = {
-          waybill: order.awb,
-          cancellation: true
-        };
-
-        try {
-          const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_CANCEL_ORDER}`, cancelShipmentPayload, {
-            headers: {
-              Authorization: delhiveryToken,
-            },
-          });
-
-          const delhiveryShipmentResponse = response.data;
-
-          if (delhiveryShipmentResponse.status) {
-            if (type === "order") {
-              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
-              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-            } else {
-              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-              order.awb = null;
-              order.carrierName = null
-              order.shipmentCharges = null;
-              order.save();
-
-              await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
-              await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
-
-            }
-            // @ts-ignore
-          }
-          return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
-
-        } catch (error) {
-          console.error("Error creating Delhivery shipment:", error);
-          return next(error);
-        }
-      }
-      else if (vendorName?.name === "DELHIVERY_10") {
-        const delhiveryToken = await getDelhiveryToken10();
-        if (!delhiveryToken) return res.status(200).send({ valid: false, message: "Invalid token" });
-
-        const cancelShipmentPayload = {
-          waybill: order.awb,
-          cancellation: true
-        };
-
-        try {
-          const response = await axios.post(`${envConfig.DELHIVERY_API_BASEURL}${APIs.DELHIVERY_CANCEL_ORDER}`, cancelShipmentPayload, {
-            headers: {
-              Authorization: delhiveryToken,
-            },
-          });
-
-          const delhiveryShipmentResponse = response.data;
-
-          if (delhiveryShipmentResponse.status) {
-            if (type === "order") {
-              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
-              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-            } else {
-              await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-              order.awb = null;
-              order.carrierName = null
-              order.shipmentCharges = null;
-              order.save();
-
-              await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
-              await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
-
-            }
-            // @ts-ignore
-          }
-          return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
-
-        } catch (error) {
-          console.error("Error creating Delhivery shipment:", error);
-          return next(error);
-        }
-      } else if (vendorName?.name === "MARUTI") {
-        const marutiToken = await getMarutiToken();
-        if (!marutiToken) return res.status(200).send({ valid: false, message: "Invalid token" });
-
-        const cancelShipmentPayload = {
-          orderId: order.order_reference_id,
-          cancelReason: "Order Cancelled",
-        };
-
-        try {
-          const response = await axios.post(`${envConfig.MARUTI_BASEURL}${APIs.MARUTI_CANCEL_ORDER}`, cancelShipmentPayload, {
-            headers: {
-              Authorization: marutiToken,
-            },
-          });
-
-          const marutiShipmentResponse = response.data;
-
-          if (marutiShipmentResponse.status) {
-            if (type === "order") {
-              await updateOrderStatus(order._id, CANCELED, CANCELLED_ORDER_DESCRIPTION);
-            } else {
-              order.awb = null;
-              order.carrierName = null
-              order.save();
-
-              await updateOrderStatus(order._id, SHIPMENT_CANCELLED_ORDER_STATUS, SHIPMENT_CANCELLED_ORDER_DESCRIPTION);
-              await updateOrderStatus(order._id, NEW, NEW_ORDER_DESCRIPTION);
-
-            }
-            // @ts-ignore
-            await updateSellerWalletBalance(req.seller._id, Number(order.shipmentCharges ?? 0), true, `AWB: ${order.awb}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-          }
-          return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
-
-        } catch (error) {
-          console.error("Error canceling Maruti shipment:", error);
-          return next(error);
-        }
+      } catch (error: any) {
+        console.error(`Error processing order ${order._id}:`, error);
+        results.push({ orderId: order._id, status: 'error', message: error.message || "Unknown error" });
+        globalError = error;
       }
     }
 
-    return res.status(200).send({ valid: true, message: "Order cancellation request generated" });
-  } catch (error) {
-    console.log(error, 'erroe')
+    return res.status(200).send({ 
+      valid: true, 
+      message: "Order cancellation requests processed", 
+      results,
+      errors: results.filter(r => r.status === 'error').length
+    });
+  } catch (error: any) {
+    console.error("Error in cancelShipment:", error);
+    // @ts-ignore
     return next(error);
   }
 }
+
 
 export async function orderManifest(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {

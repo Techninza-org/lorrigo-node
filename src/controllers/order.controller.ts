@@ -663,7 +663,6 @@ export const updateBulkPickupOrder = async (req: ExtendedRequest, res: Response,
 
       const bulkUpdateResult = await B2COrderModel.bulkWrite(bulkUpdateOps);
       savedOrders = bulkUpdateResult.modifiedCount;
-      console.log(bulkUpdateResult, 'bulkUpdateResult')
     } else {
       const bulkUpdateOps = orderIds.map((orderId: any) => ({
         updateOne: {
@@ -673,7 +672,6 @@ export const updateBulkPickupOrder = async (req: ExtendedRequest, res: Response,
       }));
 
       const bulkUpdateResult = await B2COrderModel.bulkWrite(bulkUpdateOps);
-      console.log(bulkUpdateResult, 'bulkUpdateResult')
       savedOrders = bulkUpdateResult.modifiedCount;
     }
 

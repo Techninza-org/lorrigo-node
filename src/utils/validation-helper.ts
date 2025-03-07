@@ -122,8 +122,90 @@ const customerDetailsSchema = z.object({
    address: z.string().min(1, "Address is required"),
    pincode: z.coerce.string().min(6, "Pincode must be at least 6 characters"),
 });
+const orderItemSchema = z.object({
+   name: z.string().optional(),
+   sku: z.string().optional(),
+   units: z.string().optional(),
+   selling_price: z.string().optional(),
+   discount: z.string().optional(),
+   tax: z.string().optional(),
+   hsn: z.string().optional(),
+}).superRefine((data, ctx) => {
+   if (Object.keys(data).length === 0) {
+      return true;
+   }
+   
+   if ('name' in data && data.name !== undefined) {
+      if (data.name.length < 1) {
+         ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Item name is required and must be a valid name",
+            path: ['name']
+         });
+      }
+   }
+   
+   if ('sku' in data && data.sku !== undefined) {
+      if (data.sku.length < 1) {
+         ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "SKU is required and must be a valid SKU",
+            path: ['sku']
+         });
+      }
+   }
+   
+   if ('units' in data && data.units !== undefined) {
+      if (data.units.length < 1) {
+         ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Units are required and must be valid",
+            path: ['units']
+         });
+      }
+   }
+   
+   if ('selling_price' in data && data.selling_price !== undefined) {
+      if (data.selling_price.length < 1) {
+         ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Selling price is required and must be valid",
+            path: ['selling_price']
+         });
+      }
+   }
+   
+   if ('discount' in data && data.discount !== undefined) {
+      if (data.discount.length < 1) {
+         ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Discount is required and must be valid",
+            path: ['discount']
+         });
+      }
+   }
+   
+   if ('tax' in data && data.tax !== undefined) {
+      if (data.tax.length < 1) {
+         ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Tax is required and must be valid",
+            path: ['tax']
+         });
+      }
+   }
+   
+   if ('hsn' in data && data.hsn !== undefined) {
+      if (data.hsn.length < 1) {
+         ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "HSN is required and must be valid",
+            path: ['hsn']
+         });
+      }
+   }
+});
 
-// Order Validation Schema
 const orderValidationSchema = z.object({
    order_reference_id: z.string().min(1, "Order reference id is required"),
    payment_mode: z.coerce.number().int().refine((val) => val === 0 || val === 1, { message: "Invalid payment mode, Please select 0 for Prepaid or 1 for COD" }),
@@ -140,6 +222,7 @@ const orderValidationSchema = z.object({
    amount2Collect: z.coerce.number().optional(),
    customerDetails: customerDetailsSchema,
    productDetails: productDetailsSchema,
+   orderItems: z.array(orderItemSchema).optional(),
    pickupAddress: z.string().min(1, "Pickup address is required"),
    sellerDetails: sellerDetailsSchema,
    isReverseOrder: z.boolean(),
@@ -174,7 +257,7 @@ export const validateOrderPayload = (body: any) => {
    } catch (error) {
       console.log(error, "Validation Error");
       if (error instanceof z.ZodError) {
-         return { valid: false, message: error.errors.map((err) => `${err.path} ${err.message}`).join(", ") };
+         return { valid: false, message: error.errors.map((err) => `${err.path}: ${err.message}`).join(", "), errors: error.errors };
       }
       return { valid: false, message: "Invalid payload" };
    }

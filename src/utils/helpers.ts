@@ -1219,6 +1219,19 @@ export async function getDelhiveryToken10() {
   return token;
 }
 
+  export const getDelhiveryTkn = async (type: any) => {
+    switch (type) {
+      case "DELHIVERY":
+        return await getDelhiveryToken();
+      case "DELHIVERY_0.5":
+        return await getDelhiveryTokenPoint5();
+      case "DELHIVERY_10":
+        return await getDelhiveryToken10();
+      default:
+        return null;
+    }
+  };
+
 export async function getEcommToken() {
   const env = await EnvModel.findOne({ name: "ECOMM" }).lean();
   if (!env) return false;
