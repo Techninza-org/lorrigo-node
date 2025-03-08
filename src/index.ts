@@ -19,7 +19,7 @@ import customerRouter from "./routes/customer.routes";
 import morgan from "morgan";
 import shipmentRouter from "./routes/shipment.routes";
 import sellerRouter from "./routes/seller.routes";
-import runCron from "./utils/cronjobs";
+import runCron, { processShiprocketOrders } from "./utils/cronjobs";
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
 import { getSpecificOrder } from "./controllers/order.controller";
@@ -184,7 +184,9 @@ app.get("/api/getsellers", cache("5 minutes"), getSellers); //admin
 // @ts-ignore
 app.get("/api/order/:awb", getSpecificOrder);
 
-app.post("/api/shopify", (req, res) => {
+app.post("/api/track/shiprocket", async (req, res) => {
+  const order = await B2COrderModel.find({ awb: req.body.awb })
+  await processShiprocketOrders(order)
   return res.send("ok");
 });
 

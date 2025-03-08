@@ -907,7 +907,7 @@ const processDelhiveryBatch = async (orders, delhiveryToken) => {
   return { updatedCount: updatedOrders.length };
 };
 
-const processShiprocketOrders = async (orders) => {
+export const processShiprocketOrders = async (orders) => {
   const shiprocketToken = await getShiprocketToken();
   if (!shiprocketToken) {
     console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
@@ -1175,7 +1175,6 @@ const autoCancelShipmetWhosePickupNotScheduled = async () => {
 }
 
 export default async function runCron() {
-  trackOrder_Shiprocket()
   console.log("Running cron scheduler");
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
