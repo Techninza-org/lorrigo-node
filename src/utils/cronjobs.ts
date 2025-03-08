@@ -926,7 +926,7 @@ const processDelhiveryBatch = async (orders, delhiveryToken) => {
   return { updatedCount: updatedOrders.length };
 };
 
-const processShiprocketOrders = async (orders) => {
+export const processShiprocketOrders = async (orders) => {
   const shiprocketToken = await getShiprocketToken();
   if (!shiprocketToken) {
     console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
@@ -983,6 +983,7 @@ const processShiprocketOrders = async (orders) => {
         ) || new Date();
 
         const bucketInfo = getShiprocketBucketing(Number(activity['sr-status']));
+        console.log(bucketInfo, 'bucketInfo', order.awb)
 
         if (bucketInfo.bucket !== -1) {
           // Create the activity key without timestamp

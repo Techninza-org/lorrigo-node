@@ -792,7 +792,6 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       query.bucket = { $in: bucketMap[status as keyof typeof bucketMap] };
     }
 
-    // Search filter (for AWB or reference ID)
     if (search) {
       query.$or = [
         { awb: { $regex: search, $options: 'i' } },
@@ -819,7 +818,7 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
     }
 
     // Validate sort field to prevent injection
-    const allowedSortFields = ['createdAt', 'order_reference_id', 'awb', 'order_invoice_date', 'bucket'];
+    const allowedSortFields = ['createdAt', 'order_reference_id', 'awb', 'order_invoice_date', 'customerDetails','bucket'];
     const sortField = allowedSortFields.includes(sort) ? sort : 'createdAt';
     const sortOrder = order === 'asc' ? 1 : -1;
     const sortOptions: any = {};

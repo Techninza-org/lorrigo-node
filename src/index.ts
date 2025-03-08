@@ -1,5 +1,11 @@
 import express from "express";
 import type { Request, Response } from "express";
+import http from "http";
+import { Server as SocketIOServer } from "socket.io";
+import cluster from "cluster";
+import os from "os";
+import compression from "compression";
+import helmet from "helmet";
 import authRouter from "./routes/auth.routes";
 import mongoose from "mongoose";
 import config from "./utils/config";
@@ -10,8 +16,6 @@ import {
   addVendors,
   getSellers,
   ratecalculatorController,
-  refundExtraInvoiceAmount,
-  // reverseExtraRtoCodfor31,
 } from "./utils/helpers";
 import hubRouter from "./routes/hub.routes";
 import cors from "cors";
@@ -19,231 +23,247 @@ import customerRouter from "./routes/customer.routes";
 import morgan from "morgan";
 import shipmentRouter from "./routes/shipment.routes";
 import sellerRouter from "./routes/seller.routes";
-import runCron from "./utils/cronjobs";
+import runCron, { processShiprocketOrders } from "./utils/cronjobs";
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
 import { getSpecificOrder } from "./controllers/order.controller";
 import apicache from "apicache";
 import path from "path";
-import PaymentTransactionModal from "./models/payment.transaction.modal";
-import SellerModel from "./models/seller.model";
-import ClientBillingModal from "./models/client.billing.modal";
 import { B2COrderModel } from "./models/order.model";
-import { sendMail, shiprocketShipment } from "./utils";
 
-const app = express();
-app.use(cors({ origin: "*" }));
-app.use(express.json());
+// Number of CPU cores to use
+// const numCPUs = os.cpus().length;
+const numCPUs = 1;
 
+// Use in-memory cache
 const cache = apicache.middleware;
 
-app.use('/api/public', express.static(path.join(__dirname, 'public')));
-//@ts-ignore
-morgan.token("reqbody", (req, res) => JSON.stringify(req.body));
-app.use(morgan(":method :url :status - :response-time ms - :reqbody"));
+// Only run server setup in worker processes or if not using cluster
+if (!config.USE_CLUSTER || (config.USE_CLUSTER && cluster.isWorker)) {
+  const app = express();
+  const server = http.createServer(app);
+  // const io = new SocketIOServer(server, {
+  //   cors: {
+  //     origin: "*",
+  //     methods: ["GET", "POST"],
+  //   },
+  //   transports: ["websocket", "polling"],
+  //   pingTimeout: 60000,
+  //   maxHttpBufferSize: 1e6, // 1MB
+  // });
 
-app.get("/ping", (_req, res: Response) => {
-  return res.send("pong");
-});
+  // Middleware for performance
+  app.use(helmet()); // Security headers
+  app.use(compression()); // Compress responses
+  app.use(cors({ origin: "*" }));
+  app.use(express.json({ limit: "2mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
-if (!config.MONGODB_URI) {
-  Logger.log("MONGODB_URI doesn't exists: " + config.MONGODB_URI);
-  process.exit(0);
-}
+  // Static files
+  app.use('/api/public', express.static(path.join(__dirname, 'public'), {
+    maxAge: 86400000 // 1 day caching
+  }));
 
-// RTO
-// $regex: /(RTO charges|~RTO charges|RTO-charges|RTO Charge Applied)$/i
-// $regex: `(AWB: ${awbNumber}|${awbNumber}).*(RTO charges|~RTO charges|RTO-charges|RTO Charge Applied)`,
-
-// Cod 
-// $regex: /(~RTO COD charges|COD Charge Reversed|COD Refund)$/i
-// $regex: `(AWB: ${awbNumber}|${awbNumber}).*(~RTO COD charges|COD Charge Reversed|COD Refund)`,
-
-
-// RTO Excess Charge + 
-// FW Excess Charge + 
-// RTO-charges + 
-
-// COD-Refund - sign 
-// async function revertRevisedMoneyNTxnToday() {
-//   try {
-//     const rtoChargeAppliedTxns = await PaymentTransactionModal.find({
-//       // sellerId: "667e4e1fd0f6ee549f0592ee",
-//       desc: {
-//         $regex: /(~COD-Refund|COD-Refund|COD-Refund)$/i
-//       },
-//       createdAt: { $gt: "2025-03-02T00:00:38.030+00:00" }
-//     }).sort({ createdAt: -1 })
-
-//     const processedAwbs = new Set();
-
-//     console.log(rtoChargeAppliedTxns.length)
-//     for (const txn of rtoChargeAppliedTxns) {
-//       // const awbMatch = txn.desc.match(/(?:AWB: )?(\d+)/);
-//       const awbMatch = txn.desc.match(/(?:AWB: )?(\w+)/);
-
-//       if (!awbMatch) continue;
-
-//       const awbNumber = awbMatch[1];
-//       if (awbNumber.length < 8 || processedAwbs.has(awbNumber)) continue;
-
-//       const duplicateRtoTxns = await PaymentTransactionModal.find({
-//         desc: {
-//           $regex: `(AWB: ${awbNumber}|${awbNumber}).*(~COD-Refund|COD-Refund|COD-Refund)`,
-//           $options: 'i'
-//         },
-//         sellerId: txn.sellerId
-//       });
-
-//       if (duplicateRtoTxns.length > 0) {
-//         // @ts-ignore
-//         duplicateRtoTxns.sort((a, b) => b.createdAt - a.createdAt);
-
-//         const transactionsToDeleteAll = duplicateRtoTxns;
-//         const totalRefundAmount = transactionsToDeleteAll.reduce((sum, dTxn) => sum + Number(dTxn.amount), 0);
-//         if (totalRefundAmount <= 0) continue;
-
-//         console.log(` ${txn.desc} Total Refund Amount for AWB ${awbNumber}: ₹${totalRefundAmount}`);
-
-//         const seller = await SellerModel.findById(txn.sellerId).select("walletBalance name");
-//         if (seller) {
-//           seller.walletBalance -= totalRefundAmount;
-//           await seller.save();
-
-//           await PaymentTransactionModal.deleteMany({
-//             _id: { $in: transactionsToDeleteAll.map(dTxn => dTxn._id) }
-//           });
-
-//           console.log(`Reverted ₹${totalRefundAmount} to seller ${seller._id} ${seller.name} and removed ${transactionsToDeleteAll.length} duplicate transactions.`);
-//         }
-//       }
-
-//       processedAwbs.add(awbNumber);
-//     }
-
-//     console.log("Reversion Process Completed.");
-//   } catch (error) {
-//     console.error("Error in revertRevisedMoneyNTxnToday:", error);
-//   }
-// }
-
-
-// Excess
-// async function excessChargeRefundForMansiOnly() {
-
-//   const revisedTxn = await PaymentTransactionModal.find({
-//     sellerId: "66791386cfe0c278957805af",
-//     desc: { $regex: " RTO Excess Charge" }
-//   });
-//   console.log(revisedTxn.length)
-
-//   const totalRefundAmount = revisedTxn.reduce((sum, dTxn) => sum + Number(dTxn.amount), 0);
-//   const allTxnIds = revisedTxn.map(txn => txn._id);
-//   const seller = await SellerModel.findById("66791386cfe0c278957805af");
-
-//   if (seller) {
-//     seller.walletBalance += Number(totalRefundAmount); // - to duduct and + to add
-//     await seller.save();
-
-//     await PaymentTransactionModal.deleteMany({
-//       _id: { $in: allTxnIds }
-//     });
-//   }
-
-//   console.log("Reversion Process Completed.");
-// }
-
-// async function update() {
-//   const filterCondition = {
-//     zoneChangeCharge: { $gt: 0 },
-//   };
-
-//   // Define the update operation
-//   const updateOperation = { disputeRaisedBySystem: false };
-
-//   // const result = await ClientBillingModal.find({ zoneChangeCharge: { $gt: 0 }, sellerId: "66791386cfe0c278957805af" })
-//   // Perform the update
-//   const result = await ClientBillingModal.updateMany(filterCondition, updateOperation);
-//   console.log(result, "result")
-// }
-
-
-mongoose
-  .connect(config.MONGODB_URI)
-  .then(() => {
-    console.log("db connected successfully");
-  })
-  .catch((err) => {
-    console.log(err.message);
-  });
-
-app.use("/api/auth", authRouter);
-app.post("/api/vendor", addVendors);
-app.get("/api/getsellers", cache("5 minutes"), getSellers); //admin
-
-// @ts-ignore
-app.get("/api/order/:awb", getSpecificOrder);
-
-app.post("/api/shopify", (req, res) => {
-  return res.send("ok");
-});
-
-//@ts-ignore
-// app.get("/api/invoice/:id", getOrderInvoiceById);
-//@ts-ignore
-app.post("/api/ratecalculator", AuthMiddleware, ratecalculatorController);
-//@ts-ignore
-app.post("/api/ratecalculator/b2b", AuthMiddleware, B2BRatecalculatorController);
-//@ts-ignore
-app.use("/api/seller", AuthMiddleware, sellerRouter);
-//@ts-ignore
-app.use("/api/customer", AuthMiddleware, customerRouter);
-//@ts-ignore
-app.use("/api/hub", AuthMiddleware, hubRouter);
-//@ts-ignore
-app.use("/api/order", AuthMiddleware, orderRouter);
-//@ts-ignore
-app.use("/api/shipment", AuthMiddleware, shipmentRouter);
-//@ts-ignore
-app.use("/api/admin", adminRouter);
-
-app.use(ErrorHandler);
-app.use("*", (req: Request, res: Response) => {
-  return res.status(404).send({
-    valid: false,
-    message: "invalid route",
-  });
-});
-
-// refundExtraInvoiceAmount();
-// reverseExtraRtoCodfor31();
-
-runCron();
-
-app.listen(config.PORT, () => console.log("server running on port " + config.PORT));
-
-async function createShipmentStruttStore() {
-
-  const orders = await B2COrderModel.find({
-    sellerId: "663c76ad8e9e095def325208",
-    bucket: 0,
-    $or: [
-      { awb: { $exists: false } },
-      { awb: "" }
-    ],
-    createdAt: { $gte: '2025-02-25T07:52:36.953+00:00' }
-  }).populate("productId pickupAddress")
-// @ts-ignore
-const getUnassignedOrders = orders.filter(x=>x.customerDetails.get("address").length < 170)
-console.log("processing..", getUnassignedOrders.length)
-  for (const order of getUnassignedOrders) {
-    const shipmentResponse = await shiprocketShipment({
-      sellerId: "663c76ad8e9e095def325208",
-      vendorName: { nickName: "BDS" },
-      charge: 0,
-      order: order,
-      carrierId: "67c1dce4ec84abf517a537fc",
-    });
+  // Logging in development only
+  if (config.NODE_ENV !== "production") {
+    //@ts-ignore
+    morgan.token("reqbody", (req, res) => JSON.stringify(req.body));
+    app.use(morgan(":method :url :status - :response-time ms - :reqbody"));
+  } else {
+    app.use(morgan("combined"));
   }
-  console.log("completed", getUnassignedOrders.length)
+
+  // Health check endpoint
+  app.get("/ping", (_req, res: Response) => {
+    return res.send("pong");
+  });
+
+  // MongoDB connection
+  if (!config.MONGODB_URI) {
+    Logger.log("MONGODB_URI doesn't exist: " + config.MONGODB_URI);
+    process.exit(0);
+  }
+
+  // MongoDB connection options for high performance
+  const mongoOptions = {
+    maxPoolSize: 100, // Increase connection pool for high traffic
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+  };
+
+  mongoose
+    .connect(config.MONGODB_URI, mongoOptions)
+    .then(() => {
+      Logger.log("MongoDB connected successfully");
+    })
+    .catch((err) => {
+      Logger.log("MongoDB connection error: " + err.message);
+      process.exit(1);
+    });
+
+  // API Routes
+  app.use("/api/auth", authRouter);
+  app.post("/api/vendor", addVendors);
+  app.get("/api/getsellers", cache("5 minutes"), getSellers);
+  // @ts-ignore
+  app.get("/api/order/:awb", getSpecificOrder);
+
+  app.post("/api/shopify", async (req, res) => {
+    const order = await B2COrderModel.find({ awb: req.body.awb })
+    await processShiprocketOrders(order)
+    return res.send("ok");
+  });
+
+  // @ts-ignore
+  app.post("/api/ratecalculator", AuthMiddleware, ratecalculatorController);
+  // @ts-ignore
+  app.post("/api/ratecalculator/b2b", AuthMiddleware, B2BRatecalculatorController);
+  // @ts-ignore
+  app.use("/api/seller", AuthMiddleware, sellerRouter);
+  // @ts-ignore
+  app.use("/api/customer", AuthMiddleware, customerRouter);
+  // @ts-ignore
+  app.use("/api/hub", AuthMiddleware, hubRouter);
+  // @ts-ignore
+  app.use("/api/order", AuthMiddleware, orderRouter);
+  // @ts-ignore
+  app.use("/api/shipment", AuthMiddleware, shipmentRouter);
+  // @ts-ignore
+  app.use("/api/admin", adminRouter);
+
+  // WebSocket setup
+  // const connectedUsers = new Map(); // In-memory store for connected users
+
+  // io.on("connection", (socket) => {
+  //   Logger.log(`New client connected: ${socket.id}`);
+
+  //   // Auth middleware for socket
+  //   socket.use(([event, data], next) => {
+  //     // Example: token verification can be implemented here
+  //     const token = socket.handshake.auth.token;
+  //     if (!token && event !== "authenticate") {
+  //       return next(new Error("Authentication error"));
+  //     }
+  //     next();
+  //   });
+
+  //   // Handle authentication
+  //   socket.on("authenticate", async (data) => {
+  //     try {
+  //       // Implement your authentication logic here
+  //       const userId = "example-user-id"; // Replace with actual auth logic
+
+  //       socket.data.userId = userId;
+  //       socket.join(`user:${userId}`);
+
+  //       // Track the user connection
+  //       if (!connectedUsers.has(userId)) {
+  //         connectedUsers.set(userId, new Set());
+  //       }
+  //       connectedUsers.get(userId).add(socket.id);
+
+  //       socket.emit("authenticated", { success: true });
+
+  //       // Broadcast user online status if needed
+  //       io.emit("user:status", { userId, status: "online" });
+  //     } catch (error) {
+  //       socket.emit("error", { message: "Authentication failed" });
+  //     }
+  //   });
+
+  //   // Order status update notification
+  //   socket.on("subscribe:orders", () => {
+  //     if (socket.data.userId) {
+  //       socket.join(`orders:${socket.data.userId}`);
+  //       socket.emit("subscribed:orders", { success: true });
+  //     }
+  //   });
+
+  //   // Disconnect event
+  //   socket.on("disconnect", () => {
+  //     Logger.log(`Client disconnected: ${socket.id}`);
+
+  //     // Remove user from tracking
+  //     if (socket.data.userId) {
+  //       const userId = socket.data.userId;
+  //       const userSockets = connectedUsers.get(userId);
+
+  //       if (userSockets) {
+  //         userSockets.delete(socket.id);
+
+  //         // If no more sockets, user is offline
+  //         if (userSockets.size === 0) {
+  //           connectedUsers.delete(userId);
+  //           io.emit("user:status", { userId, status: "offline" });
+  //         }
+  //       }
+  //     }
+  //   });
+  // });
+
+  // Notification function to be used throughout the app
+  // global.sendNotification = (userId: string, event: string, data: any) => {
+  //   io.to(`user:${userId}`).emit(event, data);
+  // };
+
+  // // Global notification for order updates
+  // global.sendOrderUpdate = (userId: string, orderData: any) => {
+  //   io.to(`orders:${userId}`).emit("order:update", orderData);
+  // };
+
+  // // Broadcast to all connected clients
+  // global.broadcastMessage = (event: string, data: any) => {
+  //   io.emit(event, data);
+  // };
+
+  // Error handlers
+  app.use(ErrorHandler);
+  app.use("*", (_req: Request, res: Response) => {
+    return res.status(404).send({
+      valid: false,
+      message: "invalid route",
+    });
+  });
+
+  // Run cron jobs
+  runCron();
+
+  // Start server
+
+  // @ts-ignore
+  const PORT = parseInt(config.PORT || "3000", 10);
+  server.listen(PORT, () => {
+    Logger.log(`Server running on port ${PORT} | Worker ${process.pid}`);
+  });
+
+  // Graceful shutdown
+  process.on("SIGTERM", () => {
+    Logger.log(`Worker ${process.pid} shutting down...`);
+    server.close(() => {
+      mongoose.connection.close(false);
+      process.exit(0);
+    });
+  });
 }
+
+// Master process - only run if using cluster mode
+if (config.USE_CLUSTER && cluster.isPrimary) {
+  Logger.log(`Master ${process.pid} is running`);
+
+  // Fork workers based on CPU cores
+  for (let i = 0; i < numCPUs; i++) {
+    console.log(`CPU idx: ${i}`)
+    cluster.fork();
+  }
+
+  // Handle worker crashes and restart
+  cluster.on("exit", (worker, code, signal) => {
+    Logger.log(`Worker ${worker.process.pid} died with code: ${code} and signal: ${signal}`);
+    Logger.log("Starting a new worker...");
+    cluster.fork();
+  });
+}
+
+// Add to config.ts:
+// USE_CLUSTER: process.env.USE_CLUSTER === "true",
+// NODE_ENV: process.env.NODE_ENV || "development",

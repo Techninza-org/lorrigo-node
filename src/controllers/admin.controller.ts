@@ -1829,7 +1829,6 @@ export const invoiceAwbListAdmin = async (req: ExtendedRequest, res: Response, n
   }
 };
 
-
 export const mapInoiceAwbTransactions = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
     const invoices = await InvoiceModel.find({}).select(["invoice_id", "invoicedAwbs"]);
