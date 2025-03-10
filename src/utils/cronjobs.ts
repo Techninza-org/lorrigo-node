@@ -1210,7 +1210,7 @@ export default async function runCron() {
     // Email Cron
     cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);
     cron.schedule(expression4every12Hrs, syncInvoicePdfs);
-    cron.schedule(expression4every12Hrs, emailInvoiceWithPaymnetLink);
+    // cron.schedule(expression4every12Hrs, emailInvoiceWithPaymnetLink);
 
 
     // SMARTR discontinued
