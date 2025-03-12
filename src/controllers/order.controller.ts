@@ -775,7 +775,8 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       search,
       statusFilter,
       awb,
-      reference
+      reference,
+      isReverse,
     }: {
       from?: string,
       to?: string,
@@ -788,6 +789,7 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       search?: string,
       awb?: string,
       reference?: string
+      isReverse?: string
     } = req.query;
 
     // Convert page and limit to numbers
@@ -807,6 +809,10 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
 
     // Build query
     const query: any = { sellerId };
+
+    if(isReverse){
+      query.isReverseOrder = isReverse
+    }
 
     // Date range filter
     if (from || to) {
@@ -832,6 +838,7 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
 
     // Search filter (for AWB or reference ID)
     if (search) {
+      delete query.createdAt
       query.$or = [
         { awb: { $regex: search, $options: 'i' } },
         { order_reference_id: { $regex: search, $options: 'i' } },
