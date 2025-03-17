@@ -471,16 +471,22 @@ export const trackOrder_Smartr = async () => {
 export const track_delivery = async () => {
   try {
     const vendorNicknames = await EnvModel.find({ name: { $regex: "DEL" } }).select("nickName");
+    const vendorIds = vendorNicknames.map(x => x._id)
 
     let totalProcessed = 0;
     let totalUpdated = 0;
+
+    const deliveryCouriers = (await CourierModel.find({ vendor_channel_id: { $in: vendorIds } })).map(courier => courier.id);
 
     for (const vendor of vendorNicknames) {
 
       // Get total count for this vendor
       const totalVendorOrders = await B2COrderModel.countDocuments({
         bucket: { $in: ORDER_TO_TRACK },
-        carrierName: { $regex: vendor?.nickName },
+        $or: [
+          { carrierName: { $regex: vendor?.nickName, } },
+          { carrierId: { $in: deliveryCouriers } }
+        ]
       });
 
       // Get appropriate token based on vendor
@@ -514,7 +520,10 @@ export const track_delivery = async () => {
 
         const orders = await B2COrderModel.find({
           bucket: { $in: ORDER_TO_TRACK },
-          carrierName: { $regex: vendor?.nickName },
+          $or: [
+            { carrierName: { $regex: vendor?.nickName, } },
+            { carrierId: { $in: deliveryCouriers } }
+          ]
         })
           .lean()
           .skip(skip)
@@ -812,7 +821,6 @@ const processDelhiveryBatch = async (orders, delhiveryToken) => {
 
       // Sort scans by date ascending (oldest first) for chronological processing
       allScans.sort((a, b) => new Date(a.ScanDetail.ScanDateTime).getTime() - new Date(b.ScanDetail.ScanDateTime).getTime());
-
       // Process all scans
       for (const scan of allScans) {
         const bucketInfo = getDelhiveryBucketing(scan.ScanDetail);
@@ -831,6 +839,7 @@ const processDelhiveryBatch = async (orders, delhiveryToken) => {
             continue;
           }
 
+          order.bucket = bucketInfo.bucket
           // Add missing tracking event
           const newStage = {
             stage: bucketInfo.bucket,
