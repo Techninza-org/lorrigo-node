@@ -24,7 +24,7 @@ Handlebars.registerHelper('formatPhone', (phone) => {
 // Load the invoice template
 export const loadTemplate = async () => {
   const projectRoot = path.resolve(process.cwd());
-  const templatePath = path.join(projectRoot, 'template/invoice-template.html');
+  const templatePath = path.join(projectRoot, 'src/template/invoice-template.html');
   
   // Check if the directory exists
   const templateDir = path.dirname(templatePath);
@@ -331,7 +331,7 @@ export const generateBulkInvoicesMultiplePerPage = async (orders, template, labe
 export const loadManifestTemplate = async () => {
   try {
     const projectRoot = path.resolve(process.cwd());
-    const templatePath = path.join(projectRoot, "template/manifest-template.html");
+    const templatePath = path.join(projectRoot, "src/template/manifest-template.html");
     
     // Check if directory exists, create if not found
     const templateDir = path.dirname(templatePath);
