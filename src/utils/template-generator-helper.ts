@@ -23,15 +23,19 @@ Handlebars.registerHelper('formatPhone', (phone) => {
 
 // Load the invoice template
 export const loadTemplate = async () => {
-  const templatePath = path.join(__dirname, '../template/invoice-template.html');
+  const projectRoot = path.resolve(process.cwd());
+  const templatePath = path.join(projectRoot, 'template/invoice-template.html');
   
+  // Check if the directory exists
   const templateDir = path.dirname(templatePath);
   try {
     await fs.access(templateDir);
   } catch (error) {
+    // Directory does not exist, create it
     await fs.mkdir(templateDir, { recursive: true });
   }
   
+  // Now try to read the file
   try {
     const templateContent = await fs.readFile(templatePath, 'utf8');
     return Handlebars.compile(templateContent);
@@ -326,22 +330,23 @@ export const generateBulkInvoicesMultiplePerPage = async (orders, template, labe
 // Load the manifest template
 export const loadManifestTemplate = async () => {
   try {
-    const templatePath = path.join(__dirname, "../template/manifest-template.html")
+    const projectRoot = path.resolve(process.cwd());
+    const templatePath = path.join(projectRoot, "template/manifest-template.html");
     
     // Check if directory exists, create if not found
-    const templateDir = path.dirname(templatePath)
+    const templateDir = path.dirname(templatePath);
     try {
-      await fs.access(templateDir)
+      await fs.access(templateDir);
     } catch (error) {
       // Directory doesn't exist, create it
-      await fs.mkdir(templateDir, { recursive: true })
+      await fs.mkdir(templateDir, { recursive: true });
     }
     
-    const templateContent = await fs.readFile(templatePath, "utf8")
-    return Handlebars.compile(templateContent)
+    const templateContent = await fs.readFile(templatePath, "utf8");
+    return Handlebars.compile(templateContent);
   } catch (error) {
-    console.error("Error loading manifest template:", error)
-    throw new Error("Failed to load manifest template")
+    console.error("Error loading manifest template:", error);
+    throw new Error("Failed to load manifest template");
   }
 }
 // Helper function to chunk array
