@@ -716,81 +716,86 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
           return res.status(200).send({ valid: false, message: "Must Select the Delhivery Registered Hub" });
         }
 
-        order.awb = delhiveryRes?.waybill;
-        order.carrierName = courier?.name + " " + (vendorName?.nickName);
-        order.shipmentCharges = body.charge;
-        order.carrierId = carrierId;
-        order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
-        order.orderStages.push({
-          stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_STATUS
-          action: COURRIER_ASSIGNED_ORDER_DESCRIPTION, // Evantuallly change this to DELHIVERY_COURIER_ASSIGNED_ORDER_DESCRIPTION
-          stageDateTime: new Date(),
-        }, {
-          stage: SMARTSHIP_MANIFEST_ORDER_STATUS,
-          action: MANIFEST_ORDER_DESCRIPTION,
-          stageDateTime: new Date(),
-        }, {
-          stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
-          action: PICKUP_SCHEDULED_DESCRIPTION,
-          stageDateTime: new Date(),
-        }
-        );
+        if (delhiveryRes?.waybill) {
 
-        try {
-          if (order.channelName === "shopify") {
-            const shopfiyConfig = await getSellerChannelConfig(sellerId);
-            const shopifyOrders = await axios.get(
-              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
-              {
-                headers: {
-                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-                },
-              }
-            );
-
-            const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
-
-            const shopifyFulfillment = {
-              fulfillment: {
-                line_items_by_fulfillment_order: [
-                  {
-                    fulfillment_order_id: fulfillmentOrderId,
-                  },
-                ],
-                tracking_info: {
-                  company: delhiveryRes?.waybill,
-                  number: courier?.name + " " + (vendorName?.nickName),
-                  url: `https://lorrigo.in/track/${order?._id}`,
-                },
-              },
-            };
-            const shopifyFulfillmentResponse = await axios.post(
-              `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
-              shopifyFulfillment,
-              {
-                headers: {
-                  "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
-                },
-              }
-            );
-            order.channelFulfillmentId = fulfillmentOrderId;
+          order.awb = delhiveryRes?.waybill;
+          order.carrierName = courier?.name + " " + (vendorName?.nickName);
+          order.shipmentCharges = body.charge;
+          order.carrierId = carrierId;
+          order.bucket = order?.isReverseOrder ? RETURN_CONFIRMED : READY_TO_SHIP;
+          order.orderStages.push({
+            stage: SHIPROCKET_COURIER_ASSIGNED_ORDER_STATUS,
+            action: COURRIER_ASSIGNED_ORDER_DESCRIPTION,
+            stageDateTime: new Date(),
+          }, {
+            stage: SMARTSHIP_MANIFEST_ORDER_STATUS,
+            action: MANIFEST_ORDER_DESCRIPTION,
+            stageDateTime: new Date(),
+          }, {
+            stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
+            action: PICKUP_SCHEDULED_DESCRIPTION,
+            stageDateTime: new Date(),
           }
-        } catch (error) {
-          console.log("Error[shopify]", error);
+          );
+
+          try {
+            if (order.channelName === "shopify") {
+              const shopfiyConfig = await getSellerChannelConfig(sellerId);
+              const shopifyOrders = await axios.get(
+                `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT_ORDER}/${order.channelOrderId}/fulfillment_orders.json`,
+                {
+                  headers: {
+                    "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                  },
+                }
+              );
+
+              const fulfillmentOrderId = shopifyOrders?.data?.fulfillment_orders[0]?.id;
+
+              const shopifyFulfillment = {
+                fulfillment: {
+                  line_items_by_fulfillment_order: [
+                    {
+                      fulfillment_order_id: fulfillmentOrderId,
+                    },
+                  ],
+                  tracking_info: {
+                    company: delhiveryRes?.waybill,
+                    number: courier?.name + " " + (vendorName?.nickName),
+                    url: `https://lorrigo.in/track/${order?._id}`,
+                  },
+                },
+              };
+              const shopifyFulfillmentResponse = await axios.post(
+                `${shopfiyConfig?.storeUrl}${APIs.SHOPIFY_FULFILLMENT}`,
+                shopifyFulfillment,
+                {
+                  headers: {
+                    "X-Shopify-Access-Token": shopfiyConfig?.sharedSecret,
+                  },
+                }
+              );
+              order.channelFulfillmentId = fulfillmentOrderId;
+            }
+          } catch (error) {
+            console.log("Error[shopify]", error);
+          }
+
+          await order.save();
+
+
+          const { _id, ...restCourier } = courierCharge[0].courier
+
+          const savedShipmentResponse = await ShipmenAwbCourierModel.create({
+            awb: delhiveryRes?.waybill,
+            ...restCourier,
+          });
+          await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
+          const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
+          return res.status(200).send({ valid: true, order: orderWOShiprocket });
         }
+        return res.status(200).send({ valid: false, order: null, message: "Shipement Request Failed" });
 
-        await order.save();
-
-
-        const { _id, ...restCourier } = courierCharge[0].courier
-
-        const savedShipmentResponse = await ShipmenAwbCourierModel.create({
-          awb: delhiveryRes?.waybill,
-          ...restCourier,
-        });
-        await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
-        const orderWOShiprocket = await B2COrderModel.findById(order._id).populate("productId pickupAddress").select("-shiprocket_order_id -shiprocket_shipment_id");
-        return res.status(200).send({ valid: true, order: orderWOShiprocket });
       } catch (error) {
         console.error("Error creating Delhivery shipment:", error);
         return next(error);
@@ -1404,7 +1409,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
         const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
         let vendorName: any = null;
-        
+
         if (order.carrierId) {
           const courier = await CourierModel.findById(order.carrierId).populate("vendor_channel_id");
           vendorName = courier?.vendor_channel_id || null;
@@ -1440,9 +1445,9 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
       }
     }
 
-    return res.status(200).send({ 
-      valid: true, 
-      message: "Order cancellation requests processed", 
+    return res.status(200).send({
+      valid: true,
+      message: "Order cancellation requests processed",
       results,
       errors: results.filter(r => r.status === 'error').length
     });
