@@ -23,13 +23,20 @@ Handlebars.registerHelper('formatPhone', (phone) => {
 
 // Load the invoice template
 export const loadTemplate = async () => {
+  const templatePath = path.join(__dirname, '../template/invoice-template.html');
+  
+  const templateDir = path.dirname(templatePath);
   try {
-    const templatePath = path.join(__dirname, '../template/invoice-template.html');
+    await fs.access(templateDir);
+  } catch (error) {
+    await fs.mkdir(templateDir, { recursive: true });
+  }
+  
+  try {
     const templateContent = await fs.readFile(templatePath, 'utf8');
     return Handlebars.compile(templateContent);
   } catch (error) {
-    console.error('Error loading template:', error);
-    throw new Error('Failed to load invoice template');
+    throw new Error(`Could not read template file: ${error.message}`);
   }
 };
 
@@ -320,6 +327,16 @@ export const generateBulkInvoicesMultiplePerPage = async (orders, template, labe
 export const loadManifestTemplate = async () => {
   try {
     const templatePath = path.join(__dirname, "../template/manifest-template.html")
+    
+    // Check if directory exists, create if not found
+    const templateDir = path.dirname(templatePath)
+    try {
+      await fs.access(templateDir)
+    } catch (error) {
+      // Directory doesn't exist, create it
+      await fs.mkdir(templateDir, { recursive: true })
+    }
+    
     const templateContent = await fs.readFile(templatePath, "utf8")
     return Handlebars.compile(templateContent)
   } catch (error) {
