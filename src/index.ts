@@ -185,8 +185,8 @@ app.get("/api/getsellers", cache("5 minutes"), getSellers); //admin
 app.get("/api/order/:awb", getSpecificOrder);
 
 app.post("/api/track/shiprocket", async (req, res) => {
-  const order = await B2COrderModel.find({ awb: req.body.awb })
-  await processShiprocketOrders(order)
+  const data = req.body;
+  await processShiprocketOrders(data)
   return res.send("ok");
 });
 
