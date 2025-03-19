@@ -18,6 +18,7 @@ import Counter from "../models/counter.model";
 import ClientBillingModal from "../models/client.billing.modal";
 import EnvModel from "../models/env.model";
 import { formatPhoneNumber } from "./validation-helper";
+import { ExtendedRequest } from "./middleware";
 
 
 
@@ -1202,7 +1203,7 @@ export async function handleDelhiveryCancellation(
   results: any[]
 ): Promise<void> {
   let delhiveryToken: string | false | null = await getDelhiveryTkn(vendorType);
- 
+
   if (!delhiveryToken) {
     results.push({ orderId: order._id, status: 'error', message: "Invalid Delhivery token" });
     return;
@@ -1742,6 +1743,7 @@ export async function shiprocketShipment({ sellerId, carrierId, order, charge, v
       );
 
       let awb = awbResponse?.data?.response?.data?.awb_code || awbResponse?.data?.response?.data?.awb_assign_error?.split("-")[1]?.split(" ")[1];
+      console.log(JSON.stringify(awb), "shiprocket response")
 
       if (!awb) {
         return { valid: false, message: "Internal Server Error, Please use another courier partner", awb: null };
@@ -2262,3 +2264,25 @@ export function formatCurrencyForIndia(amount: number): string {
 
   return formatter.format(amount);
 }
+
+export const getPaginationParams = (req: ExtendedRequest) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const skip = (page - 1) * limit;
+  return { page, limit, skip };
+};
+
+export const buildSearchQuery = (searchTerm: string, fields: string[]) => {
+  if (!searchTerm) return {};
+
+  if (fields.includes('$text')) {
+    return { $text: { $search: searchTerm } };
+  }
+
+  return {
+    $or: fields.map(field => ({
+      [field]: { $regex: searchTerm, $options: 'i' }
+    }))
+  };
+};
+

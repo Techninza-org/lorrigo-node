@@ -5,14 +5,14 @@ import { DELIVERED, IN_TRANSIT, NDR, NEW, READY_TO_SHIP, RTO } from "../utils/lo
 import mongoose, { Types, isValidObjectId } from "mongoose";
 import RemittanceModel from "../models/remittance-modal";
 import SellerModel from "../models/seller.model";
-import { calculateShippingCharges, convertToISO, csvJSON, generateListInoviceAwbs, updateSellerWalletBalance, validateB2BClientBillingFeilds, validateClientBillingFeilds, validateDisputeFeilds } from "../utils";
+import { buildSearchQuery, calculateShippingCharges, convertToISO, csvJSON, generateListInoviceAwbs, getPaginationParams, updateSellerWalletBalance, validateB2BClientBillingFeilds, validateClientBillingFeilds, validateDisputeFeilds } from "../utils";
 import PincodeModel from "../models/pincode.model";
 import CourierModel from "../models/courier.model";
 import CustomPricingModel, { CustomB2BPricingModel } from "../models/custom_pricing.model";
 import ClientBillingModal from "../models/client.billing.modal";
 import csvtojson from "csvtojson";
 import exceljs from "exceljs";
-import { format, formatDate } from "date-fns";
+import { endOfDay, format, formatDate, isValid, parse, startOfDay } from "date-fns";
 import InvoiceModel from "../models/invoice.model";
 import { calculateSellerInvoiceAmount, calculateZone, generateAccessToken } from "../utils/helpers";
 import axios from "axios";
@@ -47,11 +47,12 @@ export const walletDeduction = async (req: ExtendedRequest, res: Response, next:
     return next(error);
   }
 }
+
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const { from, to, status }: { from?: string, to?: string, status?: string } = req.query;
+    // @ts-ignore
+    const { from, to, status, page = 1, limit = 10, statusFilter, search }: { search: string, statusFilter: string, from?: string, to?: string, status?: string, page?: number, limit?: number } = req.query;
 
-    // Define status buckets
     const statusBuckets = {
       new: [NEW],
       "ready-to-ship": [READY_TO_SHIP],
@@ -69,53 +70,62 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
 
     if (from || to) {
       query.createdAt = {};
-
       if (from) {
         const [month, day, year] = from.split("/");
-        const fromDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
-        query.createdAt.$gte = fromDate;
+        query.createdAt.$gte = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
       }
-
       if (to) {
         const [month, day, year] = to.split("/");
-        const toDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
-        query.createdAt.$lte = toDate;
+        query.createdAt.$lte = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
       }
+      if (!from) delete query.createdAt.$gte;
+      if (!to) delete query.createdAt.$lte;
+    }
 
-      if (!from) {
-        delete query.createdAt.$gte;
-      }
-      if (!to) {
-        delete query.createdAt.$lte;
+    if (statusFilter) {
+      const bucketStatusArray = statusFilter.split(',').filter(Boolean);
+      if (bucketStatusArray.length > 0) {
+        query.bucket = { $in: bucketStatusArray };
       }
     }
 
-    const [orders, b2borders] = await Promise.all([
+    if (search) {
+      delete query.createdAt;
+      query.$or = [
+        { awb: { $regex: search, $options: 'i' } },
+        { order_reference_id: { $regex: search, $options: 'i' } },
+        { 'customerDetails.name': { $regex: search, $options: 'i' } },
+        { 'customerDetails.phone': { $regex: search, $options: 'i' } }
+      ];
+    }
+    const pageNum = Math.max(1, parseInt(page as any, 10));
+    const limitNum = Math.max(1, parseInt(limit as any, 10));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [orders, totalCount] = await Promise.all([
       B2COrderModel.find(query)
         .sort({ createdAt: -1 })
         .populate("productId")
         .populate("pickupAddress")
-        .populate({
-          path: "sellerId",
-          select: "name"
-        })
-        .lean(),
-      B2BOrderModel.find(query)
-        .sort({ createdAt: -1 })
-        .populate("customer")
-        .populate("pickupAddress")
-        .populate({
-          path: "sellerId",
-          select: "name"
-        })
-        .select('-invoiceImage')
+        .populate({ path: "sellerId", select: "name" })
+        .skip(skip)
+        .limit(limitNum)
         .lean()
+        .allowDiskUse(true),
+      B2COrderModel.countDocuments(query)
     ]);
-
 
     return res.status(200).send({
       valid: true,
-      response: { orders, b2borders: b2borders.reverse() },
+      response: {
+        orders,
+        pagination: {
+          total: totalCount,
+          page: pageNum,
+          limit: limitNum,
+          pages: Math.ceil(totalCount / limitNum)
+        }
+      }
     });
   } catch (error) {
     return next(error);
@@ -211,105 +221,6 @@ export const getSellerSpecificOrderAdmin = async (req: ExtendedRequest, res: Res
     : res.status(200).send({ valid: true, orders: orders });
 };
 
-export const getAllRemittances = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  try {
-    const { from, to }: { from?: string, to?: string, status?: string } = req.query;
-
-    const query: { createdAt?: any } = {};
-
-    if (from || to) {
-      const createdAtQuery: any = {};
-
-      if (from) {
-        const fromDate = new Date(from.split("/").reverse().join("-") + "T00:00:00.000Z");
-        createdAtQuery.$gte = fromDate;
-      }
-
-      if (to) {
-        const toDate = new Date(to.split("/").reverse().join("-") + "T23:59:59.999Z");
-        createdAtQuery.$lte = toDate;
-      }
-
-      if (Object.keys(createdAtQuery).length > 0) {
-        query.createdAt = createdAtQuery;
-      }
-    }
-
-    const remittanceOrders = await RemittanceModel.find(
-      {},
-      {
-        BankTransactionId: 1,
-        remittanceStatus: 1,
-        remittanceDate: 1,
-        remittanceId: 1,
-        remittanceAmount: 1,
-        sellerId: 1,
-        orders: {
-          $map: {
-            input: "$orders",
-            as: "order",
-            in: {
-              orderStages: "$$order.orderStages",
-              awb: "$$order.awb",
-            },
-          },
-        },
-      }
-    )
-      .populate({ path: "sellerId", select: "name" })
-      .lean()
-      .sort({ remittanceDate: -1 });
-
-    if (!remittanceOrders) return res.status(200).send({ valid: false, message: "No Remittance found" });
-    return res.status(200).send({
-      valid: true,
-      remittanceOrders,
-    });
-  } catch (error) {
-    return res.status(200).send({ valid: false, message: "Error in fetching remittance" });
-  }
-};
-
-export const getFutureRemittances = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
-  try {
-    const currentDate = new Date();
-    const currDate = format(currentDate, 'yyyy-MM-dd');
-
-    const futureRemittances = await RemittanceModel.find(
-      {
-        remittanceDate: { $gte: currDate },
-      },
-      {
-        BankTransactionId: 1,
-        remittanceStatus: 1,
-        remittanceDate: 1,
-        remittanceId: 1,
-        remittanceAmount: 1,
-        sellerId: 1,
-        orders: {
-          $map: {
-            input: "$orders",
-            as: "order",
-            in: {
-              orderStages: "$$order.orderStages",
-              awb: "$$order.awb"
-            }
-          }
-        }
-      }
-    )
-      .populate("sellerId", "name email")
-      .lean()
-      .sort({ remittanceDate: -1 })
-
-    return res.status(200).send({
-      valid: true,
-      remittanceOrders: futureRemittances,
-    });
-  } catch (error) {
-    return res.status(500).send({ valid: false, message: "Error in fetching remittance" });
-  }
-};
 
 export const getSellerRemittance = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1425,53 +1336,385 @@ export const getVendorBillingData = async (req: ExtendedRequest, res: Response, 
     return next(error);
   }
 }
+
 export const getClientBillingData = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const [data, b2bData] = await Promise.all([
-      ClientBillingModal.find({})
-        .populate({
-          path: 'sellerId',
-          select: 'name'
-        }),
-      B2BClientBillingModal.find({})
-        .populate({
-          path: 'sellerId',
-          select: 'name'
-        })
-    ]);
+    const { page, limit, skip } = getPaginationParams(req);
+    const searchTerm = req.query.search as string;
+    const sortField = req.query.sortField as string || "billingDate";
+    const sortOrder = parseInt(req.query.sortOrder as string) || -1;
 
+    // Build search query
+    const searchQuery = searchTerm ? buildSearchQuery(searchTerm, ["awb", "orderRefId", "recipientName"]) : {};
 
-    if (!data.length && !b2bData.length) {
-      return res.status(200).send({ valid: false, message: "No Client Billing found" });
-    }
+    // Date range filter
+    const dateFilter: any = {};
+    if (req.query.from || req.query.to) {
+      dateFilter["billingDate"] = {};
 
-    const billedAwbs = data.map(bill => bill.awb);
-    const billsStatus = await MonthlyBilledAWBModel.find({ awb: { $in: billedAwbs } });
-
-    const billsWStatus = data.map((bill: any) => {
-      const statusEntry: any = billsStatus.find(status => status.awb === bill.awb);
-      let status = 'Forward Billed'
-
-      if (statusEntry?.isRTOApplicable) {
-        status = 'Forward + RTO Billed'
+      if (req.query.from) {
+        const fromDate = parse(req.query.from as string, "MM/dd/yyyy", new Date());
+        if (isValid(fromDate)) {
+          dateFilter["billingDate"]["$gte"] = startOfDay(fromDate);
+        } else {
+          console.warn(`Invalid 'from' date provided: ${req.query.from}`);
+        }
       }
 
-      return {
-        ...bill._doc,
-        status
-      };
-    });
+      if (req.query.to) {
+        const toDate = parse(req.query.to as string, "MM/dd/yyyy", new Date());
+        if (isValid(toDate)) {
+          dateFilter["billingDate"]["$lte"] = endOfDay(toDate);
+        } else {
+          console.warn(`Invalid 'to' date provided: ${req.query.to}`);
+        }
+      }
+    }
 
+    // Combine search query and date filter
+    const query = { ...searchQuery, ...dateFilter };
+
+    // Get total count for pagination
+    const [totalD2C, totalB2B] = await Promise.all([
+      ClientBillingModal.countDocuments(query),
+      B2BClientBillingModal.countDocuments(query),
+    ]);
+
+    // Get data with pagination
+    const [data, b2bData] = await Promise.all([
+      ClientBillingModal.find(query)
+        .populate({
+          path: "sellerId",
+          select: "name",
+        })
+        .sort({ billingDate: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      B2BClientBillingModal.find(query)
+        .populate({
+          path: "sellerId",
+          select: "name",
+        })
+        .sort({ billingDate: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    if (!data.length && !b2bData.length) {
+      return res.status(200).send({
+        valid: false,
+        message: "No Client Billing found",
+        pagination: {
+          total: 0,
+          page,
+          limit,
+          pages: 0,
+        },
+      });
+    }
+
+    // Get billing status more efficiently
+    const billedAwbs = data.map((bill) => bill.awb);
+    const billsStatus = await MonthlyBilledAWBModel.find(
+      { awb: { $in: billedAwbs } },
+      { awb: 1, isRTOApplicable: 1 }
+    ).lean();
+
+    // Create a map for faster lookup
+    const statusMap: Record<string, string> = billsStatus.reduce((map, status: any) => {
+      map[status.awb] = status.isRTOApplicable ? "Forward + RTO Billed" : "Forward Billed";
+      return map;
+    }, {} as Record<string, string>);
+
+    // Attach status without iteration
+    const billsWStatus = data.map((bill: any) => ({
+      ...bill,
+      status: statusMap[bill.awb] || "Forward Billed",
+    }));
 
     return res.status(200).send({
       valid: true,
-      data: billsWStatus.reverse(),
-      b2bData: b2bData.reverse()
+      data: billsWStatus,
+      b2bData: b2bData,
+      pagination: {
+        total: totalD2C + totalB2B,
+        page,
+        limit,
+        pages: Math.ceil((totalD2C + totalB2B) / limit),
+      },
     });
   } catch (error) {
+    console.error("Error in getClientBillingData:", error);
     return next(error);
   }
-}
+};
+
+export const getAllRemittances = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { page, limit, skip } = getPaginationParams(req);
+    const searchTerm = req.query.search as string;
+    const sortField = req.query.sortField as string || "remittanceDate";
+    const sortOrder = parseInt(req.query.sortOrder as string) || -1;
+
+    const query: any = {};
+
+    if (req.query.from || req.query.to) {
+      query.remittanceDate = {};
+
+      if (req.query.from) {
+        const parsedFrom = parse(req.query.from as string, "MM/dd/yyyy", new Date());
+        if (isValid(parsedFrom)) {
+          query.remittanceDate.$gte = format(parsedFrom, "yyyy-MM-dd");
+        }
+      }
+
+      if (req.query.to) {
+        const parsedTo = parse(req.query.to as string, "MM/dd/yyyy", new Date());
+        if (isValid(parsedTo)) {
+          query.remittanceDate.$lte = format(parsedTo, "yyyy-MM-dd");
+        }
+      }
+    }
+
+    if (searchTerm) {
+      query.$or = [
+        { remittanceId: { $regex: searchTerm, $options: "i" } },
+        { BankTransactionId: { $regex: searchTerm, $options: "i" } },
+        { "orders.awb": { $regex: searchTerm, $options: "i" } },
+      ];
+    }
+
+    if (req.query.status) query.remittanceStatus = req.query.status;
+    if (req.query.sellerId) query.sellerId = req.query.sellerId;
+
+    const total = await RemittanceModel.countDocuments(query);
+
+    const sortOptions: any = {};
+    sortOptions[sortField] = sortOrder;
+
+    const remittanceOrders = await RemittanceModel.find(query, {
+      BankTransactionId: 1,
+      remittanceStatus: 1,
+      remittanceDate: 1,
+      remittanceId: 1,
+      remittanceAmount: 1,
+      sellerId: 1,
+      orders: {
+        $map: {
+          input: "$orders",
+          as: "order",
+          in: {
+            orderStages: "$$order.orderStages",
+            awb: "$$order.awb",
+          },
+        },
+      },
+    })
+      .populate({ path: "sellerId", select: "name" })
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    if (!remittanceOrders.length) {
+      return res.status(200).send({
+        valid: false,
+        message: "No Remittance found",
+        pagination: {
+          total: 0,
+          page,
+          limit,
+          pages: 0,
+        },
+      });
+    }
+
+    return res.status(200).send({
+      valid: true,
+      remittanceOrders,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Error in getAllRemittances:", error);
+    return res.status(500).send({ valid: false, message: "Error in fetching remittance" });
+  }
+};
+
+export const getFutureRemittances = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { page, limit, skip } = getPaginationParams(req);
+    const searchTerm = req.query.search as string;
+    const sortField = req.query.sortField as string || 'remittanceDate';
+    const sortOrder = parseInt(req.query.sortOrder as string) || -1;
+
+    const currentDate = new Date();
+    const currDate = format(currentDate, 'yyyy-MM-dd');
+
+    const query: any = {
+      remittanceDate: { $gte: currDate }
+    };
+
+    if (searchTerm) {
+      if (sortField !== 'score' && searchTerm) {
+        query.$text = { $search: searchTerm };
+      } else {
+        query.$or = [
+          { remittanceId: { $regex: searchTerm, $options: 'i' } },
+          { BankTransactionId: { $regex: searchTerm, $options: 'i' } },
+          { 'orders.awb': { $regex: searchTerm, $options: 'i' } }
+        ];
+      }
+    }
+
+    if (req.query.sellerId) {
+      query.sellerId = req.query.sellerId;
+    }
+
+    const total = await RemittanceModel.countDocuments(query);
+
+    const sortOptions: any = {};
+    if (searchTerm && sortField === 'score') {
+      sortOptions.score = { $meta: 'textScore' };
+    } else {
+      sortOptions[sortField] = sortOrder;
+    }
+
+    const futureRemittances = await RemittanceModel.find(
+      query,
+      {
+        BankTransactionId: 1,
+        remittanceStatus: 1,
+        remittanceDate: 1,
+        remittanceId: 1,
+        remittanceAmount: 1,
+        sellerId: 1,
+        orders: {
+          $map: {
+            input: "$orders",
+            as: "order",
+            in: {
+              orderStages: "$$order.orderStages",
+              awb: "$$order.awb"
+            }
+          }
+        },
+        ...(searchTerm && sortField === 'score' ? { score: { $meta: 'textScore' } } : {})
+      }
+    )
+      .populate("sellerId", "name email")
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    if (!futureRemittances.length) {
+      return res.status(200).send({
+        valid: false,
+        message: "No Future Remittance found",
+        pagination: {
+          total: 0,
+          page,
+          limit,
+          pages: 0
+        }
+      });
+    }
+
+    return res.status(200).send({
+      valid: true,
+      remittanceOrders: futureRemittances,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error("Error in getFutureRemittances:", error);
+    return res.status(500).send({ valid: false, message: "Error in fetching remittance" });
+  }
+};
+
+export const getRemittanceAnalytics = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { sellerId, period } = req.query;
+
+    // Set date range based on period
+    const dateRange: any = {};
+    const now = new Date();
+
+    switch (period) {
+      case 'week':
+        dateRange.$gte = new Date(now.setDate(now.getDate() - 7));
+        break;
+      case 'month':
+        dateRange.$gte = new Date(now.setMonth(now.getMonth() - 1));
+        break;
+      case 'quarter':
+        dateRange.$gte = new Date(now.setMonth(now.getMonth() - 3));
+        break;
+      case 'year':
+        dateRange.$gte = new Date(now.setFullYear(now.getFullYear() - 1));
+        break;
+      default:
+        // Default to last 30 days
+        dateRange.$gte = new Date(now.setDate(now.getDate() - 30));
+    }
+    dateRange.$lte = new Date();
+
+    // Build match stage for aggregation
+    const matchStage: any = {
+      remittanceDate: dateRange
+    };
+
+    if (sellerId) {
+      matchStage.sellerId = new mongoose.Types.ObjectId(sellerId as string);
+    }
+
+    // Perform aggregation
+    const result = await RemittanceModel.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$remittanceDate" }
+          },
+          totalAmount: { $sum: "$remittanceAmount" },
+          count: { $sum: 1 },
+          statuses: {
+            $push: "$remittanceStatus"
+          }
+        }
+      },
+      {
+        $project: {
+          date: "$_id",
+          totalAmount: 1,
+          count: 1,
+          statuses: 1,
+          _id: 0
+        }
+      },
+      { $sort: { date: 1 } }
+    ]);
+
+    return res.status(200).send({
+      valid: true,
+      analytics: result
+    });
+  } catch (error) {
+    console.error("Error in getRemittanceAnalytics:", error);
+    return res.status(500).send({ valid: false, message: "Error in fetching analytics" });
+  }
+};
 
 export const manageSellerRemittance = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {

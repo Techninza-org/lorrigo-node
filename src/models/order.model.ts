@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const B2COrderSchema = new mongoose.Schema({
-  awb: { type: String },
+  awb: { type: String, index: true, unique: true },
   shipmentCharges: { type: Number, required: false },
   codCharge: { type: Number, required: false },
   rtoCharges: { type: Number, required: true, default: 0 },
@@ -12,8 +12,8 @@ const B2COrderSchema = new mongoose.Schema({
   shiprocket_order_id: { type: String, required: false },
   shiprocket_shipment_id: { type: String, required: false },
 
-  sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true },
-  bucket: { type: Number, required: true }, // 0 -> not shipped, 1 -> shipped, 2 -> Cancelation Request, 3->Canceled
+  sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true, index: true },
+  bucket: { type: Number, required: true, index: true }, // 0 -> not shipped, 1 -> shipped, 2 -> Cancelation Request, 3->Canceled
   orderStages: [
     {
       stage: { type: Number, required: true },
@@ -37,10 +37,10 @@ const B2COrderSchema = new mongoose.Schema({
   carrierId: { type: mongoose.Schema.Types.ObjectId, ref: "Courier" },
   carrierName: { type: String, required: false },
   pickupAddress: { type: mongoose.Schema.Types.ObjectId, ref: "Hub" },
-  productId: { type: mongoose.Schema.Types.ObjectId, ref: "Products", required: true },
+  productId: { type: mongoose.Schema.Types.ObjectId, ref: "Products", required: true, index: true },
   client_order_reference_id: { type: String, required: false },
 
-  order_reference_id: { type: String, required: true },
+  order_reference_id: { type: String, required: true, index: true },
   payment_mode: { type: Number, required: true }, // 0 -> prepaid, 1 -> COD
   order_invoice_date: { type: String, default: Date.now },
   order_invoice_number: { type: String },
@@ -63,14 +63,14 @@ const B2COrderSchema = new mongoose.Schema({
     required: true,
     name: { type: String, required: true },
     email: { type: String, required: true },
-    phone: { type: String, required: true },
+    phone: { type: String, required: true, index: true },
     address: { type: String, required: true },
     city: { type: String, required: true },
     state: { type: String, required: true },
-    pincode: { type: String, required: true },
+    pincode: { type: String, required: true, index: true },
   },
 
-  createdAt: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now, index: true },
   updatedAt: { type: Date, default: Date.now },
   sellerDetails: {
     type: mongoose.Schema.Types.Map,
@@ -83,11 +83,43 @@ const B2COrderSchema = new mongoose.Schema({
     sellerPincode: { type: Number, required: false },
     sellerPhone: { type: String, required: false },
   },
-
-  /*
-    product -> shipmentValue, taxrates
-  */
+}, { 
+  timestamps: true
 });
+
+// Create compound indexes for common query patterns
+B2COrderSchema.index({ bucket: 1, createdAt: -1 }); // For queries filtering by bucket and sorting by createdAt
+B2COrderSchema.index({ 'customerDetails.phone': 1, createdAt: -1 }); // For customer phone searches with sorting
+
+// Create text index for full-text search
+B2COrderSchema.index({
+  awb: 'text',
+  order_reference_id: 'text',
+  'customerDetails.name': 'text',
+  'customerDetails.phone': 'text'
+});
+
+// Add instance methods if needed
+B2COrderSchema.methods.getOrderSummary = function() {
+  return {
+    id: this._id,
+    reference: this.order_reference_id,
+    status: this.bucket,
+    customer: this.customerDetails.name,
+    created: this.createdAt
+  };
+};
+
+// Add pre-save middleware to handle any data transformations
+// B2COrderSchema.pre('save', function(next) {
+//   // If you need to perform any calculations or transformations before saving
+//   next();
+// });
+
+// // Add post-find middleware to handle data after retrieval if needed
+// B2COrderSchema.post('find', function(docs) {
+//   // You can do batch processing on retrieved documents here
+// });
 
 export const packageDetailsSchema = new mongoose.Schema({
   qty: { type: String, required: true },
@@ -173,5 +205,7 @@ const B2BOrderSchema = new mongoose.Schema({
 //     },
 //   ],
 // });
+
+// Add this to your database initialization code or run manually in MongoDB
 export const B2COrderModel = mongoose.model("B2COrders", B2COrderSchema);
 export const B2BOrderModel = mongoose.model("B2BOrder", B2BOrderSchema);

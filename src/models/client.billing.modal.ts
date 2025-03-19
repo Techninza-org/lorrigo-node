@@ -1,7 +1,7 @@
 import mongoose, { Mongoose } from "mongoose";
 import { paymentStatusInfo } from "../utils/recharge-wallet-info";
 
-const modal = new mongoose.Schema({
+const ClientBillingSchema = new mongoose.Schema({
   sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true },
   carrierID: { type: mongoose.Types.ObjectId, ref: "Courier", required: true },
   disputeId: { type: mongoose.Types.ObjectId, ref: "Dispute" },
@@ -46,5 +46,14 @@ const modal = new mongoose.Schema({
   billingDate: { type: Date, default: Date.now },
 });
 
-const ClientBillingModal = mongoose.model("ClientBilling", modal);
+ClientBillingSchema.index({ sellerId: 1, billingDate: -1 });
+ClientBillingSchema.index({ awb: 1 }, { unique: true });
+ClientBillingSchema.index({ 
+  awb: "text", 
+  orderRefId: "text", 
+  recipientName: "text" 
+});
+
+const ClientBillingModal = mongoose.model("ClientBilling", ClientBillingSchema);
+
 export default ClientBillingModal;

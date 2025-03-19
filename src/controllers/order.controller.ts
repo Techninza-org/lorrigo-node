@@ -777,6 +777,9 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       awb,
       reference,
       isReverse,
+      pickupLocation,
+      paymentMode,
+      bucketStatus
     }: {
       from?: string,
       to?: string,
@@ -788,8 +791,11 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       order?: "asc" | "desc",
       search?: string,
       awb?: string,
-      reference?: string
-      isReverse?: string
+      reference?: string,
+      isReverse?: string,
+      pickupLocation?: string,
+      paymentMode?: string,
+      bucketStatus?: string
     } = req.query;
 
     // Convert page and limit to numbers
@@ -797,7 +803,6 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
     const limitNum = Number(limit) < 1 ? 20 : Number(limit) > 100 ? 100 : Number(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Status mapping
     const bucketMap = {
       new: [NEW, RETURN_CONFIRMED],
       "ready-to-ship": [READY_TO_SHIP, RETURN_PICKED],
@@ -807,14 +812,12 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       rto: [RTO, RTO_DELIVERED],
     };
 
-    // Build query
     const query: any = { sellerId };
 
-    if(isReverse){
-      query.isReverseOrder = isReverse
+    if (isReverse) {
+      query.isReverseOrder = isReverse;
     }
 
-    // Date range filter
     if (from || to) {
       query.createdAt = {};
 
@@ -831,14 +834,34 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       }
     }
 
-    // Status filter
+    // Status filter (bucket groups)
     if (status && bucketMap.hasOwnProperty(status)) {
       query.bucket = { $in: bucketMap[status as keyof typeof bucketMap] };
     }
 
-    // Search filter (for AWB or reference ID)
+    if (bucketStatus) {
+      const bucketStatusArray = bucketStatus.split(',').filter(Boolean);
+      if (bucketStatusArray.length > 0) {
+        query.bucket = { $in: bucketStatusArray };
+      }
+    }
+
+    if (paymentMode) {
+      const paymentModeArray = paymentMode.split(',').filter(Boolean);
+      if (paymentModeArray.length > 0) {
+        query.payment_mode = { $in: paymentModeArray };
+      }
+    }
+
+    if (pickupLocation) {
+      const pickupLocationArray = pickupLocation.split(',').filter(Boolean);
+      if (pickupLocationArray.length > 0) {
+        query.pickupAddress = { $in: pickupLocationArray };
+      }
+    }
+
     if (search) {
-      delete query.createdAt
+      delete query.createdAt;
       query.$or = [
         { awb: { $regex: search, $options: 'i' } },
         { order_reference_id: { $regex: search, $options: 'i' } },
@@ -847,34 +870,29 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       ];
     }
 
-    // Specific AWB filter
     if (awb) {
       query.awb = { $regex: awb, $options: 'i' };
     }
 
-    // Specific reference ID filter
     if (reference) {
       query.order_reference_id = { $regex: reference, $options: 'i' };
     }
 
     if (statusFilter && statusFilter === "unassigned") {
-      query.awb = { $exists: false }
+      query.awb = { $exists: false };
     } else if (statusFilter && statusFilter === "assigned") {
-      query.awb = { $exists: true, $ne: null }
+      query.awb = { $exists: true, $ne: null };
     }
 
-    // Validate sort field to prevent injection
-    const allowedSortFields = ['createdAt', 'order_reference_id', 'awb', 'order_invoice_date', 'bucket'];
+    const allowedSortFields = ['createdAt', 'order_reference_id', 'awb', 'order_invoice_date', 'bucket', 'payment_mode'];
     const sortField = allowedSortFields.includes(sort) ? sort : 'createdAt';
     const sortOrder = order === 'asc' ? 1 : -1;
     const sortOptions: any = {};
     sortOptions[sortField] = sortOrder;
 
     try {
-      // Count total documents for pagination info
       const totalCount = await B2COrderModel.countDocuments(query);
 
-      // Execute optimized query with projection to select only needed fields
       const orders = await B2COrderModel
         .find(query)
         .sort(sortOptions)

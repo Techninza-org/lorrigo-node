@@ -184,7 +184,7 @@ app.get("/api/getsellers", cache("5 minutes"), getSellers); //admin
 // @ts-ignore
 app.get("/api/order/:awb", getSpecificOrder);
 
-app.post("/api/track/shiprocket", async (req, res) => {
+app.post("/api/track/orders", async (req, res) => {
   const data = req.body;
   await processShiprocketOrders(data)
   return res.send("ok");

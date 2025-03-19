@@ -11,6 +11,9 @@ const RemittanceSchema = new mongoose.Schema({
   BankTransactionId : { type: String, required: true },
 
 });
+RemittanceSchema.index({ sellerId: 1, remittanceDate: -1 });
+RemittanceSchema.index({ remittanceStatus: 1 });
+RemittanceSchema.index({ remittanceId: "text", BankTransactionId: "text" });
 
 const RemittanceModel = mongoose.model("Remittance", RemittanceSchema);
 export default RemittanceModel;
