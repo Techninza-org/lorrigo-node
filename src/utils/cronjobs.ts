@@ -25,6 +25,7 @@ import PaymentTransactionModal from "../models/payment.transaction.modal";
 import emailService from "./email.service";
 import CourierModel from "../models/courier.model";
 import { createTrackingKey, removeDuplicateStages, stageExists, buildExistingStagesMap } from './cron-shipment';
+import { DeliveredB2COrderModel } from "../models/delivered_order.model";
 
 const BATCH_SIZE = 80;
 const API_DELAY = 300000; // 5 minutes in milliseconds
@@ -572,12 +573,17 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
     const sellerIds = await SellerModel.find({}).select('_id').lean();
 
     for (const seller of sellerIds) {
-      const orders = await B2COrderModel.find({
+      // const orders = await B2COrderModel.find({
+      //   sellerId: seller._id,
+      //   bucket: DELIVERED,
+      //   payment_mode: 1, // COD
+      //   // createdAt: { $gte: currMonth }, // Filter for current month's orders
+      // }).populate('productId').lean()
+
+      const orders = await DeliveredB2COrderModel.find({
         sellerId: seller._id,
-        bucket: DELIVERED,
         payment_mode: 1, // COD
-        // createdAt: { $gte: currMonth }, // Filter for current month's orders
-      }).populate('productId').lean()
+      })
 
       // Check for orders already included in any remittance
       const remittedOrderIds = new Set(
@@ -1334,6 +1340,7 @@ export default async function runCron() {
   const expression4every9_59Hr = "59 9 * * *";
   const expression4everyFriday = "0 0 * * 5";
   const expression4every12Hrs = "0 0,12 * * *";
+  const expression4every1am = "0 1 * * *";
 
   if (cron.validate(expression4every2Minutes)) {
     // cron.schedule("20,50 * * * *", track_delivery); //20 minutes after the hour and half hour
@@ -1351,6 +1358,7 @@ export default async function runCron() {
     // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
 
     cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
+    cron.schedule(expression4every1am, moveDeliveredOrders);
 
     cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
     cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
@@ -1835,5 +1843,41 @@ async function emailSellerMonthlyWalletSummary(): Promise<void> {
     );
   } catch (error) {
     console.error('Error in emailInvoiceWithPaymnetLink:', error);
+  }
+}
+
+export async function moveDeliveredOrders(): Promise<void> {
+  try {
+    const yesterdayStart = new Date();
+    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+    yesterdayStart.setHours(0, 0, 0, 0);
+    const yesterdayEnd = new Date();
+    yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
+    yesterdayEnd.setHours(23, 59, 59, 999);
+    const yesterdayOrders = await B2COrderModel.find({
+      bucket: DELIVERED,
+      updatedAt: { $gte: yesterdayStart, $lte: yesterdayEnd }
+    }).populate("productId")
+    .populate("pickupAddress")
+    .populate("sellerId")
+    .populate("customerDetails")
+    .lean()
+
+    if (yesterdayOrders.length === 0) {
+      console.log('No delivered orders found yesterday');
+      return;
+    }
+    
+    const updatedOrders = await Promise.all(yesterdayOrders.map(async (order) => {
+      order.orderStages = order.orderStages[order.orderStages.length - 1];
+      return order;
+    }));
+
+    await DeliveredB2COrderModel.insertMany(updatedOrders);
+
+    console.log(`Moved ${updatedOrders.length} delivered orders to DeliveredB2COrderModel`);
+
+  } catch (error) {
+    console.error('Error in moveDeliveredOrders:', error);
   }
 }

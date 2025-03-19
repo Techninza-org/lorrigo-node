@@ -26,7 +26,7 @@ import { calculateB2BPriceCouriers, getB2BShiprocketServicableOrder, registerB2B
 import { OrderDetails } from "../types/b2b";
 import { validateOrderPayload } from "../utils/validation-helper";
 import CustomPricingModel from "../models/custom_pricing.model";
-import OrderPricingModel from "../models/order_pricing.modal";
+// import OrderPricingModel from "../models/order_pricing.modal";
 
 // TODO create api to delete orders
 
@@ -136,28 +136,28 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
     const customPricings = await CustomPricingModel.findOne({ sellerId: req.seller._id });
     console.log(customPricings, 'customPricings');
         
-    const orderPricingDetailsData = {
-      sellerId: req.seller._id,
-      order_reference_id: body?.order_reference_id,
-      codCharge: customPricings?.codCharge,
-      withinCity: customPricings?.withinCity,
-      withinZone: customPricings?.withinZone,
-      withinMetro: customPricings?.withinMetro,
-      withinRoi: customPricings?.withinRoi,
-      northEast: customPricings?.northEast,
-    }
+    // const orderPricingDetailsData = {
+    //   sellerId: req.seller._id,
+    //   order_reference_id: body?.order_reference_id,
+    //   codCharge: customPricings?.codCharge,
+    //   withinCity: customPricings?.withinCity,
+    //   withinZone: customPricings?.withinZone,
+    //   withinMetro: customPricings?.withinMetro,
+    //   withinRoi: customPricings?.withinRoi,
+    //   northEast: customPricings?.northEast,
+    // }
 
-    console.log(orderPricingDetailsData, 'orderPricingDetailsData');
+    // console.log(orderPricingDetailsData, 'orderPricingDetailsData');
 
-    const orderPricingDetails = new OrderPricingModel(orderPricingDetailsData);
-    console.log(orderPricingDetails, 'orderPricingDetails');
+    // const orderPricingDetails = new OrderPricingModel(orderPricingDetailsData);
+    // console.log(orderPricingDetails, 'orderPricingDetails');
     
-    try {
-      const createdOrderPricing = await orderPricingDetails.save();
-      console.log(createdOrderPricing, 'createdOrderPricing');
-    } catch (error) {
-      console.error('Error saving order pricing:', error);
-    }
+    // try {
+    //   const createdOrderPricing = await orderPricingDetails.save();
+    //   console.log(createdOrderPricing, 'createdOrderPricing');
+    // } catch (error) {
+    //   console.error('Error saving order pricing:', error);
+    // }
     
     return res.status(200).send({ valid: true, order: savedOrder });
   } catch (error) {

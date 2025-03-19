@@ -19,7 +19,7 @@ import customerRouter from "./routes/customer.routes";
 import morgan from "morgan";
 import shipmentRouter from "./routes/shipment.routes";
 import sellerRouter from "./routes/seller.routes";
-import runCron, { processShiprocketOrders } from "./utils/cronjobs";
+import runCron, { moveDeliveredOrders, processShiprocketOrders } from "./utils/cronjobs";
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
 import { getSpecificOrder } from "./controllers/order.controller";
@@ -219,6 +219,8 @@ app.use("*", (req: Request, res: Response) => {
 
 // refundExtraInvoiceAmount();
 // reverseExtraRtoCodfor31();
+
+// moveDeliveredOrders();
 
 runCron();
 
