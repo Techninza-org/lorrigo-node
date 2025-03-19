@@ -25,6 +25,7 @@ import PaymentTransactionModal from "../models/payment.transaction.modal";
 import emailService from "./email.service";
 import CourierModel from "../models/courier.model";
 import { createTrackingKey, removeDuplicateStages, stageExists, buildExistingStagesMap } from './cron-shipment';
+import { DeliveredB2COrderModel } from "../models/delivered_order.model";
 
 const BATCH_SIZE = 80;
 const API_DELAY = 300000; // 5 minutes in milliseconds
@@ -574,9 +575,15 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
     const sellerIds = await SellerModel.find({}).select('_id').lean();
 
     for (const seller of sellerIds) {
-      const orders = await B2COrderModel.find({
+      // const orders = await B2COrderModel.find({
+      //   sellerId: seller._id,
+      //   bucket: DELIVERED,
+      //   payment_mode: 1, // COD
+      //   // createdAt: { $gte: currMonth }, // Filter for current month's orders
+      // }).populate('productId').lean()
+
+      const orders = await DeliveredB2COrderModel.find({
         sellerId: seller._id,
-        bucket: DELIVERED,
         payment_mode: 1, // COD
         createdAt: { $gte: currMonth }, // Filter for current month's orders
       }).populate('productId').lean()
@@ -926,7 +933,185 @@ const processDelhiveryBatch = async (orders, delhiveryToken) => {
   return { updatedCount: updatedOrders.length };
 };
 
-export const processShiprocketOrders = async (orders) => {
+// export const processShiprocketOrders = async (data) => {
+//   console.log("Processing Shiprocket orders", data);
+  
+//   const shipment_track = data.shipment_track[0];
+//   if(!shipment_track) {
+//     return { processedCount: 0 };
+//   }
+//   const awb = shipment_track.awb_code;
+//   if(!awb || awb === '') {
+//     return { processedCount: 0 };
+//   }
+
+//   const orders = await B2COrderModel.find({ awb: awb });
+  
+//   const shiprocketToken = await getShiprocketToken();
+//   if (!shiprocketToken) {
+//     console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
+//     return { processedCount: 0 };
+//   }
+
+//   const processedOrders = [];
+
+//   for (const order of orders) {
+//     if (trackedOrders.has(order.awb)) {
+//       continue;
+//     }
+
+//     try {
+//       // const apiUrl = `https://apiv2.shiprocket.in/v1/external/courier/track/awb/${order.awb}`;
+//       // const response = await axios.get(apiUrl, {
+//       //   headers: {
+//       //     Authorization: shiprocketToken
+//       //   }
+//       // });
+
+//       // console.log(JSON.stringify(data?.tracking_data))
+//       // if (!data?.tracking_data?.shipment_status) {
+//       //   continue;
+//       // }
+
+//       // const trackData = data.tracking_data;
+//       // console.log("Track data", trackData);
+      
+//       const activities = data.shipment_track_activities || [];
+//       console.log("Activities", activities);
+      
+
+//       // First clean up any potential duplicate stages in the existing orderStages
+//       order.orderStages = removeDuplicateStages(order).orderStages;
+
+//       // Build map of existing tracking keys directly
+//       const existingActivities = new Map();
+//       order.orderStages.forEach(stage => {
+//         const key = createTrackingKey(
+//           stage.activity,
+//           stage.location,
+//           stage.action || stage.statusCode || ''
+//         );
+//         existingActivities.set(key, true);
+//       });
+
+//       let updatedOrder = false;
+
+//       // Ensure activities are in chronological order (oldest first)
+//       activities.sort((a, b) =>
+//         new Date(a.date).getTime() - new Date(b.date).getTime()
+//       );
+
+//       // Process all activities from the API
+//       for (const activity of activities) {
+//         const stageDateTime = formatISO(
+//           parse(activity.date, 'yyyy-MM-dd HH:mm:ss', new Date())
+//         ) || new Date();
+
+//         const bucketInfo = getShiprocketBucketing(Number(activity['sr-status']));
+
+//         if (bucketInfo.bucket !== -1) {
+//           // Create the activity key without timestamp
+//           const activityDescription = activity.activity || "";
+//           const location = activity.location || "";
+//           const action = bucketInfo.bucket === RTO ?
+//             `RTO ${bucketInfo.description}` :
+//             bucketInfo.description;
+
+//           const activityKey = createTrackingKey(activityDescription, location, action);
+
+//           // Only add if this specific activity isn't already recorded
+//           if (!existingActivities.has(activityKey)) {
+//             const newStage = {
+//               stage: bucketInfo?.stage || bucketInfo.bucket,
+//               action: action,
+//               activity: activityDescription,
+//               location: location,
+//               stageDateTime: stageDateTime,
+//             };
+
+//             // Add the new stage to orderStages
+//             order.orderStages.push(newStage);
+
+//             // Mark this activity as now existing
+//             existingActivities.set(activityKey, true);
+
+//             updatedOrder = true;
+
+//             // Handle RTO charges if needed
+//             if (bucketInfo.bucket === RTO && order.rtoCharges === 0) {
+//               const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb);
+//               await updateSellerWalletBalance(
+//                 order.sellerId,
+//                 rtoCharges?.rtoCharges,
+//                 false,
+//                 `${order.awb}, RTO charges`
+//               );
+//               order.rtoCharges = rtoCharges?.rtoCharges;
+//             }
+//           }
+//         }
+//       }
+
+//       // Update bucket to reflect the latest activity status
+//       if (activities.length > 0) {
+//         const latestActivity = activities[activities.length - 1];
+//         const latestBucketInfo = getShiprocketBucketing(Number(latestActivity['sr-status']));
+//         if (latestBucketInfo.bucket !== -1) {
+//           order.bucket = latestBucketInfo.bucket;
+//           updatedOrder = true;
+//         }
+//       }
+
+//       if (updatedOrder) {
+//         // Re-sort all order stages to ensure proper chronological order
+//         order.orderStages.sort((a, b) =>
+//           new Date(a.stageDateTime).getTime() - new Date(b.stageDateTime).getTime()
+//         );
+
+//         processedOrders.push(order);
+//       }
+
+//       trackedOrders.add(order.awb);
+//     } catch (err) {
+//       console.log(`Error tracking order ${order.awb}:`, err.message);
+//     }
+//   }
+
+//   if (processedOrders.length > 0) {
+//     try {
+//       const bulkOps = processedOrders.map(order => ({
+//         updateOne: {
+//           filter: { _id: order._id },
+//           update: {
+//             $set: {
+//               bucket: order.bucket,
+//               orderStages: order.orderStages,
+//               rtoCharges: order.rtoCharges
+//             }
+//           }
+//         }
+//       }));
+
+//       // await B2COrderModel.bulkWrite(bulkOps);
+//       console.log(`Updated ${processedOrders.length} orders with new tracking information`);
+//     } catch (error) {
+//       console.error("Error bulk updating orders:", error);
+//     }
+//   }
+
+//   return { processedCount: processedOrders.length };
+// };
+
+export const processShiprocketOrders = async (data) => {
+  console.log("Processing Shiprocket orders", data);
+
+  const awb = data.awb;
+  if (!awb || awb === '') {
+    return { processedCount: 0 };
+  }
+
+  const orders = await B2COrderModel.find({ awb: awb });
+
   const shiprocketToken = await getShiprocketToken();
   if (!shiprocketToken) {
     console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
@@ -936,29 +1121,12 @@ export const processShiprocketOrders = async (orders) => {
   const processedOrders = [];
 
   for (const order of orders) {
-    if (trackedOrders.has(order.awb)) {
-      continue;
-    }
-
     try {
-      const apiUrl = `https://apiv2.shiprocket.in/v1/external/courier/track/awb/${order.awb}`;
-      const response = await axios.get(apiUrl, {
-        headers: {
-          Authorization: shiprocketToken
-        }
-      });
+      const activities = data.scans || [];
+      console.log("Activities", activities);
 
-      if (!response.data?.tracking_data?.shipment_status) {
-        continue;
-      }
-
-      const trackData = response.data.tracking_data;
-      const activities = trackData.shipment_track_activities || [];
-
-      // First clean up any potential duplicate stages in the existing orderStages
       order.orderStages = removeDuplicateStages(order).orderStages;
 
-      // Build map of existing tracking keys directly
       const existingActivities = new Map();
       order.orderStages.forEach(stage => {
         const key = createTrackingKey(
@@ -971,12 +1139,10 @@ export const processShiprocketOrders = async (orders) => {
 
       let updatedOrder = false;
 
-      // Ensure activities are in chronological order (oldest first)
       activities.sort((a, b) =>
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
 
-      // Process all activities from the API
       for (const activity of activities) {
         const stageDateTime = formatISO(
           parse(activity.date, 'yyyy-MM-dd HH:mm:ss', new Date())
@@ -986,7 +1152,6 @@ export const processShiprocketOrders = async (orders) => {
         console.log(bucketInfo, 'bucketInfo', order.awb)
 
         if (bucketInfo.bucket !== -1) {
-          // Create the activity key without timestamp
           const activityDescription = activity.activity || "";
           const location = activity.location || "";
           const action = bucketInfo.bucket === RTO ?
@@ -995,7 +1160,6 @@ export const processShiprocketOrders = async (orders) => {
 
           const activityKey = createTrackingKey(activityDescription, location, action);
 
-          // Only add if this specific activity isn't already recorded
           if (!existingActivities.has(activityKey)) {
             const newStage = {
               stage: bucketInfo?.stage || bucketInfo.bucket,
@@ -1005,15 +1169,12 @@ export const processShiprocketOrders = async (orders) => {
               stageDateTime: stageDateTime,
             };
 
-            // Add the new stage to orderStages
             order.orderStages.push(newStage);
 
-            // Mark this activity as now existing
             existingActivities.set(activityKey, true);
 
             updatedOrder = true;
 
-            // Handle RTO charges if needed
             if (bucketInfo.bucket === RTO && order.rtoCharges === 0) {
               const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb);
               await updateSellerWalletBalance(
@@ -1028,7 +1189,6 @@ export const processShiprocketOrders = async (orders) => {
         }
       }
 
-      // Update bucket to reflect the latest activity status
       if (activities.length > 0) {
         const latestActivity = activities[activities.length - 1];
         const latestBucketInfo = getShiprocketBucketing(Number(latestActivity['sr-status']));
@@ -1039,7 +1199,6 @@ export const processShiprocketOrders = async (orders) => {
       }
 
       if (updatedOrder) {
-        // Re-sort all order stages to ensure proper chronological order
         order.orderStages.sort((a, b) =>
           new Date(a.stageDateTime).getTime() - new Date(b.stageDateTime).getTime()
         );
@@ -1069,7 +1228,7 @@ export const processShiprocketOrders = async (orders) => {
       }));
 
       await B2COrderModel.bulkWrite(bulkOps);
-      console.log(`Updated ${processedOrders.length} orders with new tracking information`);
+      console.log(`Updated ${processedOrders.length} order of awb ${awb} with new tracking information`);
     } catch (error) {
       console.error("Error bulk updating orders:", error);
     }
@@ -1194,7 +1353,6 @@ const autoCancelShipmetWhosePickupNotScheduled = async () => {
 }
 
 export default async function runCron() {
-  // calculateRemittanceEveryDay()
   console.log("Running cron scheduler");
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
@@ -1203,15 +1361,20 @@ export default async function runCron() {
   const expression4every9_59Hr = "59 9 * * *";
   const expression4everyFriday = "0 0 * * 5";
   const expression4every12Hrs = "0 0,12 * * *";
+  const expression4every1am = "0 1 * * *";
 
   if (cron.validate(expression4every2Minutes)) {
     // cron.schedule("20,50 * * * *", track_delivery); //20 minutes after the hour and half hour
     // cron.schedule("10,40 * * * *", trackOrder_Smartship); //10 minutes after the hour and half hour
     // cron.schedule(expression4every59Minutes, trackOrder_Shiprocket);  // Track order status every 30 minutes
     // cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
+    // cron.schedule("20,50 * * * *", track_delivery); //20 minutes after the hour and half hour
+    // cron.schedule("10,40 * * * *", trackOrder_Smartship); //10 minutes after the hour and half hour
+    // cron.schedule(expression4every59Minutes, trackOrder_Shiprocket);  // Track order status every 30 minutes
+    // cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
 
     // cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
-    // cron.schedule(expression4every2Minutes, scheduleShipmentCheck); // B2B 
+    // cron.schedule(expression4every2Minutes, scheduleShipmentCheck); // B2B a
     // // cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
     // cron.schedule(expression4every12Hrs, autoCancelShipmetWhosePickupNotScheduled);
 
@@ -1219,7 +1382,8 @@ export default async function runCron() {
     // // cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
     // // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
 
-    // cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
+    cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
+    cron.schedule(expression4every1am, moveDeliveredOrders);
 
     // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
     // cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
@@ -1227,7 +1391,7 @@ export default async function runCron() {
     // cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
     // cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
 
-    // // Email Cron
+    // Email Cron
     // cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);
     // cron.schedule(expression4every12Hrs, syncInvoicePdfs);
     // cron.schedule(expression4every12Hrs, emailInvoiceWithPaymnetLink);
@@ -1704,5 +1868,41 @@ async function emailSellerMonthlyWalletSummary(): Promise<void> {
     );
   } catch (error) {
     console.error('Error in emailInvoiceWithPaymnetLink:', error);
+  }
+}
+
+export async function moveDeliveredOrders(): Promise<void> {
+  try {
+    const yesterdayStart = new Date();
+    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+    yesterdayStart.setHours(0, 0, 0, 0);
+    const yesterdayEnd = new Date();
+    yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
+    yesterdayEnd.setHours(23, 59, 59, 999);
+    const yesterdayOrders = await B2COrderModel.find({
+      bucket: DELIVERED,
+      updatedAt: { $gte: yesterdayStart, $lte: yesterdayEnd }
+    }).populate("productId")
+    .populate("pickupAddress")
+    .populate("sellerId")
+    .populate("customerDetails")
+    .lean()
+
+    if (yesterdayOrders.length === 0) {
+      console.log('No delivered orders found yesterday');
+      return;
+    }
+    
+    const updatedOrders = await Promise.all(yesterdayOrders.map(async (order) => {
+      order.orderStages = order.orderStages[order.orderStages.length - 1];
+      return order;
+    }));
+
+    await DeliveredB2COrderModel.insertMany(updatedOrders);
+
+    console.log(`Moved ${updatedOrders.length} delivered orders to DeliveredB2COrderModel`);
+
+  } catch (error) {
+    console.error('Error in moveDeliveredOrders:', error);
   }
 }

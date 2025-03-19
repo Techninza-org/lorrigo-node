@@ -28,6 +28,9 @@ export const shipmenAwbCourierSchema = new mongoose.Schema(
     isActive: { type: Boolean, required: true, default: true },
     isReversedCourier: { type: Boolean, required: true, default: false },
     vendor_channel_id: { type: Types.ObjectId, ref: "Env", required: true },
+    cod: { type: Number, required: false },
+    shipmentCharge: { type: Number, required: false },
+    isReverse: { type: Boolean, required: false },
   },
   { timestamps: true }
 );

@@ -23,7 +23,7 @@ import customerRouter from "./routes/customer.routes";
 import morgan from "morgan";
 import shipmentRouter from "./routes/shipment.routes";
 import sellerRouter from "./routes/seller.routes";
-import runCron, { processShiprocketOrders } from "./utils/cronjobs";
+import runCron, { moveDeliveredOrders, processShiprocketOrders } from "./utils/cronjobs";
 import Logger from "./utils/logger";
 import adminRouter from "./routes/admin.routes";
 import { getSpecificOrder } from "./controllers/order.controller";
@@ -108,11 +108,11 @@ if (!config.USE_CLUSTER || (config.USE_CLUSTER && cluster.isWorker)) {
   // @ts-ignore
   app.get("/api/order/:awb", getSpecificOrder);
 
-  app.post("/api/shopify", async (req, res) => {
-    const order = await B2COrderModel.find({ awb: req.body.awb })
-    await processShiprocketOrders(order)
-    return res.send("ok");
-  });
+app.post("/api/track/shiprocket", async (req, res) => {
+  const data = req.body;
+  await processShiprocketOrders(data)
+  return res.send("ok");
+});
 
   // @ts-ignore
   app.post("/api/ratecalculator", AuthMiddleware, ratecalculatorController);
@@ -225,8 +225,12 @@ if (!config.USE_CLUSTER || (config.USE_CLUSTER && cluster.isWorker)) {
     });
   });
 
-  // Run cron jobs
-  runCron();
+// refundExtraInvoiceAmount();
+// reverseExtraRtoCodfor31();
+
+// moveDeliveredOrders();
+
+runCron();
 
   // Start server
 

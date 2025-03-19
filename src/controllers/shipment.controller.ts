@@ -58,6 +58,7 @@ import SellerModel from "../models/seller.model";
 import B2BCalcModel from "../models/b2b.calc.model";
 import ShipmenAwbCourierModel from "../models/shipment-awb-courier.model";
 import { formatPhoneNumber, validateIndianMobileNumber } from "../utils/validation-helper";
+// import OrderPricingModel from "../models/order_pricing.modal";
 
 // TODO: REMOVE THIS CODE: orderType = 0 ? "b2c" : "b2b"
 export async function createShipment(req: ExtendedRequest, res: Response, next: NextFunction) {
@@ -68,8 +69,7 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     const sellerId = req.seller._id;
     const carrierId = body.carrierId;
     let codCharge = body.codCharge
-
-
+    
     if (!isValidPayload(body, ["orderId", "orderType", "carrierId", "carrierNickName"])) {
       return res.status(200).send({ valid: false, message: "Invalid payload" });
     }
@@ -188,11 +188,15 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
     codCharge = courierCharge[0].cod
 
     // // update in order
-    order.codCharge = codCharge;
-
-    if (seller.config.isPrepaid && (body.charge >= seller.walletBalance || seller.walletBalance <= 0)) {
-      return res.status(200).send({ valid: false, message: "Insufficient wallet balance, Please Recharge your waller!" });
-    }
+    // let orderPricingDetails: any;
+    
+    // orderPricingDetails = await OrderPricingModel.findOne({ order_reference_id: order.order_reference_id});
+    
+    // if(orderPricingDetails){
+    //   orderPricingDetails.charge = courierCharge?.[0].charge; 
+    //   orderPricingDetails.orderCodCharge = codCharge
+    //   await orderPricingDetails.save();
+    // }
 
     if (vendorName?.name === "SMARTSHIP") {
       const smartShipCourier = await CourierModel.findById(body.carrierId);
@@ -371,6 +375,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           const savedShipmentResponse = await ShipmenAwbCourierModel.create({
             awb: awbNumber,
+            shipmentCharge: courierCharge?.[0].charge,
+            cod: codCharge,
+            isReverse: order.isReverseOrder,
             ...restCourier,
           });
           return res.status(200).send({ valid: true, order: updatedOrder, shipment: savedShipmentResponse });
@@ -475,6 +482,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
           const savedShipmentResponse = await ShipmenAwbCourierModel.create({
             awb: awb,
+            shipmentCharge: courierCharge?.[0].charge,
+            cod: codCharge,
+            isReverse: order.isReverseOrder,
             ...restCourier,
           });
 
@@ -786,6 +796,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         const savedShipmentResponse = await ShipmenAwbCourierModel.create({
           awb: delhiveryRes?.waybill,
+          shipmentCharge: courierCharge?.[0].charge,
+          cod: codCharge,
+          isReverse: order.isReverseOrder,
           ...restCourier,
         });
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
@@ -934,6 +947,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         const savedShipmentResponse = await ShipmenAwbCourierModel.create({
           awb: delhiveryRes?.waybill,
+          shipmentCharge: courierCharge?.[0].charge,
+          cod: codCharge,
+          isReverse: order.isReverseOrder,
           ...restCourier,
         });
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`);
@@ -1085,6 +1101,9 @@ export async function createShipment(req: ExtendedRequest, res: Response, next: 
 
         const savedShipmentResponse = await ShipmenAwbCourierModel.create({
           awb: delhiveryRes?.waybill,
+          shipmentCharge: courierCharge?.[0].charge,
+          cod: codCharge,
+          isReverse: order.isReverseOrder,
           ...restCourier,
         });
         await updateSellerWalletBalance(req.seller._id, Number(body.charge), false, `AWB: ${delhiveryRes?.waybill}, ${order.payment_mode ? "COD" : "Prepaid"}`)
