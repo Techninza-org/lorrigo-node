@@ -87,6 +87,7 @@ const MARUTI_REFRESH_TOKEN = process.env.MARUTI_REFRESH_TOKEN;
 const SHIPROCKET_B2B_API_BASEURL = process.env.SHIPROCKET_B2B_API_BASEURL;
 
 const envConfig = {
+  USE_CLUSTER: process.env.USE_CLUSTER === "true",
   NODE_ENV,
   MONGODB_URI,
   SALT_ROUND,

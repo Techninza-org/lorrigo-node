@@ -10,7 +10,7 @@ import {
   isValidPayload,
   rateCalculation,
 } from "../utils/helpers";
-import { isValidObjectId } from "mongoose";
+import mongoose, { isValidObjectId } from "mongoose";
 import { ObjectId } from "mongoose";
 import envConfig from "../utils/config";
 import axios from "axios";
@@ -167,250 +167,211 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
 
 export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const body = req.body;
-    if (!body) return res.status(200).send({ valid: false, message: "Invalid payload" });
+    // Validate basic request structure
+    if (!req.body) {
+      return res.status(400).send({ valid: false, message: "Invalid payload" });
+    }
 
     if (!req.file || !req.file.buffer) {
       return res.status(400).send({ valid: false, message: "No file uploaded" });
     }
-    const existingOrders = await B2COrderModel.find({ sellerId: req.seller._id }).lean();
-    const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
 
-    const orders = json.map((hub: any) => {
-      const isPaymentCOD = hub["payment_mode(COD/Prepaid)*"]?.toUpperCase() === "COD" ? 1 : 0;
-      const isContainFragileItem = hub["isContainFragileItem(Yes/No)*"]?.toUpperCase() === "TRUE" ? true : false;
-      return {
-        order_reference_id: hub["order_reference_id*"],
+    const buffer = req.file.buffer.toString('utf8');
+    const json = await csvtojson().fromString(buffer);
+
+    if (json.length < 1) {
+      return res.status(400).send({
+        valid: false,
+        message: "Empty payload",
+      });
+    }
+
+    // Validate CSV headers
+    const requiredHeaders = [
+      "order_reference_id*", "product_desc*", "product_category*", 
+      "order_quantity*", "tax_rate*", "order_value*", "order_invoice_date*",
+      "order_invoice_number*", "length(cm)*", "breadth(cm)*", 
+      "height(cm)*", "orderWeight(Kg)*", "payment_mode(COD/Prepaid)*",
+      "recipient_name*", "recipient_phone*", "recipient_address*", 
+      "recipient_pincode*", "recipient_city*", "recipient_state*",
+      "seller_name*", "isContainFragileItem(Yes/No)*"
+    ];
+
+    const csvHeaders = Object.keys(json[0] || {});
+    const missingHeaders = requiredHeaders.filter(header => !csvHeaders.includes(header));
+
+    if (missingHeaders.length > 0) {
+      return generateErrorCSV(res, [{
+        order_reference_id: "Header Error",
+        errors: `Missing required headers: ${missingHeaders.join(', ')}`
+      }]);
+    }
+
+    // Check if primary hub exists (early validation)
+    const hubDetails = await HubModel.findOne({ 
+      sellerId: req.seller._id, 
+      isPrimary: true 
+    }).lean();
+
+    if (!hubDetails) {
+      return generateErrorCSV(res, [{
+        order_reference_id: "Configuration Error",
+        errors: "Pickup address doesn't exist. Please enable the Primary Address!"
+      }]);
+    }
+
+    // Fetch existing orders in one query for validation
+    const existingOrderRefs = await B2COrderModel.distinct('order_reference_id', { 
+      sellerId: req.seller._id 
+    });
+    
+    // Create a Set for faster lookups during validation
+    const existingOrderRefsSet = new Set(existingOrderRefs);
+
+    // Transform and validate order data
+    const errorRows: any = [];
+    const validOrders: any[] = [];
+    const ordersToProcess: any[] = [];
+
+    // Parse and validate all orders
+    for (const item of json) {
+      const isPaymentCOD = item["payment_mode(COD/Prepaid)*"]?.toUpperCase() === "COD" ? 1 : 0;
+      const isContainFragileItem = item["isContainFragileItem(Yes/No)*"]?.toUpperCase() === "TRUE" || 
+                                  item["isContainFragileItem(Yes/No)*"]?.toUpperCase() === "YES";
+      
+      const order = {
+        order_reference_id: item["order_reference_id*"],
         productDetails: {
-          name: hub["product_desc*"],
-          category: hub["product_category*"],
-          quantity: hub["order_quantity*"],
-          hsn_code: hub["hsn_code"],
-          taxRate: hub["tax_rate*"],
-          taxableValue: hub["order_value*"]
+          name: item["product_desc*"],
+          category: item["product_category*"],
+          quantity: Number(item["order_quantity*"]),
+          hsn_code: item["hsn_code"],
+          taxRate: Number(item["tax_rate*"]),
+          taxableValue: Number(item["order_value*"])
         },
-        order_invoice_date: hub["order_invoice_date*"],
-        order_invoice_number: hub["order_invoice_number*"],
+        order_invoice_date: item["order_invoice_date*"],
+        order_invoice_number: item["order_invoice_number*"],
         isContainFragileItem: Boolean(isContainFragileItem),
-        numberOfBoxes: hub["order_quantity*"],
-        orderBoxHeight: hub["length(cm)*"],
-        orderBoxWidth: hub["breadth(cm)*"],
-        orderBoxLength: hub["height(cm)*"],
-        orderWeight: hub["orderWeight(Kg)*"],
+        numberOfBoxes: Number(item["order_quantity*"]),
+        orderBoxHeight: Number(item["length(cm)*"]),
+        orderBoxWidth: Number(item["breadth(cm)*"]),
+        orderBoxLength: Number(item["height(cm)*"]),
+        orderWeight: Number(item["orderWeight(Kg)*"]),
         orderWeightUnit: "kg",
         orderSizeUnit: "cm",
         payment_mode: isPaymentCOD,
-        amount2Collect: hub['cod_value*'],
+        amount2Collect: isPaymentCOD ? Number(item['cod_value*']) : 0,
         customerDetails: {
-          name: hub['recipient_name*'],
-          phone: "+91" + hub['recipient_phone*'],
-          address: hub['recipient_address*'],
-          pincode: hub['recipient_pincode*'],
-          city: hub['recipient_city*'],
-          state: hub['recipient_state*']
+          name: item['recipient_name*'],
+          phone: "+91" + item['recipient_phone*'],
+          address: item['recipient_address*'],
+          pincode: item['recipient_pincode*'],
+          city: item['recipient_city*'],
+          state: item['recipient_state*']
         },
         sellerDetails: {
-          sellerName: hub['seller_name*'],
-          sellerGSTIN: hub['gstin'],
-          sellerAddress: hub['seller_address'],
+          sellerName: item['seller_name*'],
+          sellerGSTIN: item['gstin'],
+          sellerAddress: item['seller_address'],
         },
       };
-    })
 
-    if (orders.length < 1) {
-      return res.status(200).send({
-        valid: false,
-        message: "empty payload",
+      // Validate the order
+      const errors = validateOrder(order, existingOrderRefsSet);
+      
+      if (errors.length > 0) {
+        errorRows.push({
+          order_reference_id: order.order_reference_id || "Unknown",
+          errors: errors.join(", ")
+        });
+      } else {
+        validOrders.push(order);
+      }
+    }
+
+    // If there are validation errors, return CSV with errors
+    if (errorRows.length > 0) {
+      return generateErrorCSV(res, errorRows);
+    }
+
+    // Prepare data for bulk operations
+    for (const order of validOrders) {
+      // Prepare product data
+      const { name, category, hsn_code, quantity, taxRate, taxableValue } = order.productDetails;
+      const productData = {
+        name,
+        category,
+        hsn_code,
+        quantity,
+        tax_rate: taxRate,
+        taxable_value: taxableValue,
+      };
+
+      // Prepare order data
+      ordersToProcess.push({
+        productData,
+        orderData: {
+          sellerId: req.seller?._id,
+          bucket: NEW,
+          client_order_reference_id: order.order_reference_id,
+          orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
+          pickupAddress: hubDetails._id,
+          order_reference_id: order.order_reference_id,
+          payment_mode: order.payment_mode,
+          order_invoice_date: convertToISO(order.order_invoice_date),
+          order_invoice_number: order.order_invoice_number.toString(),
+          isContainFragileItem: order.isContainFragileItem,
+          numberOfBoxes: order.numberOfBoxes,
+          orderBoxHeight: order.orderBoxHeight,
+          orderBoxWidth: order.orderBoxWidth,
+          orderBoxLength: order.orderBoxLength,
+          orderSizeUnit: order.orderSizeUnit,
+          orderWeight: order.orderWeight,
+          orderWeightUnit: order.orderWeightUnit,
+          amount2Collect: order.amount2Collect,
+          customerDetails: order.customerDetails,
+          sellerDetails: order.sellerDetails,
+        }
       });
     }
 
+    // Use MongoDB transactions for atomic operations
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
-      const errorWorkbook = new exceljs.Workbook();
-      const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
-
-      errorWorksheet.columns = [
-        { header: 'order_reference_id', key: 'order_reference_id', width: 20 },
-        { header: 'Error Message', key: 'errors', width: 40 },
-      ];
-
-      const errorRows: any = [];
-
-      orders.forEach((order) => {
-        const errors: string[] = [];
-        Object.entries(order).forEach(([fieldName, value]) => {
-          const error = validateBulkOrderField(value, fieldName, orders, existingOrders);
-          if (error) {
-            errors.push(error);
-          }
-        });
-
-        if (errors.length > 0) {
-          errorRows.push({
-            order_reference_id: order.order_reference_id,
-            errors: errors.join(", ")
-          });
-        }
+      // Bulk insert products and retrieve their IDs
+      const productDocs = ordersToProcess.map(item => item.productData);
+      const savedProducts = await ProductModel.insertMany(productDocs, { session });
+      
+      // Prepare orders with product IDs
+      const orderDocs = ordersToProcess.map((item, index) => ({
+        ...item.orderData,
+        productId: savedProducts[index]._id
+      }));
+      
+      // Bulk insert orders
+      await B2COrderModel.insertMany(orderDocs, { session });
+      
+      // Commit the transaction
+      await session.commitTransaction();
+      
+      return res.status(200).send({ 
+        valid: true, 
+        message: "Orders submitted successfully. You will be notified once all orders are processed." 
       });
-
-      if (errorRows.length > 0) {
-        errorWorksheet.addRows(errorRows);
-
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
-
-        await errorWorkbook.csv.write(res);
-        return res.end();
-      }
     } catch (error) {
-      return next(error);
+      console.log(error, "error")
+      // Abort transaction if any error occurs
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
     }
-
-    let hubDetails;
-    try {
-      hubDetails = await HubModel.findOne({ sellerId: req.seller._id, isPrimary: true });
-      if (!hubDetails) {
-        try {
-          const errorWorkbook = new exceljs.Workbook();
-          const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
-
-          errorWorksheet.columns = [
-            { header: 'order_reference_id', key: 'order_reference_id', width: 20 },
-            { header: 'Error Message', key: 'errors', width: 40 },
-          ];
-
-          const errorRows: any = [];
-
-          errorRows.push({
-            order_reference_id: "Error",
-            errors: "Pickup address doesn't exists, Please enable the Primary Address!"
-          });
-
-
-          if (errorRows.length > 0) {
-            errorWorksheet.addRows(errorRows);
-
-            res.setHeader('Content-Type', 'text/csv');
-            res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
-
-            await errorWorkbook.csv.write(res);
-            return res.end();
-          }
-        } catch (error) {
-          return next(error);
-        }
-        return res.status(200).send({ valid: false, message: "Pickup address doesn't exists" });
-      }
-
-    } catch (err) {
-      return next(err);
-    }
-
-    for (let i = 0; i < orders.length; i++) {
-      const order = orders[i];
-      const customerDetails = order?.customerDetails;
-      const productDetails = order?.productDetails;
-
-      if (
-        !isValidPayload(order, [
-          "order_reference_id",
-          "payment_mode",
-          "customerDetails",
-          "productDetails",
-        ])
-      )
-        return res.status(200).send({ valid: false, message: "Invalid payload" });
-
-      if (!isValidPayload(productDetails, ["name", "category", "quantity", "taxRate", "taxableValue"]))
-        return res.status(200).send({ valid: false, message: "Invalid payload: productDetails" });
-      if (!isValidPayload(customerDetails, ["name", "phone", "address", "pincode"]))
-        return res.status(200).send({ valid: false, message: "Invalid payload: customerDetails" });
-
-      if (!(order.payment_mode === 0 || order.payment_mode === 1))
-        return res.status(200).send({ valid: false, message: "Invalid payment mode" });
-      if (order.payment_mode === 1) {
-        if (!order?.amount2Collect) {
-          return res.status(200).send({ valid: false, message: "amount2Collect > 0 for COD order" });
-        }
-      }
-      // if (order.total_order_value > 50000) {
-      //   if (!isValidPayload(order, ["ewaybill"]))
-      //     return res.status(200).send({ valid: false, message: "Ewaybill required." });
-      // }
-
-      try {
-        const orderWithOrderReferenceId = await B2COrderModel.findOne({
-          sellerId: req.seller._id,
-          order_reference_id: order?.order_reference_id,
-        }).lean();
-
-        if (orderWithOrderReferenceId) {
-          const newError = new Error("Order reference Id already exists.");
-          return next(newError);
-        }
-      }
-      catch (err) {
-        return next(err);
-      }
-
-
-      let savedProduct;
-      try {
-        const { name, category, hsn_code, quantity, taxRate, taxableValue } = productDetails;
-        const product2save = new ProductModel({
-          name,
-          category,
-          hsn_code,
-          quantity,
-          tax_rate: taxRate,
-          taxable_value: taxableValue,
-        });
-        savedProduct = await product2save.save();
-      } catch (err) {
-        return next(err);
-      }
-
-      let savedOrder;
-
-      const data = {
-        sellerId: req.seller?._id,
-        bucket: NEW,
-        client_order_reference_id: order?.order_reference_id,
-        orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
-        pickupAddress: hubDetails?._id,
-        productId: savedProduct._id,
-        order_reference_id: order?.order_reference_id,
-        payment_mode: order?.payment_mode,
-        order_invoice_date: convertToISO(order?.order_invoice_date),
-        order_invoice_number: order?.order_invoice_number.toString(),
-        isContainFragileItem: order?.isContainFragileItem,
-        numberOfBoxes: order?.numberOfBoxes, // if undefined, default=> 0
-        orderBoxHeight: order?.orderBoxHeight,
-        orderBoxWidth: order?.orderBoxWidth,
-        orderBoxLength: order?.orderBoxLength,
-        orderSizeUnit: order?.orderSizeUnit,
-        orderWeight: order?.orderWeight,
-        orderWeightUnit: order?.orderWeightUnit,
-        amount2Collect: order?.amount2Collect,
-        customerDetails: order?.customerDetails,
-        sellerDetails: {
-          sellerName: order?.sellerDetails.sellerName,
-          sellerGSTIN: order?.sellerDetails.sellerGSTIN,
-          sellerAddress: order?.sellerDetails.sellerAddress,
-        },
-      };
-
-      // if (order?.total_order_value > 50000) {
-      //   //@ts-ignore
-      //   data.ewaybill = order?.ewaybill;
-      // }
-      const order2save = new B2COrderModel(data);
-      savedOrder = await order2save.save();
-    }
-    return res.status(200).send({ valid: true });
   } catch (error) {
     return next(error);
   }
-}
+};
 
 export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -859,7 +820,6 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       query.bucket = { $in: bucketMap[status as keyof typeof bucketMap] };
     }
 
-    // Search filter (for AWB or reference ID)
     if (search) {
       query.$or = [
         { awb: { $regex: search, $options: 'i' } },
@@ -886,7 +846,7 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
     }
 
     // Validate sort field to prevent injection
-    const allowedSortFields = ['createdAt', 'order_reference_id', 'awb', 'order_invoice_date', 'bucket'];
+    const allowedSortFields = ['createdAt', 'order_reference_id', 'awb', 'order_invoice_date', 'customerDetails','bucket'];
     const sortField = allowedSortFields.includes(sort) ? sort : 'createdAt';
     const sortOrder = order === 'asc' ? 1 : -1;
     const sortOptions: any = {};

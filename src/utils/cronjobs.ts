@@ -567,9 +567,11 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
   try {
     const companyName = 'L';
     const currMonth = new Date();
-    currMonth.setDate(1);
+    currMonth.setMonth(currMonth.getMonth() - 1)
+    currMonth.setDate(15);
     currMonth.setHours(0, 0, 0, 0);
 
+    console.log(currMonth, "currmonth")
     const sellerIds = await SellerModel.find({}).select('_id').lean();
 
     for (const seller of sellerIds) {
@@ -583,7 +585,8 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
       const orders = await DeliveredB2COrderModel.find({
         sellerId: seller._id,
         payment_mode: 1, // COD
-      })
+        createdAt: { $gte: currMonth }, // Filter for current month's orders
+      }).populate('productId').lean()
 
       // Check for orders already included in any remittance
       const remittedOrderIds = new Set(
@@ -630,6 +633,14 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
             (sum, order) => sum + Number(order.amount2Collect),
             0
           );
+          // console.log("existingRemittance", {
+          //   sellerId,
+          //   remittanceId,
+          //   remittanceDate,
+          //   remittanceAmount,
+          //   remittanceStatus,
+          //   BankTransactionId,
+          // })
           await RemittanceModel.updateOne({ _id: existingRemittance._id }, existingRemittance);
         } else {
           const remittanceId = generateRemittanceId(companyName, seller._id.toString(), remittanceDate);
@@ -637,6 +648,15 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
           const remittanceStatus = 'pending';
           const BankTransactionId = 'xxxxxxxxxxxxx'; // Static or replace as needed
 
+          console.log({
+            sellerId: seller._id,
+            remittanceId: remittanceId,
+            remittanceDate: remittanceDate,
+            remittanceAmount: remittanceAmount,
+            remittanceStatus: remittanceStatus,
+            // orders: ordersOnSameDate,
+            BankTransactionId: BankTransactionId,
+          })
           const remittance = new RemittanceModel({
             sellerId: seller._id,
             remittanceId: remittanceId,
@@ -1129,6 +1149,7 @@ export const processShiprocketOrders = async (data) => {
         ) || new Date();
 
         const bucketInfo = getShiprocketBucketing(Number(activity['sr-status']));
+        console.log(bucketInfo, 'bucketInfo', order.awb)
 
         if (bucketInfo.bucket !== -1) {
           const activityDescription = activity.activity || "";
@@ -1347,24 +1368,28 @@ export default async function runCron() {
     // cron.schedule("10,40 * * * *", trackOrder_Smartship); //10 minutes after the hour and half hour
     // cron.schedule(expression4every59Minutes, trackOrder_Shiprocket);  // Track order status every 30 minutes
     // cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
+    // cron.schedule("20,50 * * * *", track_delivery); //20 minutes after the hour and half hour
+    // cron.schedule("10,40 * * * *", trackOrder_Smartship); //10 minutes after the hour and half hour
+    // cron.schedule(expression4every59Minutes, trackOrder_Shiprocket);  // Track order status every 30 minutes
+    // cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
 
     // cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
     // cron.schedule(expression4every2Minutes, scheduleShipmentCheck); // B2B a
     // // cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
     // cron.schedule(expression4every12Hrs, autoCancelShipmetWhosePickupNotScheduled);
 
-    // Need to fix
-    // cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
-    // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
+    // // Need to fix
+    // // cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
+    // // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
 
     cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
     cron.schedule(expression4every1am, moveDeliveredOrders);
 
-    cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
-    cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
-    cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET_B2B);
-    cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
-    cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
+    // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
+    // cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
+    // cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET_B2B);
+    // cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
+    // cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
 
     // Email Cron
     // cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);

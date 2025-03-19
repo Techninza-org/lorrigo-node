@@ -1423,7 +1423,7 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
 
         const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
         let vendorName: any = null;
-        
+
         if (order.carrierId) {
           const courier = await CourierModel.findById(order.carrierId).populate("vendor_channel_id");
           vendorName = courier?.vendor_channel_id || null;
@@ -1459,9 +1459,9 @@ export async function cancelShipment(req: ExtendedRequest, res: Response, next: 
       }
     }
 
-    return res.status(200).send({ 
-      valid: true, 
-      message: "Order cancellation requests processed", 
+    return res.status(200).send({
+      valid: true,
+      message: "Order cancellation requests processed",
       results,
       errors: results.filter(r => r.status === 'error').length
     });
@@ -1484,12 +1484,12 @@ export async function orderManifest(req: ExtendedRequest, res: Response, next: N
 
     let order: any;
     try {
-      order = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate(["productId", "pickupAddress"]);
+      order = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id, awb: { $exists: true }, bucket: 1 }).populate(["productId", "pickupAddress"]);
     } catch (err) {
       return next(err);
     }
 
-    if (!order) order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate(["customer", "pickupAddress"]);
+    if (!order) order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id, awb: { $exists: true }, bucket: 1 }).populate(["customer", "pickupAddress"]);
 
     if (!order) return res.status(200).send({ valid: false, message: "Order not found" });
 

@@ -125,12 +125,16 @@ export const generateManifests = async (req: ExtendedRequest, res: Response) => 
 
 
     if (!isBulk && req.body.orderIds && Array.isArray(req.body.orderIds)) {
-      orders = await B2COrderModel.find({ _id: { $in: req.body.orderIds } }).populate("pickupAddress productId");
+      orders = await B2COrderModel.find({
+        _id: { $in: req.body.orderIds },
+        bucket: 1,
+        awb: { $exists: true, $ne: "" }
+      }).populate("pickupAddress productId");
     } else {
       orders = await B2COrderModel.find({
         sellerId: sellerId,
         bucket: 1,
-        awb: { $exists: true }
+        awb: { $exists: true, $ne: "" }
       }).limit(options.limit || 100).populate("pickupAddress productId");
     }
 
