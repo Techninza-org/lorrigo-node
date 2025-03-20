@@ -26,6 +26,7 @@ import { addDays } from 'date-fns';
 import SellerDisputeModel from "../models/dispute.model";
 import { paymentStatusInfo } from "../utils/recharge-wallet-info";
 import ShipmenAwbCourierModel from "../models/shipment-awb-courier.model";
+import { DeliveredB2COrderModel } from "../models/delivered_order.model";
 
 export const walletDeduction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
@@ -1011,7 +1012,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
     }
 
     const orderAwbs = bills.map(bill => bill.awb);
-    const orders = await B2COrderModel.find({
+    const orders = await DeliveredB2COrderModel.find({
       $or: [{ awb: { $in: orderAwbs } }],
     }).populate(["productId", "pickupAddress"]);
 
