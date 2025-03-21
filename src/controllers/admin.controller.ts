@@ -50,9 +50,13 @@ export const walletDeduction = async (req: ExtendedRequest, res: Response, next:
 }
 export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const { from, to, status }: { from?: string, to?: string, status?: string } = req.query;
+    const { from, to, status, page = "1", limit = "20", search }: { from?: string, to?: string, status?: string, page?: string, limit?: string, search?: string } = req.query;
+    
+    
+    const pageNumber = Math.max(parseInt(page), 1);
+    const limitNumber = Math.max(parseInt(limit), 1);
+    const skip = (pageNumber - 1) * limitNumber;
 
-    // Define status buckets
     const statusBuckets = {
       new: [NEW],
       "ready-to-ship": [READY_TO_SHIP],
@@ -91,7 +95,15 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
       }
     }
 
-    const [orders, b2borders] = await Promise.all([
+    if (search) {
+      query.$or = [
+      { awb: { $regex: search, $options: 'i' } },
+      { order_reference_id: { $regex: search, $options: 'i' } }
+      ];
+      
+    }
+    
+    const [orders, b2borders, totalOrders, totalB2BOrders] = await Promise.all([
       B2COrderModel.find(query)
         .sort({ createdAt: -1 })
         .populate("productId")
@@ -100,6 +112,8 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
           path: "sellerId",
           select: "name"
         })
+        .skip(skip)
+        .limit(limitNumber)
         .lean(),
       B2BOrderModel.find(query)
         .sort({ createdAt: -1 })
@@ -110,18 +124,31 @@ export const getAllOrdersAdmin = async (req: ExtendedRequest, res: Response, nex
           select: "name"
         })
         .select('-invoiceImage')
-        .lean()
+        .skip(skip)
+        .limit(limitNumber)
+        .lean(),
+      B2COrderModel.countDocuments(query),  
+      B2BOrderModel.countDocuments(query)   
     ]);
-
 
     return res.status(200).send({
       valid: true,
-      response: { orders, b2borders: b2borders.reverse() },
+      response: {
+        orders,
+        b2borders: b2borders.reverse(),
+        pagination: {
+          currentPage: pageNumber,
+          pageSize: limitNumber,
+          totalOrders: Number(totalOrders),
+          totalPages: Math.ceil(totalOrders / limitNumber),
+        }
+      },
     });
   } catch (error) {
     return next(error);
   }
 };
+
 
 
 export const getAllUserWalletTransaction = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
