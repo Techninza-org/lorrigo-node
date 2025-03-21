@@ -1625,7 +1625,7 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
     }
     const orderPayload = {
       order_id: customClientRefOrderId,
-      order_date: format(orderDetails?.order_invoice_date, 'yyyy-MM-dd HH:mm'),
+      order_date: format(orderDetails?.createdAt, 'yyyy-MM-dd HH:mm'),
       pickup_location: orderDetails?.pickupAddress?.name,
       billing_customer_name: orderDetails?.customerDetails.get("name"),
       billing_last_name: "",
@@ -1633,7 +1633,7 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
       billing_address_2: billingAddress2,
       billing_city: orderDetails?.customerDetails.get("city"),
       billing_pincode: orderDetails?.customerDetails.get("pincode"),
-      billing_state: orderDetails?.customerDetails.get("state") || customerPincodeDetails?.StateName,
+      billing_state: orderDetails?.customerDetails?.get("state") || customerPincodeDetails?.StateName,
       billing_country: "India",
       billing_email: orderDetails?.customerDetails.get("email") || "noreply@lorrigo.com",
       billing_phone: formatPhoneNumber(orderDetails?.customerDetails.get("phone")),

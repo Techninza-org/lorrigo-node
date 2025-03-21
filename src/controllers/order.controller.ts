@@ -488,7 +488,10 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
         orderWeightUnit: body?.orderWeightUnit,
         productCount: body?.productCount,
         amount2Collect: body?.amount2Collect,
-        customerDetails: body?.customerDetails,
+        customerDetails: {
+          ...body?.customerDetails,
+          name: body.customerDetails.name.replace(/[^A-Za-z\s]/g, "")
+        },
         sellerDetails: {
           sellerName: body?.sellerDetails.sellerName,
           sellerGSTIN: body?.sellerDetails.sellerGSTIN,
@@ -1432,14 +1435,14 @@ export const getB2BCourier = async (req: ExtendedRequest, res: Response, next: N
 
 export const getCourier = async (req: ExtendedRequest, res: Response, next: NextFunction) => {
   try {
-    const productId = req.params.id;
+    const orderId = req.params.id;
     const type = req.params.type;
     const users_vendors = req.seller.vendors
     let data2send: any;
     let orderDetails: any;
     if (type === "b2c") {
       try {
-        orderDetails = await B2COrderModel.findOne({ _id: productId, sellerId: req.seller._id }).populate(["pickupAddress", "productId"]);
+        orderDetails = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id }).populate("pickupAddress productId");
       } catch (err) {
         return next(err);
       }
