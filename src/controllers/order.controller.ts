@@ -5,6 +5,7 @@ import ProductModel from "../models/product.model";
 import HubModel from "../models/hub.model";
 import { format, parse } from "date-fns";
 import {
+  getPincodeDetails,
   getSellerChannelConfig,
   getShiprocketToken,
   isValidPayload,
@@ -80,6 +81,13 @@ export const createB2COrder = async (req: ExtendedRequest, res: Response, next: 
     } catch (err) {
       return next(err);
     }
+
+    const deliveryDetails = await getPincodeDetails(Number(body.customerDetails.pincode));
+
+    if (!deliveryDetails) {
+      return res.status(200).send({ valid: false, message: "Pincode is not serviceable!" });
+    }
+
     const orderboxUnit = "kg";
 
     const orderboxSize = "cm";
@@ -464,6 +472,11 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
     } catch (err) {
       return next(err);
     }
+
+    const pickupDetails = await getPincodeDetails(Number(body.pickupAddress.pincode));
+    const deliveryDetails = await getPincodeDetails(Number(body.customerDetails.pincode));
+
+    if (!pickupDetails || !deliveryDetails) throw new Error("invalid pickup or delivery pincode");
 
     let savedOrder;
 
