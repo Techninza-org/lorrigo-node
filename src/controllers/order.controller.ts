@@ -473,10 +473,9 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
       return next(err);
     }
 
-    const pickupDetails = await getPincodeDetails(Number(body.pickupAddress.pincode));
     const deliveryDetails = await getPincodeDetails(Number(body.customerDetails.pincode));
 
-    if (!pickupDetails || !deliveryDetails) throw new Error("invalid pickup or delivery pincode");
+    if (!deliveryDetails) throw new Error("Pincode is not serviceable!");
 
     let savedOrder;
 
@@ -855,7 +854,7 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
       query.bucket = { $in: bucketMap[status as keyof typeof bucketMap] };
     }
 
-    if (bucketStatus) {
+    if (bucketStatus && !status) {
       const bucketStatusArray = bucketStatus.split(',').filter(Boolean);
       if (bucketStatusArray.length > 0) {
         query.bucket = { $in: bucketStatusArray };
