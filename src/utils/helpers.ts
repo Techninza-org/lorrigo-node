@@ -1357,7 +1357,7 @@ export function getShiprocketBucketing(status: number) {
     16: { bucket: CANCELED, description: "Cancellation Requested" },
     17: { bucket: IN_TRANSIT, description: "Out For Delivery" },
     18: { bucket: IN_TRANSIT, description: "In Transit" },
-    19: { bucket: NEW, stage: 52, description: "Out For Pickup" },
+    19: { bucket: READY_TO_SHIP, stage: 52, description: "Out For Pickup" },
     21: { bucket: NDR, description: "Undelivered" },
     22: { bucket: IN_TRANSIT, description: "Delayed" },
     23: { bucket: IN_TRANSIT, description: "Partial Delivered" },

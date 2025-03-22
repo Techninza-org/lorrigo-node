@@ -1644,7 +1644,7 @@ export async function registerOrderOnShiprocket(orderDetails: any, customClientR
           units: 1,
           selling_price: Number(orderDetails.productId.taxable_value),
         },
-        ...orderDetails.orderItems
+        // ...orderDetails.orderItems
       ],
       payment_method: orderDetails?.payment_mode === 0 ? "Prepaid" : "COD",
       sub_total: Number(orderDetails.productId?.taxable_value),
