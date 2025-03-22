@@ -56,7 +56,7 @@ const B2COrderSchema = new mongoose.Schema({
 
   // productCount: { type: Number, required: true, min: 1, default: 0 },
   amount2Collect: { type: Number, required: false, min: 0, default: 0 },
-  ewaybill: { type: Number, required: false },
+  ewaybill: { type: String, required: false },
 
   customerDetails: {
     type: mongoose.Schema.Types.Map,

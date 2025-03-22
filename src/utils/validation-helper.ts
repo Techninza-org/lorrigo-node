@@ -223,9 +223,9 @@ const orderValidationSchema = z.object({
    customerDetails: customerDetailsSchema,
    productDetails: productDetailsSchema,
    orderItems: z.array(orderItemSchema).optional(),
-   pickupAddress: z.string().min(1, "Pickup address is required"),
+   pickupAddress: z.string().optional(),
    sellerDetails: sellerDetailsSchema,
-   isReverseOrder: z.boolean(),
+   isReverseOrder: z.boolean().optional(),
 }).refine((data) => {
    return isValidObjectId(data.pickupAddress);
 }, {

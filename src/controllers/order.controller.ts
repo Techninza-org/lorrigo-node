@@ -152,189 +152,140 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
     if (!req.file || !req.file.buffer) {
       return res.status(400).send({ valid: false, message: "No file uploaded" });
     }
-    const existingOrders = await B2COrderModel.find({ sellerId: req.seller._id }).lean();
+
+    // Create error workbook early to collect all errors
+    const errorWorkbook = new exceljs.Workbook();
+    const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
+    errorWorksheet.columns = [
+      { header: 'order_reference_id', key: 'order_reference_id', width: 20 },
+      { header: 'Error Message', key: 'errors', width: 40 },
+    ];
+    const errorRows: any = [];
+
+    // Check hub details early to fail fast
+    const hubDetails = await HubModel.findOne({ sellerId: req.seller._id, isPrimary: true });
+    if (!hubDetails) {
+      errorRows.push({
+        order_reference_id: "Error",
+        errors: "Pickup address doesn't exist. Please enable the Primary Address!"
+      });
+      errorWorksheet.addRows(errorRows);
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+      await errorWorkbook.csv.write(res);
+      return res.end();
+    }
+
+    // Get existing orders once
+    const existingOrders = await B2COrderModel.find({ sellerId: req.seller._id }, { order_reference_id: 1 }).lean();
+    const existingOrderIds = new Set(existingOrders.map(order => order.order_reference_id));
+
+    // Parse CSV to JSON
     const json = await csvtojson().fromString(req.file.buffer.toString('utf8'));
 
-    const orders = json.map((hub: any) => {
-      const isPaymentCOD = hub["payment_mode(COD/Prepaid)*"]?.toUpperCase() === "COD" ? 1 : 0;
-      const isContainFragileItem = hub["isContainFragileItem(Yes/No)*"]?.toUpperCase() === "TRUE" ? true : false;
-      return {
-        order_reference_id: hub["order_reference_id*"],
-        productDetails: {
-          name: hub["product_desc*"],
-          category: hub["product_category*"],
-          quantity: hub["order_quantity*"],
-          hsn_code: hub["hsn_code"],
-          taxRate: hub["tax_rate*"],
-          taxableValue: hub["order_value*"]
-        },
-        order_invoice_date: hub["order_invoice_date*"],
-        order_invoice_number: hub["order_invoice_number*"],
-        isContainFragileItem: Boolean(isContainFragileItem),
-        numberOfBoxes: hub["order_quantity*"],
-        orderBoxHeight: hub["length(cm)*"],
-        orderBoxWidth: hub["breadth(cm)*"],
-        orderBoxLength: hub["height(cm)*"],
-        orderWeight: hub["orderWeight(Kg)*"],
-        orderWeightUnit: "kg",
-        orderSizeUnit: "cm",
-        payment_mode: isPaymentCOD,
-        amount2Collect: hub['cod_value*'],
-        customerDetails: {
-          name: hub['recipient_name*'],
-          phone: "+91" + hub['recipient_phone*'],
-          address: hub['recipient_address*'],
-          pincode: hub['recipient_pincode*'],
-          city: hub['recipient_city*'],
-          state: hub['recipient_state*']
-        },
-        sellerDetails: {
-          sellerName: hub['seller_name*'],
-          sellerGSTIN: hub['gstin'],
-          sellerAddress: hub['seller_address'],
-        },
-      };
-    })
-
-    if (orders.length < 1) {
+    if (json.length < 1) {
       return res.status(200).send({
         valid: false,
         message: "empty payload",
       });
     }
 
-    try {
-      const errorWorkbook = new exceljs.Workbook();
-      const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
+    const today = new Date().toISOString();
 
-      errorWorksheet.columns = [
-        { header: 'order_reference_id', key: 'order_reference_id', width: 20 },
-        { header: 'Error Message', key: 'errors', width: 40 },
-      ];
+    // Transform all orders at once
+    const orders = json.map((hub: any) => {
+      const isPaymentCOD = hub["payment_mode(COD/Prepaid)"]?.toUpperCase() === "COD" ? 1 : 0;
+      const isContainFragileItem = hub["isContainFragileItem(Yes/No)"]?.toUpperCase() === "TRUE" ? true : false;
+      return {
+        order_reference_id: hub["order_reference_id"],
+        pickupAddress: hubDetails._id.toString(),
+        productDetails: {
+          name: hub["product_desc"],
+          category: hub["product_category"],
+          quantity: Number(hub["order_quantity"]) ?? 1,
+          hsn_code: hub["hsn_code"],
+          taxRate: Number(hub["tax_rate"]) ?? 0,
+          taxableValue: Number(hub["order_value"]) ?? 0
+        },
+        order_invoice_date: convertToISO(hub["order_invoice_date"]) || today,
+        order_invoice_number: hub["order_invoice_number"],
+        isContainFragileItem: Boolean(isContainFragileItem),
+        numberOfBoxes: Number(hub["order_quantity"]) || 1,
+        orderBoxHeight: Number(hub["length(cm)"]),
+        orderBoxWidth: Number(hub["breadth(cm)"]),
+        orderBoxLength: Number(hub["height(cm)"]),
+        orderWeight: Number(hub["orderWeight(Kg)"]),
+        orderWeightUnit: "kg",
+        orderSizeUnit: "cm",
+        payment_mode: isPaymentCOD,
+        amount2Collect: Number(hub['cod_value']) || 0,
+        customerDetails: {
+          name: hub['recipient_name'],
+          phone: "+91" + hub['recipient_phone'],
+          address: hub['recipient_address'],
+          pincode: hub['recipient_pincode'],
+          city: hub['recipient_city'],
+          state: hub['recipient_state']
+        },
+        sellerDetails: {
+          sellerName: hub['seller_name'] ?? req.seller?.name,
+          sellerGSTIN: hub['gstin'],
+          sellerAddress: hub['seller_address'],
+          isSellerAddressAdded: false,
+        },
+      };
+    });
 
-      const errorRows: any = [];
+    // Validate all orders first before processing
+    const validOrders: any[] = [];
+    for (const order of orders) {
+      const errors: string[] = [];
 
-      orders.forEach((order) => {
-        const errors: string[] = [];
-        Object.entries(order).forEach(([fieldName, value]) => {
-          const error = validateBulkOrderField(value, fieldName, orders, existingOrders);
-          if (error) {
-            errors.push(error);
-          }
+      // Check for duplicate order reference IDs in the uploaded batch
+      if (validOrders.some(o => o.order_reference_id === order.order_reference_id)) {
+        errors.push(`Duplicate order reference ID in the uploaded batch: ${order.order_reference_id}`);
+      }
+
+      // Check for existing order reference IDs in the database
+      if (existingOrderIds.has(order.order_reference_id)) {
+        errors.push(`Order reference ID already exists in the database: ${order.order_reference_id}`);
+      }
+
+      const validationResult = validateOrderPayload(order);
+      if (!validationResult.valid && validationResult.message) {
+        errors.push(validationResult.message);
+      }
+
+      if (errors.length > 0) {
+        errorRows.push({
+          order_reference_id: order.order_reference_id || "Unknown",
+          errors: errors.join(", ")
         });
-
-        if (errors.length > 0) {
-          errorRows.push({
-            order_reference_id: order.order_reference_id,
-            errors: errors.join(", ")
-          });
-        }
-      });
-
-      if (errorRows.length > 0) {
-        errorWorksheet.addRows(errorRows);
-
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
-
-        await errorWorkbook.csv.write(res);
-        return res.end();
+      } else {
+        validOrders.push(order);
       }
-    } catch (error) {
-      return next(error);
     }
 
-    let hubDetails;
-    try {
-      hubDetails = await HubModel.findOne({ sellerId: req.seller._id, isPrimary: true });
-      if (!hubDetails) {
-        try {
-          const errorWorkbook = new exceljs.Workbook();
-          const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
-
-          errorWorksheet.columns = [
-            { header: 'order_reference_id', key: 'order_reference_id', width: 20 },
-            { header: 'Error Message', key: 'errors', width: 40 },
-          ];
-
-          const errorRows: any = [];
-
-          errorRows.push({
-            order_reference_id: "Error",
-            errors: "Pickup address doesn't exists, Please enable the Primary Address!"
-          });
-
-
-          if (errorRows.length > 0) {
-            errorWorksheet.addRows(errorRows);
-
-            res.setHeader('Content-Type', 'text/csv');
-            res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
-
-            await errorWorkbook.csv.write(res);
-            return res.end();
-          }
-        } catch (error) {
-          return next(error);
-        }
-        return res.status(200).send({ valid: false, message: "Pickup address doesn't exists" });
-      }
-
-    } catch (err) {
-      return next(err);
+    if (errorRows.length > 0) {
+      errorWorksheet.addRows(errorRows);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=error_report.csv');
+      await errorWorkbook.csv.write(res);
+      return res.end();
     }
 
-    for (let i = 0; i < orders.length; i++) {
-      const order = orders[i];
-      const customerDetails = order?.customerDetails;
-      const productDetails = order?.productDetails;
+    const BATCH_SIZE = 100; // Adjust based on your system capabilities
+    const totalBatches = Math.ceil(validOrders.length / BATCH_SIZE);
 
-      if (
-        !isValidPayload(order, [
-          "order_reference_id",
-          "payment_mode",
-          "customerDetails",
-          "productDetails",
-        ])
-      )
-        return res.status(200).send({ valid: false, message: "Invalid payload" });
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      const start = batchIndex * BATCH_SIZE;
+      const end = Math.min(start + BATCH_SIZE, validOrders.length);
+      const batchOrders = validOrders.slice(start, end);
 
-      if (!isValidPayload(productDetails, ["name", "category", "quantity", "taxRate", "taxableValue"]))
-        return res.status(200).send({ valid: false, message: "Invalid payload: productDetails" });
-      if (!isValidPayload(customerDetails, ["name", "phone", "address", "pincode"]))
-        return res.status(200).send({ valid: false, message: "Invalid payload: customerDetails" });
-
-      if (!(order.payment_mode === 0 || order.payment_mode === 1))
-        return res.status(200).send({ valid: false, message: "Invalid payment mode" });
-      if (order.payment_mode === 1) {
-        if (!order?.amount2Collect) {
-          return res.status(200).send({ valid: false, message: "amount2Collect > 0 for COD order" });
-        }
-      }
-      // if (order.total_order_value > 50000) {
-      //   if (!isValidPayload(order, ["ewaybill"]))
-      //     return res.status(200).send({ valid: false, message: "Ewaybill required." });
-      // }
-
-      try {
-        const orderWithOrderReferenceId = await B2COrderModel.findOne({
-          sellerId: req.seller._id,
-          order_reference_id: order?.order_reference_id,
-        }).lean();
-
-        if (orderWithOrderReferenceId) {
-          const newError = new Error("Order reference Id already exists.");
-          return next(newError);
-        }
-      }
-      catch (err) {
-        return next(err);
-      }
-
-
-      let savedProduct;
-      try {
-        const { name, category, hsn_code, quantity, taxRate, taxableValue } = productDetails;
+      // Create all products for this batch in parallel
+      const productPromises = batchOrders.map(order => {
+        const { name, category, hsn_code, quantity, taxRate, taxableValue } = order.productDetails;
         const product2save = new ProductModel({
           name,
           category,
@@ -343,49 +294,52 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
           tax_rate: taxRate,
           taxable_value: taxableValue,
         });
-        savedProduct = await product2save.save();
-      } catch (err) {
-        return next(err);
-      }
+        return product2save.save();
+      });
 
-      let savedOrder;
+      const savedProducts = await Promise.all(productPromises);
 
-      const data = {
-        sellerId: req.seller?._id,
-        bucket: NEW,
-        client_order_reference_id: order?.order_reference_id,
-        orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
-        pickupAddress: hubDetails?._id,
-        productId: savedProduct._id,
-        order_reference_id: order?.order_reference_id,
-        payment_mode: order?.payment_mode,
-        order_invoice_date: convertToISO(order?.order_invoice_date),
-        order_invoice_number: order?.order_invoice_number.toString(),
-        isContainFragileItem: order?.isContainFragileItem,
-        numberOfBoxes: order?.numberOfBoxes, // if undefined, default=> 0
-        orderBoxHeight: order?.orderBoxHeight,
-        orderBoxWidth: order?.orderBoxWidth,
-        orderBoxLength: order?.orderBoxLength,
-        orderSizeUnit: order?.orderSizeUnit,
-        orderWeight: order?.orderWeight,
-        orderWeightUnit: order?.orderWeightUnit,
-        amount2Collect: order?.amount2Collect,
-        customerDetails: order?.customerDetails,
-        sellerDetails: {
-          sellerName: order?.sellerDetails.sellerName,
-          sellerGSTIN: order?.sellerDetails.sellerGSTIN,
-          sellerAddress: order?.sellerDetails.sellerAddress,
-        },
-      };
+      const orderDocuments = batchOrders.map((order, index) => {
+        return {
+          sellerId: req.seller?._id,
+          bucket: NEW,
+          client_order_reference_id: order?.order_reference_id,
+          orderStages: [{ stage: NEW_ORDER_STATUS, stageDateTime: new Date(), action: NEW_ORDER_DESCRIPTION }],
+          pickupAddress: hubDetails?._id,
+          productId: savedProducts[index]._id,
+          order_reference_id: order?.order_reference_id,
+          payment_mode: order?.payment_mode,
+          order_invoice_date: order?.order_invoice_date,
+          order_invoice_number: order?.order_invoice_number.toString(),
+          isContainFragileItem: order?.isContainFragileItem,
+          numberOfBoxes: order?.numberOfBoxes,
+          orderBoxHeight: order?.orderBoxHeight,
+          orderBoxWidth: order?.orderBoxWidth,
+          orderBoxLength: order?.orderBoxLength,
+          orderSizeUnit: order?.orderSizeUnit,
+          orderWeight: order?.orderWeight,
+          orderWeightUnit: order?.orderWeightUnit,
+          amount2Collect: order?.amount2Collect,
+          customerDetails: {
+            ...body?.customerDetails,
+            name: body.customerDetails.name.replace(/[^A-Za-z\s]/g, "")
+          },
+          sellerDetails: {
+            sellerName: order?.sellerDetails.sellerName,
+            sellerGSTIN: order?.sellerDetails.sellerGSTIN,
+            sellerAddress: order?.sellerDetails.sellerAddress,
+          },
+        };
+      });
 
-      // if (order?.total_order_value > 50000) {
-      //   //@ts-ignore
-      //   data.ewaybill = order?.ewaybill;
-      // }
-      const order2save = new B2COrderModel(data);
-      savedOrder = await order2save.save();
+      // await B2COrderModel.insertMany(orderDocuments);
     }
-    return res.status(200).send({ valid: true });
+
+    return res.status(200).send({
+      valid: true,
+      message: `Successfully processed ${validOrders.length} orders`
+    });
+
   } catch (error) {
     return next(error);
   }
@@ -516,7 +470,7 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
         },
       };
 
-      if (body?.total_order_value > 50000) {
+      if (body?.productDetails.taxableValue > 50000) {
         //@ts-ignore
         data.ewaybill = body?.ewaybill;
       }
@@ -916,6 +870,7 @@ export const getOrders = async (req: ExtendedRequest, res: Response, next: NextF
         .select({
           _id: 1,
           awb: 1,
+          ewaybill: 1,
           order_reference_id: 1,
           orderItems: 1,
           client_order_reference_id: 1,
