@@ -266,7 +266,7 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
         validOrders.push(order);
       }
     }
-
+    
     if (errorRows.length > 0) {
       errorWorksheet.addRows(errorRows);
       res.setHeader('Content-Type', 'text/csv');
@@ -322,8 +322,7 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
           amount2Collect: order?.amount2Collect,
           customerDetails: {
             ...order?.customerDetails,
-            // name: order?.customerDetails?.name?.replace(/[^A-Za-z\s]/g, "")
-            name: order?.customerDetails?.name
+            // name: body.customerDetails.name//.replace(/[^A-Za-z\s]/g, "")
           },
           sellerDetails: {
             sellerName: order?.sellerDetails.sellerName,
@@ -332,7 +331,6 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
           },
         };
       });
-
 
       await B2COrderModel.insertMany(orderDocuments);
     }
