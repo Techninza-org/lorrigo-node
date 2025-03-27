@@ -648,15 +648,6 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
           const remittanceStatus = 'pending';
           const BankTransactionId = 'xxxxxxxxxxxxx'; // Static or replace as needed
 
-          console.log({
-            sellerId: seller._id,
-            remittanceId: remittanceId,
-            remittanceDate: remittanceDate,
-            remittanceAmount: remittanceAmount,
-            remittanceStatus: remittanceStatus,
-            // orders: ordersOnSameDate,
-            BankTransactionId: BankTransactionId,
-          })
           const remittance = new RemittanceModel({
             sellerId: seller._id,
             remittanceId: remittanceId,
@@ -676,7 +667,7 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
   }
 };
 
-const processSmartshipBatch = async (orders, shipmentAPIConfig) => {
+export const processSmartshipBatch = async (orders, shipmentAPIConfig) => {
   const updatedOrders = [];
   const rtoUpdatesNeeded = [];
 
@@ -727,6 +718,11 @@ const processSmartshipBatch = async (orders, shipmentAPIConfig) => {
             order.orderStages.push(newStage);
             existingTrackingKeys.set(trackingKey, true);
             orderUpdated = true;
+
+            // Track RTO cases for batch processing
+            if (bucketInfo.bucket === RTO && order.rtoCharges === 0) {
+              rtoUpdatesNeeded.push(order);
+            }
           }
         }
 
@@ -737,11 +733,6 @@ const processSmartshipBatch = async (orders, shipmentAPIConfig) => {
 
           if (latestBucketInfo.bucket !== -1) {
             order.bucket = latestBucketInfo.bucket;
-
-            // Track RTO cases for batch processing
-            if (latestBucketInfo.bucket === RTO && order.rtoCharges === 0) {
-              rtoUpdatesNeeded.push(order);
-            }
           }
         }
 
@@ -766,15 +757,38 @@ const processSmartshipBatch = async (orders, shipmentAPIConfig) => {
   // Process RTO charges in batch
   if (rtoUpdatesNeeded.length > 0) {
     await Promise.all(rtoUpdatesNeeded.map(async (order) => {
+      const session = await mongoose.startSession();
       try {
+        await session.startTransaction();
+
         const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb);
-        await updateSellerWalletBalance(order.sellerId, rtoCharges.rtoCharges, false, `${order.awb}, RTO charges`);
+
+        await updateSellerWalletBalance(
+          order.sellerId,
+          rtoCharges.rtoCharges,
+          false,
+          `${order.awb}, RTO charges`,
+          session
+        );
+
         if (rtoCharges.cod) {
-          await updateSellerWalletBalance(order.sellerId, rtoCharges.cod, true, `${order.awb}, RTO COD charges`);
+          await updateSellerWalletBalance(
+            order.sellerId,
+            rtoCharges.cod,
+            true,
+            `${order.awb}, RTO COD charges`,
+            session
+          );
         }
+
         order.rtoCharges = rtoCharges.rtoCharges;
+
+        await session.commitTransaction();
       } catch (error) {
+        await session.abortTransaction();
         console.error(`Error processing RTO for ${order.awb}:`, error);
+      } finally {
+        await session.endSession();
       }
     }));
   }
@@ -894,15 +908,21 @@ const processDelhiveryBatch = async (orders, delhiveryToken) => {
   // Process RTO charges in batch
   if (rtoUpdatesNeeded.length > 0) {
     await Promise.all(rtoUpdatesNeeded.map(async (order) => {
+      const session = await mongoose.startSession();
+      await session.startTransaction();
       try {
         const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb);
-        await updateSellerWalletBalance(order.sellerId, rtoCharges.rtoCharges, false, `${order.awb}, RTO charges`);
+        await updateSellerWalletBalance(order.sellerId, rtoCharges.rtoCharges, false, `${order.awb}, RTO charges`, session);
         if (rtoCharges.cod) {
-          await updateSellerWalletBalance(order.sellerId, rtoCharges.cod, true, `${order.awb}, RTO COD charges`);
+          await updateSellerWalletBalance(order.sellerId, rtoCharges.cod, true, `${order.awb}, RTO COD charges`, session);
         }
         order.rtoCharges = rtoCharges.rtoCharges;
+        await session.commitTransaction();
       } catch (error) {
         console.error(`Error processing RTO for ${order.awb}:`, error);
+        await session.abortTransaction();
+      } finally {
+        await session.endSession();
       }
     }));
   }
@@ -935,7 +955,7 @@ const processDelhiveryBatch = async (orders, delhiveryToken) => {
 
 // export const processShiprocketOrders = async (data) => {
 //   console.log("Processing Shiprocket orders", data);
-  
+
 //   const shipment_track = data.shipment_track[0];
 //   if(!shipment_track) {
 //     return { processedCount: 0 };
@@ -946,7 +966,7 @@ const processDelhiveryBatch = async (orders, delhiveryToken) => {
 //   }
 
 //   const orders = await B2COrderModel.find({ awb: awb });
-  
+
 //   const shiprocketToken = await getShiprocketToken();
 //   if (!shiprocketToken) {
 //     console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
@@ -975,10 +995,10 @@ const processDelhiveryBatch = async (orders, delhiveryToken) => {
 
 //       // const trackData = data.tracking_data;
 //       // console.log("Track data", trackData);
-      
+
 //       const activities = data.shipment_track_activities || [];
 //       console.log("Activities", activities);
-      
+
 
 //       // First clean up any potential duplicate stages in the existing orderStages
 //       order.orderStages = removeDuplicateStages(order).orderStages;
@@ -1177,13 +1197,28 @@ export const processShiprocketOrders = async (data) => {
 
             if (bucketInfo.bucket === RTO && order.rtoCharges === 0) {
               const rtoCharges = await shipmentAmtCalcToWalletDeduction(order.awb);
-              await updateSellerWalletBalance(
-                order.sellerId,
-                rtoCharges?.rtoCharges,
-                false,
-                `${order.awb}, RTO charges`
-              );
-              order.rtoCharges = rtoCharges?.rtoCharges;
+
+              // Use a mongoose session for atomic transaction
+              const session = await mongoose.startSession();
+              try {
+                await session.startTransaction();
+
+                await updateSellerWalletBalance(
+                  order.sellerId,
+                  rtoCharges?.rtoCharges,
+                  false,
+                  `${order.awb}, RTO charges`,
+                  session
+                );
+                order.rtoCharges = rtoCharges?.rtoCharges;
+
+                await session.commitTransaction();
+              } catch (error) {
+                await session.abortTransaction();
+                console.error(`Error processing RTO for ${order.awb}:`, error);
+              } finally {
+                await session.endSession();
+              }
             }
           }
         }
@@ -1205,8 +1240,6 @@ export const processShiprocketOrders = async (data) => {
 
         processedOrders.push(order);
       }
-
-      trackedOrders.add(order.awb);
     } catch (err) {
       console.log(`Error tracking order ${order.awb}:`, err.message);
     }
@@ -1425,7 +1458,7 @@ export default async function runCron() {
 // }
 
 
-const walletDeductionForBilledOrderOnEvery7Days = async () => {
+export const walletDeductionForBilledOrderOnEvery7Days = async () => {
   try {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -1441,88 +1474,81 @@ const walletDeductionForBilledOrderOnEvery7Days = async () => {
 
     await Promise.all(
       billedOrders.map(async (order) => {
-        const updates = [];
+        const session = await mongoose.startSession();
+        try {
+          await session.startTransaction();
 
-        // Handle FW Excess Charge
-        if (order.fwExcessCharge > 0) {
-          updates.push(
-            updateSellerWalletBalance(
+          // FW Excess Charge
+          if (order.fwExcessCharge > 0) {
+            await updateSellerWalletBalance(
               order.sellerId,
               Number(order.fwExcessCharge),
               false,
-              `AWB: ${order.awb}, FW Excess Charge`
-            )
-          );
-        }
+              `AWB: ${order.awb}, FW Excess Charge`,
+              session
+            );
+          }
 
-        if (order.rtoExcessCharge > 0) {
-          updates.push(
-            updateSellerWalletBalance(
+          if (order.rtoExcessCharge > 0) {
+            await updateSellerWalletBalance(
               order.sellerId,
               Number(order.rtoExcessCharge),
               false,
-              `AWB: ${order.awb}, RTO Excess Charge`
-            )
-          );
-
-          if (order.isRTOApplicable) {
-            const paymentTransactions = await PaymentTransactionModal.find({
-              desc: {
-                $in: [
-                  `${order.awb}, RTO-charges`,
-                  `${order.awb}, RTO-COD-charges`,
-                  `${order.awb}, RTO charges`,
-                ],
-              },
-            });
-
-            const isRtoChargeDeducted = paymentTransactions.some((pt) =>
-              pt.desc.includes("RTO-charges") || pt.desc.includes("RTO charges")
-            );
-            const isRtoCODRefund = paymentTransactions.some((pt) =>
-              pt.desc.includes("RTO-COD-charges") || pt.desc.includes("COD Refund")
+              `AWB: ${order.awb}, RTO Excess Charge`,
+              session
             );
 
-            if (!isRtoChargeDeducted) {
-              updates.push(
-                updateSellerWalletBalance(
+            if (order.isRTOApplicable) {
+              const paymentTransactions = await PaymentTransactionModal.find({
+                desc: {
+                  $in: [
+                    `${order.awb}, RTO-charges`,
+                    `${order.awb}, RTO-COD-charges`,
+                    `${order.awb}, RTO charges`,
+                  ],
+                },
+              });
+
+              const isRtoChargeDeducted = paymentTransactions.some((pt) =>
+                pt.desc.includes("RTO-charges") || pt.desc.includes("RTO charges")
+              );
+              const isRtoCODRefund = paymentTransactions.some((pt) =>
+                pt.desc.includes("RTO-COD-charges") || pt.desc.includes("COD Refund")
+              );
+
+              if (!isRtoChargeDeducted) {
+                await updateSellerWalletBalance(
                   order.sellerId,
                   Number(order.rtoCharge),
                   false,
-                  `AWB: ${order.awb}, RTO-charges`
-                )
-              );
-            }
+                  `AWB: ${order.awb}, RTO-charges`,
+                  session
+                );
+              }
 
-            if (!isRtoCODRefund) {
-              updates.push(
-                updateSellerWalletBalance(
+              if (!isRtoCODRefund) {
+                await updateSellerWalletBalance(
                   order.sellerId,
                   Number(order.codValue),
                   true,
-                  `AWB: ${order.awb}, COD-Refund`
-                )
-              );
+                  `AWB: ${order.awb}, COD-Refund`,
+                  session
+                );
+              }
             }
           }
+
+          order.paymentStatus = paymentStatusInfo.PAID;
+          order.disputeRaisedBySystem = false;
+          await order.save({ session });
+
+          await session.commitTransaction();
+        } catch (error) {
+          await session.abortTransaction();
+          console.error(`Error processing order ${order.awb}:`, error);
+        } finally {
+          await session.endSession();
         }
-
-        // if (order.zoneChangeCharge > 0) {
-        //   updates.push(
-        //     updateSellerWalletBalance(
-        //       order.sellerId,
-        //       Number(order.zoneChangeCharge),
-        //       false,
-        //       `AWB: ${order.awb}, Zone Change Charge ${order.orderZone} --> ${order.newZone}`
-        //     )
-        //   );
-        // }
-
-        order.paymentStatus = paymentStatusInfo.PAID;
-        order.disputeRaisedBySystem = false;
-        updates.push(order.save());
-
-        await Promise.all(updates);
       })
     );
   } catch (error) {
@@ -1883,16 +1909,16 @@ export async function moveDeliveredOrders(): Promise<void> {
       bucket: DELIVERED,
       updatedAt: { $gte: yesterdayStart, $lte: yesterdayEnd }
     }).populate("productId")
-    .populate("pickupAddress")
-    .populate("sellerId")
-    .populate("customerDetails")
-    .lean()
+      .populate("pickupAddress")
+      .populate("sellerId")
+      .populate("customerDetails")
+      .lean()
 
     if (yesterdayOrders.length === 0) {
       console.log('No delivered orders found yesterday');
       return;
     }
-    
+
     const updatedOrders = await Promise.all(yesterdayOrders.map(async (order) => {
       order.orderStages = order.orderStages[order.orderStages.length - 1];
       return order;
