@@ -1382,8 +1382,8 @@ export default async function runCron() {
     // // cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
     // // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
 
-    cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
-    cron.schedule(expression4every1am, moveDeliveredOrders);
+    // cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
+    // cron.schedule(expression4every1am, moveDeliveredOrders);
 
     // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
     // cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);

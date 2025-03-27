@@ -109,8 +109,8 @@ if (!config.USE_CLUSTER || (config.USE_CLUSTER && cluster.isWorker)) {
   app.get("/api/order/:awb", getSpecificOrder);
 
 app.post("/api/track/shiprocket", async (req, res) => {
-  const data = req.body;
-  await processShiprocketOrders(data)
+  // const data = req.body;
+  // await processShiprocketOrders(data)
   return res.send("ok");
 });
 
