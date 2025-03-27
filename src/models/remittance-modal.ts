@@ -9,6 +9,7 @@ const RemittanceSchema = new mongoose.Schema({
   remittanceStatus: { type: String, required: true },
   orders : { type: Array, required: true },
   BankTransactionId : { type: String, required: true },
+  isStage4Remittance: { type: Boolean, default: false },
 
 });
 RemittanceSchema.index({ sellerId: 1, remittanceDate: -1 });

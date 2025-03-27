@@ -659,6 +659,133 @@ export const calculateRemittanceEveryDay = async (): Promise<void> => {
   }
 };
 
+export const createRemittanceForStage4Orders = async (): Promise<void> => {
+  try {
+    const companyName = 'L';
+    const sellerIds = await SellerModel.find({}).select('_id name').lean();
+
+    for (const seller of sellerIds) {
+      // Find orders with orderStage.stage: 4 and payment_mode: 1
+      const stage4Orders = await B2COrderModel.find({
+        "sellerId": seller._id,
+        "orderStages.stage": 4,
+        "orderStages.action": "Delivered",
+        "payment_mode": 1,
+        "bucket": { "$nin": [0, 4] }
+      }).populate('productId').lean();
+
+      // Check for orders already included in any remittance
+      const remittedOrderIds = new Set(
+        (await RemittanceModel.find({ sellerId: seller._id }).lean())
+          .flatMap((remittance) => remittance.orders)
+          .map((order) => order._id.toString())
+      );
+
+      const unremittedStage4Orders = stage4Orders.filter(
+        (order) => !remittedOrderIds.has(order._id.toString())
+      );
+
+      if (unremittedStage4Orders.length === 0) continue;
+
+      // Group orders by the date they entered stage 4
+      const ordersGroupedByStage4Date = unremittedStage4Orders.reduce(
+        (acc, order) => {
+          // Find the stage 4 entry in orderStages
+          const stage4Entry = order.orderStages.find(stage => stage.stage === 4 && stage.action === 'Delivered');
+          if (!stage4Entry || !stage4Entry.stageDateTime) return acc;
+
+          const stage4Date = format(new Date(stage4Entry.stageDateTime), 'yyyy-MM-dd');
+
+          if (!acc[stage4Date]) {
+            acc[stage4Date] = [];
+          }
+          acc[stage4Date].push(order);
+          return acc;
+        },
+        {}
+      );
+
+      // Process each group of orders
+      for (const [stage4DateStr, ordersOnSameDate] of Object.entries(ordersGroupedByStage4Date)) {
+        const stage4Date = parseISO(stage4DateStr);
+
+        // Create remittance for next business day
+        const sevenDaysAfterDelivery = addDays(stage4DateStr, 7);
+
+        // Find the nearest upcoming Friday after the 7th day
+        const remittanceDate = format(nextFriday(sevenDaysAfterDelivery), "yyyy-MM-dd");
+
+        const existingRemittance = await RemittanceModel.findOne({
+          sellerId: seller._id,
+          remittanceDate,
+        }).lean();
+
+        if (existingRemittance) {
+          existingRemittance.orders.push(...ordersOnSameDate);
+          existingRemittance.remittanceAmount += ordersOnSameDate.reduce(
+            (sum, order) => sum + Number(order.amount2Collect),
+            0
+          );
+          await RemittanceModel.updateOne({ _id: existingRemittance._id }, existingRemittance);
+        } else {
+          const remittanceId = generateRemittanceId(`${companyName}-S4-`, seller._id.toString(), remittanceDate);
+          const remittanceAmount = ordersOnSameDate.reduce((sum, order) => sum + Number(order.amount2Collect), 0);
+          const remittanceStatus = 'pending';
+          const BankTransactionId = 'xxxxxxxxxxxxx'; // Static or replace as needed
+
+          const remittance = new RemittanceModel({
+            sellerId: seller._id,
+            remittanceId: remittanceId,
+            remittanceDate: remittanceDate,
+            remittanceAmount: remittanceAmount,
+            remittanceStatus: remittanceStatus,
+            orders: ordersOnSameDate,
+            BankTransactionId: BankTransactionId,
+          });
+
+          console.log(`remittanceId : ${remittanceId}, ${seller.name}, ${remittanceDate}`)
+          await remittance.save();
+        }
+      }
+    }
+
+    console.log("Stage 4 remittances created successfully");
+  } catch (error) {
+    console.error(error, '{error} in createRemittanceForStage4Orders');
+  }
+};
+
+// Helper function to add business days (skip weekends)
+const addBusinessDays = (date, days) => {
+  let currentDate = new Date(date);
+  let remainingDays = days;
+
+  while (remainingDays > 0) {
+    currentDate.setDate(currentDate.getDate() + 1);
+    const dayOfWeek = currentDate.getDay();
+
+    // Skip weekends (0 = Sunday, 6 = Saturday)
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      remainingDays--;
+    }
+  }
+
+  return currentDate;
+};
+
+// Updated generateRemittanceId function to support specifying a type
+// const generateRemittanceId = (
+//   companyName: string,
+//   sellerId: string,
+//   remittanceDate: string,
+//   type: string = ''
+// ): string => {
+//   const dateStr = remittanceDate.replace(/-/g, '');
+//   const sellerShort = sellerId.substring(0, 4);
+//   const typePrefix = type ? `${type}-` : '';
+//   return `${companyName}-${typePrefix}${dateStr}`;
+// };
+
 const processSmartshipBatch = async (orders, shipmentAPIConfig) => {
   const updatedOrders = [];
   const rtoUpdatesNeeded = [];
@@ -918,7 +1045,7 @@ const processDelhiveryBatch = async (orders, delhiveryToken) => {
 
 // export const processShiprocketOrders = async (data) => {
 //   console.log("Processing Shiprocket orders", data);
-  
+
 //   const shipment_track = data.shipment_track[0];
 //   if(!shipment_track) {
 //     return { processedCount: 0 };
@@ -929,7 +1056,7 @@ const processDelhiveryBatch = async (orders, delhiveryToken) => {
 //   }
 
 //   const orders = await B2COrderModel.find({ awb: awb });
-  
+
 //   const shiprocketToken = await getShiprocketToken();
 //   if (!shiprocketToken) {
 //     console.log("FAILED TO RUN JOB, SHIPROCKET TOKEN NOT FOUND");
@@ -958,10 +1085,10 @@ const processDelhiveryBatch = async (orders, delhiveryToken) => {
 
 //       // const trackData = data.tracking_data;
 //       // console.log("Track data", trackData);
-      
+
 //       const activities = data.shipment_track_activities || [];
 //       console.log("Activities", activities);
-      
+
 
 //       // First clean up any potential duplicate stages in the existing orderStages
 //       order.orderStages = removeDuplicateStages(order).orderStages;
@@ -1335,6 +1462,7 @@ const autoCancelShipmetWhosePickupNotScheduled = async () => {
 }
 
 export default async function runCron() {
+  // createRemittanceForStage4Orders()
   console.log("Running cron scheduler");
   const expression4every2Minutes = "*/2 * * * *";
   const expression4every30Minutes = "*/30 * * * *";
@@ -1345,31 +1473,31 @@ export default async function runCron() {
   const expression4every12Hrs = "0 0,12 * * *";
 
   if (cron.validate(expression4every2Minutes)) {
-    cron.schedule("20,50 * * * *", track_delivery); //20 minutes after the hour and half hour
-    cron.schedule("10,40 * * * *", trackOrder_Smartship); //10 minutes after the hour and half hour
-    cron.schedule(expression4every59Minutes, trackOrder_Shiprocket);  // Track order status every 30 minutes
-    cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
+    // cron.schedule("20,50 * * * *", track_delivery); //20 minutes after the hour and half hour
+    // cron.schedule("10,40 * * * *", trackOrder_Smartship); //10 minutes after the hour and half hour
+    // cron.schedule(expression4every59Minutes, trackOrder_Shiprocket);  // Track order status every 30 minutes
+    // cron.schedule(expression4every30Minutes, track_B2B_SHIPROCKET);  // Track order status every 30 minutes
 
-    cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
-    cron.schedule(expression4every2Minutes, scheduleShipmentCheck); // B2B a
+    // cron.schedule(expression4every30Minutes, REFRESH_ZOHO_TOKEN);
+    // cron.schedule(expression4every2Minutes, scheduleShipmentCheck); // B2B a
     // // cron.schedule(expression4every12Hrs, walletDeductionForBilledOrderOnEvery7Days);
-    cron.schedule(expression4every12Hrs, autoCancelShipmetWhosePickupNotScheduled);
+    // cron.schedule(expression4every12Hrs, autoCancelShipmetWhosePickupNotScheduled);
 
     // Need to fix
     // cron.schedule(expression4every12Hrs, disputeOrderWalletDeductionWhenRejectByAdmin);
     // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
 
-    cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
+    // cron.schedule(expression4every12Hrs, CONNECT_MARUTI);
 
-    cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
-    cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
-    cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET_B2B);
-    cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
-    cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
+    // cron.schedule(expression4every9_59Hr, calculateRemittanceEveryDay);
+    // cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET);
+    // cron.schedule(expression4every59Minutes, CONNECT_SHIPROCKET_B2B);
+    // cron.schedule(expression4every59Minutes, CONNECT_SMARTSHIP);
+    // cron.schedule(expression4every5Minutes, CANCEL_REQUESTED_ORDER_SMARTSHIP);
 
     // Email Cron
-    cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);
-    cron.schedule(expression4every12Hrs, syncInvoicePdfs);
+    // cron.schedule(expression4every12Hrs, updatePaymentAlertStatus);
+    // cron.schedule(expression4every12Hrs, syncInvoicePdfs);
     // cron.schedule(expression4every12Hrs, emailInvoiceWithPaymnetLink);
 
 

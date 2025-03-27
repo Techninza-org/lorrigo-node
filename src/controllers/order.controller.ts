@@ -202,13 +202,13 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
         pickupAddress: hubDetails._id.toString(),
         productDetails: {
           name: hub["product_desc"],
-          category: hub["product_category"],
+          category: hub["product_category"] || "Uncategorized",
           quantity: Number(hub["order_quantity"]) ?? 1,
           hsn_code: hub["hsn_code"],
-          taxRate: Number(hub["tax_rate"]) ?? 0,
-          taxableValue: Number(hub["order_value"]) ?? 0
+          taxRate: 0,
+          taxableValue: Number(parseFloat(hub["order_value"]) ?? 0)
         },
-        order_invoice_date: convertToISO(hub["order_invoice_date"]) || today,
+        order_invoice_date: hub["order_invoice_date"] ? convertToISO(hub["order_invoice_date"]) : today,
         order_invoice_number: hub["order_invoice_number"],
         isContainFragileItem: Boolean(isContainFragileItem),
         numberOfBoxes: Number(hub["order_quantity"]) || 1,
@@ -321,8 +321,9 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
           orderWeightUnit: order?.orderWeightUnit,
           amount2Collect: order?.amount2Collect,
           customerDetails: {
-            ...body?.customerDetails,
-            name: body.customerDetails.name.replace(/[^A-Za-z\s]/g, "")
+            ...order?.customerDetails,
+            // name: order?.customerDetails?.name?.replace(/[^A-Za-z\s]/g, "")
+            name: order?.customerDetails?.name
           },
           sellerDetails: {
             sellerName: order?.sellerDetails.sellerName,
@@ -332,7 +333,8 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
         };
       });
 
-      // await B2COrderModel.insertMany(orderDocuments);
+
+      await B2COrderModel.insertMany(orderDocuments);
     }
 
     return res.status(200).send({
@@ -341,6 +343,7 @@ export const createBulkB2COrder = async (req: ExtendedRequest, res: Response, ne
     });
 
   } catch (error) {
+    console.log(error, "error")
     return next(error);
   }
 }
@@ -456,7 +459,8 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
         amount2Collect: body?.amount2Collect,
         customerDetails: {
           ...body?.customerDetails,
-          name: body.customerDetails.name.replace(/[^A-Za-z\s]/g, "")
+          // name: body.customerDetails.name.replace(/[^A-Za-z\s]/g, "")
+          name: body.customerDetails.name,
         },
         sellerDetails: {
           sellerName: body?.sellerDetails.sellerName,
@@ -561,11 +565,13 @@ export const updateB2COrder = async (req: ExtendedRequest, res: Response, next: 
               Authorization: `${shiprocketToken}`,
             },
           });
+          console.log(updateOrderShiprocket, "updateOrderShiprocket")
           const updateCustomerDetailsShiprocket = await axios.post(`https://apiv2.shiprocket.in/v1/external/orders/address/update`, updateCustomerDetails, {
             headers: {
               Authorization: `${shiprocketToken}`,
             },
           });
+          console.log(updateCustomerDetailsShiprocket, 'updateCustomerDetailsShiprocket')
         } catch (error: any) {
           console.log(error.response.data)
         }

@@ -758,6 +758,8 @@ function calculateTotalCharge(
 }
 
 export async function updateSellerWalletBalance(sellerId: string, amount: number, isCredit: boolean, desc: string) {
+  console.log(amount, "amount")
+
   // Validate amount
   if (amount <= 0) return
   if (typeof amount !== 'number' || isNaN(amount)) {

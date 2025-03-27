@@ -1701,113 +1701,142 @@ export async function orderBulkManifest(req: ExtendedRequest, res: Response, nex
       return res.status(400).send({ valid: false, message: "Invalid payload" });
     }
 
-    const results = await Promise.all(
-      orderIds.map(async (orderId) => {
-        if (!isValidObjectId(orderId)) {
-          return { orderId, valid: false, message: "Invalid Order ID" };
-        }
+    // For shiprocket only 
+    const extractShiprocketShipmentIds = await B2COrderModel.find(
+      { _id: { $in: orderIds }, bucket: READY_TO_SHIP },
+      { shiprocket_shipment_id: 1, _id: 0 }
+    )
+      .lean()
+      .then((orders) => orders.map(({ shiprocket_shipment_id }) => (shiprocket_shipment_id)));
+      console.log(extractShiprocketShipmentIds, "extractShiprocketShipmentIds")
 
-        let order: any = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id, awb: { $exists: true } }).populate([
-          "productId", "pickupAddress",
-        ]);
+    const shiprocketToken = await getShiprocketToken();
+    const parsedDate = parse(pickupDate, "dd-MM-yyyy", new Date());
+    const formattedDate = format(parsedDate, "yyyy-MM-dd");
+    
 
-        if (!order) {
-          order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id, awb: { $exists: true } }).populate([
-            "customer", "pickupAddress",
-          ]);
-        }
-
-        if (!order) {
-          return { orderId, valid: false, message: "Order not found" };
-        }
-
-        if (order.orderStages[order.orderStages.length - 1].stage === 67) {
-          return { orderId, valid: false, message: "Pickup is already scheduled for order ID." };
-        }
-
-        const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
-        const vendorName = await EnvModel.findOne({ nickName: assignedVendorNickname });
-
-        try {
-          let apiResponse = null;
-          if (vendorName?.name === "SMARTSHIP") {
-            const smartshipToken = await getSmartShipToken();
-            if (!smartshipToken) {
-              return { orderId, valid: false, message: "Smartship ENVs not found" };
-            }
-
-            const requestBody = {
-              client_order_reference_ids: [order.client_order_reference_id],
-              preferred_pickup_date: pickupDate.replaceAll(" ", "-"),
-              shipment_type: order.isReverseOrder ? 2 : 1,
-            };
-
-            apiResponse = await axios.post(
-              config.SMART_SHIP_API_BASEURL + APIs.ORDER_MANIFEST,
-              requestBody,
-              { headers: { Authorization: smartshipToken } }
-            );
-          } else if (vendorName?.name === "SHIPROCKET") {
-            const shiprocketToken = await getShiprocketToken();
-            const parsedDate = parse(pickupDate, "dd-MM-yyyy", new Date());
-            const formattedDate = format(parsedDate, "yyyy-MM-dd");
-            const schdulePickupPayload = {
-              shipment_id: [order.shiprocket_shipment_id],
-              pickup_date: [formattedDate],
-            };
-            apiResponse = await axios.post(
-              config.SHIPROCKET_API_BASEURL + APIs.GET_MANIFEST_SHIPROCKET,
-              schdulePickupPayload,
-              { headers: { Authorization: shiprocketToken } }
-            );
-          } else if (vendorName?.name === "DELHIVERY") {
-            const delhiveryToken = await getDelhiveryToken();
-            if (!delhiveryToken) {
-              return { orderId, valid: false, message: "Invalid token" };
-            }
-            const hubDetail = await HubModel.findById(order?.pickupAddress);
-            if (!hubDetail) {
-              return { orderId, valid: false, message: "Hub not found" };
-            }
-
-            const delhiveryManifestPayload = {
-              pickup_location: hubDetail?.name,
-              expected_package_count: 1,
-              pickup_date: pickupDate.replaceAll(" ", "-"),
-              pickup_time: "12:23:00",
-            };
-
-            apiResponse = await axios.post(
-              `${envConfig.DELHIVERY_API_BASEURL + APIs.DELHIVERY_MANIFEST_ORDER}`,
-              delhiveryManifestPayload,
-              { headers: { Authorization: delhiveryToken } }
-            );
-          }
-
-          if (apiResponse && apiResponse.data?.data?.errors) {
-            return { orderId, valid: false, message: JSON.stringify(apiResponse.data?.data?.errors) };
-          }
-
-          order.bucket = READY_TO_SHIP;
-          order.orderStages.push({
-            stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
-            action: PICKUP_SCHEDULED_DESCRIPTION,
-            stageDateTime: new Date(),
-          });
-          await order.save();
-
-          return { orderId, valid: true, message: "Order manifest request generated" };
-        } catch (error: any) {
-          console.log(error, "error")
-          return { orderId, valid: false, message: "Order manifest request failed" };
-        }
-      })
+    const schdulePickupPayload = {
+      shipment_id: extractShiprocketShipmentIds,
+      pickup_date: [formattedDate],
+    };
+    let apiResponse = await axios.post(
+      config.SHIPROCKET_API_BASEURL + APIs.GET_MANIFEST_SHIPROCKET,
+      schdulePickupPayload,
+      { headers: { Authorization: shiprocketToken } }
     );
 
-    return res.status(200).send({ results });
-  } catch (error) {
-    console.error("Bulk Order Manifest Error:", error);
-    return res.status(500).send({ valid: false, message: "Order Manifest failed" });
+
+    console.log(apiResponse, "apiResponse")
+
+    // 777512173
+    // Approach 1 (Stopped due to API limitations)
+    // const results = await Promise.all(
+    //   orderIds.map(async (orderId) => {
+    //     if (!isValidObjectId(orderId)) {
+    //       return { orderId, valid: false, message: "Invalid Order ID" };
+    //     }
+
+    //     let order: any = await B2COrderModel.findOne({ _id: orderId, sellerId: req.seller._id, awb: { $exists: true } }).populate([
+    //       "productId", "pickupAddress",
+    //     ]);
+
+    //     if (!order) {
+    //       order = await B2BOrderModel.findOne({ _id: orderId, sellerId: req.seller._id, awb: { $exists: true } }).populate([
+    //         "customer", "pickupAddress",
+    //       ]);
+    //     }
+
+    //     if (!order) {
+    //       return { orderId, valid: false, message: "Order not found" };
+    //     }
+
+    //     if (order.orderStages[order.orderStages.length - 1].stage === 67) {
+    //       return { orderId, valid: false, message: "Pickup is already scheduled for order ID." };
+    //     }
+
+    //     const assignedVendorNickname = order.carrierName ? order.carrierName.split(" ").pop() : null;
+    //     const vendorName = await EnvModel.findOne({ nickName: assignedVendorNickname });
+
+    //     try {
+    //       let apiResponse = null;
+    //       if (vendorName?.name === "SMARTSHIP") {
+    //         const smartshipToken = await getSmartShipToken();
+    //         if (!smartshipToken) {
+    //           return { orderId, valid: false, message: "Smartship ENVs not found" };
+    //         }
+
+    //         const requestBody = {
+    //           client_order_reference_ids: [order.client_order_reference_id],
+    //           preferred_pickup_date: pickupDate.replaceAll(" ", "-"),
+    //           shipment_type: order.isReverseOrder ? 2 : 1,
+    //         };
+
+    //         apiResponse = await axios.post(
+    //           config.SMART_SHIP_API_BASEURL + APIs.ORDER_MANIFEST,
+    //           requestBody,
+    //           { headers: { Authorization: smartshipToken } }
+    //         );
+    //       } else if (vendorName?.name === "SHIPROCKET") {
+    //         const shiprocketToken = await getShiprocketToken();
+    //         const parsedDate = parse(pickupDate, "dd-MM-yyyy", new Date());
+    //         const formattedDate = format(parsedDate, "yyyy-MM-dd");
+    //         const schdulePickupPayload = {
+    //           shipment_id: [order.shiprocket_shipment_id],
+    //           pickup_date: [formattedDate],
+    //         };
+    //         apiResponse = await axios.post(
+    //           config.SHIPROCKET_API_BASEURL + APIs.GET_MANIFEST_SHIPROCKET,
+    //           schdulePickupPayload,
+    //           { headers: { Authorization: shiprocketToken } }
+    //         );
+    //       } else if (vendorName?.name === "DELHIVERY") {
+    //         const delhiveryToken = await getDelhiveryToken();
+    //         if (!delhiveryToken) {
+    //           return { orderId, valid: false, message: "Invalid token" };
+    //         }
+    //         const hubDetail = await HubModel.findById(order?.pickupAddress);
+    //         if (!hubDetail) {
+    //           return { orderId, valid: false, message: "Hub not found" };
+    //         }
+
+    //         const delhiveryManifestPayload = {
+    //           pickup_location: hubDetail?.name,
+    //           expected_package_count: 1,
+    //           pickup_date: pickupDate.replaceAll(" ", "-"),
+    //           pickup_time: "12:23:00",
+    //         };
+
+    //         apiResponse = await axios.post(
+    //           `${envConfig.DELHIVERY_API_BASEURL + APIs.DELHIVERY_MANIFEST_ORDER}`,
+    //           delhiveryManifestPayload,
+    //           { headers: { Authorization: delhiveryToken } }
+    //         );
+    //       }
+
+    //       if (apiResponse && apiResponse.data?.data?.errors) {
+    //         return { orderId, valid: false, message: JSON.stringify(apiResponse.data?.data?.errors) };
+    //       }
+
+    //       order.bucket = READY_TO_SHIP;
+    //       order.orderStages.push({
+    //         stage: SHIPROCKET_MANIFEST_ORDER_STATUS,
+    //         action: PICKUP_SCHEDULED_DESCRIPTION,
+    //         stageDateTime: new Date(),
+    //       });
+    //       await order.save();
+
+    //       return { orderId, valid: true, message: "Order manifest request generated" };
+    //     } catch (error: any) {
+    //       console.log(error, "error")
+    //       return { orderId, valid: false, message: "Order manifest request failed" };
+    //     }
+    //   })
+    // );
+
+    return res.status(200).send({ message: "Order Manifest Request Generated" });
+  } catch (error: any) {
+    console.error("Bulk Order Manifest Error:", error.response.data);
+    return res.status(500).send({ valid: false, message: error?.response?.data?.message || "Order Manifest failed" });
   }
 }
 

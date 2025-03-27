@@ -636,6 +636,8 @@ export const rateCalculation = async ({
         APIs.SHIPROCKET_ORDER_COURIER +
         `/?pickup_postcode=${pickupPincode}&delivery_postcode=${deliveryPincode}&weight=${weight}&cod=${paymentType}&order_id=${shiprocketOrderID}`;
 
+       // https://apiv2.shiprocket.in/v1/external/courier/serviceability/?pickup_postcode=201301&delivery_postcode=491881&weight=0.23&cod=1&order_id=791300583 
+       console.log(url, "url") 
       const config = {
         headers: {
           Authorization: token,
