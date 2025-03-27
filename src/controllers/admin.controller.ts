@@ -1142,6 +1142,7 @@ export const uploadClientBillingCSV = async (req: ExtendedRequest, res: Response
           update.amount,
           update.isCredit,
           update.description,
+          session
         );
       }
     });
@@ -1302,6 +1303,9 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
     return res.status(200).send({ valid: false, message: "empty payload" });
   }
 
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const errorWorkbook = new exceljs.Workbook();
     const errorWorksheet = errorWorkbook.addWorksheet('Error Sheet');
@@ -1403,22 +1407,27 @@ export const uploadB2BClientBillingCSV = async (req: ExtendedRequest, res: Respo
     }));
 
     // @ts-ignore
-    // await B2BClientBillingModal.bulkWrite(billsWithCharges);
+    await B2BClientBillingModal.bulkWrite(billsWithCharges, { session });
 
     // Schedule wallet balance deduction after 7 days
     setTimeout(async () => {
       await Promise.all(billsWithCharges.map(async (bill: any) => {
         if (bill.sellerId && bill.billingAmount) {
-          await updateSellerWalletBalance(bill.sellerId, (bill.billingAmount), false, `AWB: ${bill.awb}, Revised B2B`);
+          await updateSellerWalletBalance(bill.sellerId, (bill.billingAmount), false, `AWB: ${bill.awb}, Revised B2B`, session);
         }
       }));
     }, 7 * 24 * 60 * 60 * 1000);
+
+    await session.commitTransaction();
+    session.endSession();
 
     return res.status(200).send({
       valid: true,
       message: "Billing uploaded successfully",
     });
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     console.error(error);
     return next(error);
   }
