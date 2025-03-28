@@ -58,8 +58,8 @@ import SellerModel from "../models/seller.model";
 import B2BCalcModel from "../models/b2b.calc.model";
 import ShipmenAwbCourierModel from "../models/shipment-awb-courier.model";
 
+const pLimit = async () => (await import("p-limit")).default;
 import { chunk, flatten } from 'lodash';
-import pLimit from 'p-limit';
 import { setTimeout } from 'timers/promises';
 import { formatPhoneNumber, validateIndianMobileNumber } from "../utils/validation-helper";
 
@@ -1865,7 +1865,8 @@ export async function orderBulkManifest(req: ExtendedRequest, res: Response, nex
           console.log(`Processing batch ${batchIndex + 1}/${totalBatches} with ${batchOrders.length} orders`);
 
           // Create a concurrency limiter (5 concurrent requests at a time)
-          const limit = pLimit(5);
+          const pLimitModule = await pLimit();
+          const limit = pLimitModule(5);
 
           // Process orders in this batch with concurrency limit
           const batchPromises = batchOrders.map(orderId =>
