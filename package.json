@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "",
   "main": "src/index.js",
-  "type": "module",
   "scripts": {
     "dev": "set NODE_ENV=DEVELOPMENT && npx ts-node-dev src/index.ts",
     "start": "set NODE_ENV=PRODUCTION && node dist/index.js",
