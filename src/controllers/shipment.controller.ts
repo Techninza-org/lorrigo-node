@@ -57,8 +57,6 @@ import envConfig from "../utils/config";
 import SellerModel from "../models/seller.model";
 import B2BCalcModel from "../models/b2b.calc.model";
 import ShipmenAwbCourierModel from "../models/shipment-awb-courier.model";
-
-const pLimit = async () => (await import("p-limit")).default;
 import { chunk, flatten } from 'lodash';
 import { setTimeout } from 'timers/promises';
 import { formatPhoneNumber, validateIndianMobileNumber } from "../utils/validation-helper";
@@ -1837,18 +1835,16 @@ export async function orderBulkManifest(req: ExtendedRequest, res: Response, nex
       return res.status(400).send({ valid: false, message: "Invalid payload" });
     }
 
-    // Immediately return a response to the client
     res.status(202).send({
       valid: true,
       message: `Processing ${orderIds.length} orders in background. Check logs for progress.`,
       totalOrders: orderIds.length
     });
 
-    // Process in background after responding to client
     (async () => {
       try {
-        // Break down large array into chunks of 50 orders
         const BATCH_SIZE = 50;
+        const CONCURRENCY_LIMIT = 5;
         const batches = chunk(orderIds, BATCH_SIZE);
         const totalBatches = batches.length;
 
@@ -1859,59 +1855,48 @@ export async function orderBulkManifest(req: ExtendedRequest, res: Response, nex
         let failureCount = 0;
         const allResults = [];
 
-        // Process each batch sequentially
         for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
           const batchOrders = batches[batchIndex];
           console.log(`Processing batch ${batchIndex + 1}/${totalBatches} with ${batchOrders.length} orders`);
 
-          // Create a concurrency limiter (5 concurrent requests at a time)
-          const pLimitModule = await pLimit();
-          const limit = pLimitModule(5);
+          let batchResults = [];
+          for (let i = 0; i < batchOrders.length; i += CONCURRENCY_LIMIT) {
+            const chunkOrders = batchOrders.slice(i, i + CONCURRENCY_LIMIT);
+            const results = await Promise.all(
+              chunkOrders.map(orderId => processOrder(orderId, pickupDate, req.seller._id))
+            );
+            batchResults.push(...results);
+          }
 
-          // Process orders in this batch with concurrency limit
-          const batchPromises = batchOrders.map(orderId =>
-            limit(() => processOrder(orderId, pickupDate, req.seller._id))
-          );
-
-          const batchResults = await Promise.all(batchPromises);
-
-          // Save error logs after each batch
           const errors = batchResults.filter(result => !result.valid);
           if (errors.length > 0) {
             await saveErrorLogs(errors, batchIndex + 1);
           }
 
-          // Count successes and failures
           successCount += batchResults.filter(r => r.valid).length;
           failureCount += batchResults.filter(r => !r.valid).length;
           processedCount += batchResults.length;
-
           allResults.push(...batchResults);
 
-          // Wait for 1 minute between batches to avoid rate limiting
           if (batchIndex < batches.length - 1) {
             console.log(`Batch ${batchIndex + 1} completed. Waiting 60 seconds before next batch...`);
             await setTimeout(60000);
           }
 
-          // Log progress
           console.log(`Progress: ${processedCount}/${orderIds.length} (${successCount} success, ${failureCount} failed)`);
         }
 
         console.log(`All batches processed. Total: ${processedCount}, Success: ${successCount}, Failed: ${failureCount}`);
-
-        // Optional: Save final results to a separate collection if needed
-        // await ResultModel.create({ totalOrders: orderIds.length, results: allResults });
       } catch (error) {
         console.error("Background processing error:", error);
       }
     })();
-
   } catch (error) {
     console.error("Bulk Order Manifest Error:", error);
     return res.status(500).send({ valid: false, message: "Order Manifest failed" });
   }
 }
+
 export async function orderReattempt(req: ExtendedRequest, res: Response, next: NextFunction) {
   try {
     const body = req.body;
